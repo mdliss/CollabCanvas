@@ -799,6 +799,7 @@ collabcanvas/
 - [x] PR #12: Resize and rotate functionality
   → evidence: Konva Transformer attached to selected shapes; width/height/rotation persist on transform end; lock enforced | 2025-01-14 | feature/transformations@bfcd680
 - PR #13: AI agent integration
-- [x] PR #14: Multi-select and grouping (layering only)
+- [x] PR #14: Multi-select and grouping
   → evidence: zIndex field added; bring forward/send backward buttons; shapes sorted by zIndex on render | 2025-01-14 | feature/transformations@bfcd680
+  → evidence: shift-click multi-select implemented; selectedIds array tracks multiple selections; multi-delete works | 2025-01-14 | feature/multiselect@8e08276
 - PR #15: Undo/redo system
