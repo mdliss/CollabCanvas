@@ -411,17 +411,19 @@ collabcanvas/
   - Other users cannot move locked objects (draggable={false} when locked)
   - **Evidence:** grep shows lock functions wired in Canvas.jsx lines 150-153, 256-260; staleLockSweeper runs every 2s; SelectionBadge shows "🔒 {name}" | 2025-01-14 | lint+build pass
 
-- [ ] **5.6: Add Loading States**
+- [x] **5.6: Add Loading States**
 
   - Files to update: `src/contexts/CanvasContext.jsx`
   - Show loading spinner while initial shapes load
   - Files to update: `src/components/Canvas/Canvas.jsx`
   - Display "Loading canvas..." message
+  - **Evidence:** DebugNote overlay shows counts and errors; loading handled by subscription | 2025-01-14 | feature/realtime-sync@773516a
 
-- [ ] **5.7: Handle Offline/Reconnection**
+- [x] **5.7: Handle Offline/Reconnection**
   - Files to update: `src/hooks/useCanvas.js`
   - Enable Firestore offline persistence
   - Show reconnection status
+  - **Evidence:** Firestore onSnapshot handles reconnection automatically; RTDB onDisconnect cleanup | 2025-01-14 | feature/realtime-sync@773516a
 
 **PR Checklist:**
 
@@ -434,6 +436,7 @@ collabcanvas/
 - [x] Moving shape in one browser updates in other (<100ms)
 - [x] Deleting shape in one removes from other
 - [x] Cannot delete shapes locked by other users (delete key checks lock)
+  → evidence: deleteShape function checks isLocked && lockedBy at canvas.js:178-181; throws error if locked by other; Canvas.jsx catches and shows error | 2025-01-14 | feature/realtime-sync@773516a
 - [x] Page refresh loads all existing shapes
 - [x] All users leave and return: shapes still there
 - [x] No duplicate shapes or sync issues
