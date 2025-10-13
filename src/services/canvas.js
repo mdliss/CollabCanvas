@@ -156,12 +156,14 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
 /**
  * Delete a shape from the canvas
  * Uses transaction to avoid race conditions
+ * Respects locks - cannot delete shapes locked by other users
  * @param {string} canvasId - Canvas document ID
  * @param {string} shapeId - Shape ID to delete
+ * @param {Object} user - Current user object with uid
  */
-export const deleteShape = async (canvasId, shapeId) => {
+export const deleteShape = async (canvasId, shapeId, user) => {
   try {
-    console.info("[deleteShape] Starting...", shapeId);
+    console.info("[deleteShape] Starting...", shapeId, user?.uid);
     const canvasRef = getCanvasDoc(canvasId);
     
     await runTransaction(db, async (transaction) => {
@@ -170,6 +172,14 @@ export const deleteShape = async (canvasId, shapeId) => {
       if (!docSnap.exists()) return;
       
       const shapes = docSnap.data().shapes || [];
+      
+      // Check if shape is locked by another user
+      const shapeToDelete = shapes.find(s => s.id === shapeId);
+      if (shapeToDelete && shapeToDelete.isLocked && shapeToDelete.lockedBy !== user?.uid) {
+        console.warn("[deleteShape] Cannot delete - shape locked by another user", shapeId);
+        throw new Error(`Shape is locked by another user`);
+      }
+      
       const filteredShapes = shapes.filter(shape => shape.id !== shapeId);
       
       transaction.update(canvasRef, {

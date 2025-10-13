@@ -64,10 +64,15 @@ export default function Canvas() {
 
   // Handle keyboard events (Delete/Backspace to delete selected shape)
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    const handleKeyDown = async (e) => {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
-        deleteShape(CANVAS_ID, selectedId);
-        setSelectedId(null);
+        try {
+          await deleteShape(CANVAS_ID, selectedId, user);
+          setSelectedId(null);
+        } catch (error) {
+          console.error("[Canvas] Delete failed:", error.message);
+          setLastError(error.message);
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
