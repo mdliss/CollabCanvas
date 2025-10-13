@@ -8,17 +8,13 @@ export const watchShapes = (cb) =>
 
 export const createRect = (p = {}) =>
   addDoc(col, {
-    type: "rect",
-    x: 200, y: 200, w: 100, h: 100, rot: 0,
-    fill: "#4A90E2",
-    lockedBy: null,
-    createdAt: serverTimestamp(),
-    ...p
+    type: "rect", x: 200, y: 200, w: 100, h: 100, rot: 0,
+    fill: "#4A90E2", lockedBy: null, createdAt: serverTimestamp(), ...p
   });
 
-export const moveShape   = (id, x, y)     => updateDoc(doc(col, id), { x, y });
-export const resizeShape = (id, w, h)     => updateDoc(doc(col, id), { w, h });
-export const rotateShape = (id, rot)      => updateDoc(doc(col, id), { rot });
-export const removeShape = (id)           => deleteDoc(doc(col, id));
-export const lockShape   = (id, uid)      => updateDoc(doc(col, id), { lockedBy: uid });
-export const unlockShape = (id)           => updateDoc(doc(col, id), { lockedBy: null });
+export const moveShape   = (id, x, y) => updateDoc(doc(col, id), { x, y });
+export const resizeShape = (id, w, h) => updateDoc(doc(col, id), { w, h });
+export const rotateShape = (id, rot)  => updateDoc(doc(col, id), { rot });
+export const removeShape = (id)       => deleteDoc(doc(col, id));
+export const lockShape   = (id, uid)  => updateDoc(doc(col, id), { lockedBy: uid });
+export const unlockShape = (id)       => updateDoc(doc(col, id), { lockedBy: null });
