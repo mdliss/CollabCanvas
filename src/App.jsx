@@ -10,9 +10,12 @@ function Guard({ children }) {
 function Home() {
   const { user, logout } = useAuth();
   return (
-    <div style={{ padding: 16 }}>
-      <div>Authed as: {user?.displayName || user?.email}</div>
-      <button onClick={logout}>Logout</button>
+    <div>
+      <div style={{ padding: 8 }}>
+        <span>Authed as: {user?.displayName || user?.email}</span>
+        <button style={{ marginLeft: 8 }} onClick={logout}>Logout</button>
+      </div>
+      <Canvas/>
     </div>
   );
 }
