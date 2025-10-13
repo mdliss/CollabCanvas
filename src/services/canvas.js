@@ -291,3 +291,47 @@ export const unlockShape = async (canvasId, shapeId, userId) => {
     throw error;
   }
 };
+
+/**
+ * Clean up stale locks (older than TTL)
+ * @param {string} canvasId - Canvas ID
+ * @param {number} ttlMs - Lock TTL in milliseconds (default 5000ms)
+ */
+export const staleLockSweeper = async (canvasId, ttlMs = 5000) => {
+  try {
+    const docRef = doc(db, 'canvas', canvasId);
+    
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(docRef);
+      if (!docSnap.exists()) return;
+      
+      const data = docSnap.data();
+      const shapes = data.shapes || [];
+      const now = Date.now();
+      let cleaned = 0;
+      
+      const updatedShapes = shapes.map(shape => {
+        if (shape.isLocked && shape.lockedAt) {
+          const lockAge = now - shape.lockedAt.toMillis();
+          if (lockAge > ttlMs) {
+            cleaned++;
+            return {
+              ...shape,
+              isLocked: false,
+              lockedBy: null,
+              lockedAt: null
+            };
+          }
+        }
+        return shape;
+      });
+      
+      if (cleaned > 0) {
+        transaction.update(docRef, { shapes: updatedShapes });
+        console.info("[staleLockSweeper] Cleaned", cleaned, "stale locks");
+      }
+    });
+  } catch (error) {
+    console.error("[staleLockSweeper] Failed:", error);
+  }
+};
