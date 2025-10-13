@@ -66,7 +66,13 @@ export const createShape = async (canvasId, shapeData, user) => {
       y: shapeData.y || 200,
       width: shapeData.width || 100,
       height: shapeData.height || 100,
+      rotation: shapeData.rotation || 0,
       fill: shapeData.fill || '#cccccc',
+      // Text-specific properties
+      text: shapeData.text || undefined,
+      fontSize: shapeData.fontSize || undefined,
+      // Layering
+      zIndex: shapeData.zIndex || 0,
       createdBy: user?.uid || 'anonymous',
       createdAt: Date.now(),
       lastModifiedBy: user?.uid || 'anonymous',

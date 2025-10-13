@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper } from "../../services/canvas";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, DEFAULT_RECT } from "./constants";
-import Shape from "./Shape";
+import ShapeRenderer from "./ShapeRenderer";
 import CanvasControls from "./CanvasControls";
 import DebugNote from "./DebugNote";
 import PresenceList from "../Collaboration/PresenceList";
@@ -146,6 +146,13 @@ export default function Canvas() {
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
 
+  // Handle shape transform end - persist width/height/rotation
+  const handleShapeTransformEnd = async (shapeId, attrs) => {
+    await updateShape(CANVAS_ID, shapeId, attrs, user);
+    // Release lock after transform completes
+    await unlockShape(CANVAS_ID, shapeId, user?.uid);
+  };
+
   // Handle lock request for shape
   const handleRequestLock = async (shapeId) => {
     if (!user?.uid) return false;
@@ -222,7 +229,12 @@ export default function Canvas() {
         cursorCount={Object.keys(cursors).length}
       />
       <PresenceList users={onlineUsers} />
-      <CanvasControls onAddRectangle={handleAddRectangle} />
+      <CanvasControls 
+        onAddShape={handleAddShape}
+        onLayerUp={handleLayerUp}
+        onLayerDown={handleLayerDown}
+        selectedShape={selectedId}
+      />
       <Stage
         ref={stageRef}
         width={window.innerWidth}
@@ -248,8 +260,8 @@ export default function Canvas() {
           />
           
           {/* Render all shapes */}
-          {shapes.map(shape => (
-            <Shape
+          {shapes.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(shape => (
+            <ShapeRenderer
               key={shape.id}
               shape={shape}
               isSelected={shape.id === selectedId}
@@ -258,6 +270,7 @@ export default function Canvas() {
               onRequestLock={handleRequestLock}
               onDragStart={handleShapeDragStart}
               onDragEnd={handleShapeDragEnd}
+              onTransformEnd={handleShapeTransformEnd}
             />
           ))}
 
