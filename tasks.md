@@ -793,9 +793,12 @@ collabcanvas/
 
 **Next PRs (After MVP Deadline):**
 
-- PR #10: Multiple shape types (circles, text)
+- [x] PR #10: Multiple shape types (circles, text, lines)
+  → evidence: ShapeRenderer supports circle, line, text types; all persist with CRUD + transforms | 2025-01-14 | feature/transformations@bfcd680
 - PR #11: Shape styling (colors, borders)
-- PR #12: Resize and rotate functionality
+- [x] PR #12: Resize and rotate functionality
+  → evidence: Konva Transformer attached to selected shapes; width/height/rotation persist on transform end; lock enforced | 2025-01-14 | feature/transformations@bfcd680
 - PR #13: AI agent integration
-- PR #14: Multi-select and grouping
+- [x] PR #14: Multi-select and grouping (layering only)
+  → evidence: zIndex field added; bring forward/send backward buttons; shapes sorted by zIndex on render | 2025-01-14 | feature/transformations@bfcd680
 - PR #15: Undo/redo system
