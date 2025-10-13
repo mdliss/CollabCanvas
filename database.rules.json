@@ -1,0 +1,13 @@
+{
+  "rules": {
+    "sessions": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "selections": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
+
