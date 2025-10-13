@@ -1,7 +1,7 @@
 import { Stage, Layer, Rect } from "react-konva";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { subscribeToShapes, createShape, updateShape, deleteShape } from "../../services/canvas";
+import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper } from "../../services/canvas";
 import { CANVAS_WIDTH, CANVAS_HEIGHT, DEFAULT_RECT } from "./constants";
 import Shape from "./Shape";
 import CanvasControls from "./CanvasControls";
@@ -138,10 +138,18 @@ export default function Canvas() {
     setIsDraggingShape(true);
   };
 
-  // Handle shape drag end - persist to Firestore and re-enable stage dragging
-  const handleShapeDragEnd = (shapeId, pos) => {
+  // Handle shape drag end - persist to Firestore, unlock, and re-enable stage dragging
+  const handleShapeDragEnd = async (shapeId, pos) => {
     setIsDraggingShape(false);
-    updateShape(CANVAS_ID, shapeId, pos, user);
+    await updateShape(CANVAS_ID, shapeId, pos, user);
+    // Release lock after drag completes
+    await unlockShape(CANVAS_ID, shapeId, user?.uid);
+  };
+
+  // Handle lock request for shape
+  const handleRequestLock = async (shapeId) => {
+    if (!user?.uid) return false;
+    return await tryLockShape(CANVAS_ID, shapeId, user.uid);
   };
 
   // Handle shape selection
@@ -181,6 +189,26 @@ export default function Canvas() {
       }
     };
   }, [selectedId]);
+
+  // Stale lock sweeper - run every 2 seconds and on visibility change
+  useEffect(() => {
+    const interval = setInterval(() => {
+      staleLockSweeper(CANVAS_ID);
+    }, 2000);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        staleLockSweeper(CANVAS_ID);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
 
   return (
     <div>
@@ -225,23 +253,38 @@ export default function Canvas() {
               key={shape.id}
               shape={shape}
               isSelected={shape.id === selectedId}
+              currentUserId={user?.uid}
               onSelect={handleShapeSelect}
+              onRequestLock={handleRequestLock}
               onDragStart={handleShapeDragStart}
               onDragEnd={handleShapeDragEnd}
             />
           ))}
 
-          {/* Render selection badges */}
+          {/* Render selection badges (for selections and locks) */}
           {shapes.map(shape => {
             const selection = selections[shape.id];
-            if (selection) {
+            const isLockedByOther = shape.isLocked && shape.lockedBy && shape.lockedBy !== user?.uid;
+            
+            // Show badge if selected OR locked by someone else
+            if (selection || isLockedByOther) {
+              // For locks, we need to get the user's display name from online users
+              let badgeName = selection?.name;
+              let badgeColor = selection?.color;
+              
+              if (isLockedByOther) {
+                const lockOwner = onlineUsers.find(u => u.uid === shape.lockedBy);
+                badgeName = lockOwner ? `🔒 ${lockOwner.displayName}` : "🔒 Locked";
+                badgeColor = lockOwner?.color || "#ff0000";
+              }
+              
               return (
                 <SelectionBadge
                   key={`badge-${shape.id}`}
                   x={shape.x + shape.width / 2}
                   y={shape.y}
-                  name={selection.name}
-                  color={selection.color}
+                  name={badgeName}
+                  color={badgeColor}
                 />
               );
             }
