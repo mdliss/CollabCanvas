@@ -19,7 +19,7 @@ const CANVAS_ID = "global-canvas-v1";
 export default function Canvas() {
   const { user } = useAuth();
   const [shapes, setShapes] = useState([]);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedIds, setSelectedIds] = useState([]);
   const [lastError, setLastError] = useState(null);
   const [isDraggingShape, setIsDraggingShape] = useState(false);
   const [stageScale, setStageScale] = useState(1);
@@ -62,30 +62,73 @@ export default function Canvas() {
     };
   }, []);
 
-  // Handle keyboard events (Delete/Backspace to delete selected shape)
+  // Handle keyboard events (Delete/Backspace to delete selected shapes)
   useEffect(() => {
-    const handleKeyDown = (e) => {
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedId) {
-        deleteShape(CANVAS_ID, selectedId);
-        setSelectedId(null);
+    const handleKeyDown = async (e) => {
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
+        try {
+          for (const id of selectedIds) {
+            await deleteShape(CANVAS_ID, id, user);
+          }
+          selectedIds.forEach(id => clearSelection(id));
+          setSelectedIds([]);
+        } catch (error) {
+          console.error("[Canvas] Delete failed:", error.message);
+          setLastError(error.message);
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedId]);
+  }, [selectedIds, user]);
 
-  // Create new rectangle at viewport center
-  const handleAddRectangle = () => {
+  // Create new shape at viewport center
+  const handleAddShape = async (type) => {
     // Calculate center of current viewport
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
     const centerY = (-stagePos.y + window.innerHeight / 2) / stageScale;
-    
-    createShape(CANVAS_ID, {
-      ...DEFAULT_RECT,
-      x: Math.max(0, Math.min(centerX - DEFAULT_RECT.width / 2, CANVAS_WIDTH - DEFAULT_RECT.width)),
-      y: Math.max(0, Math.min(centerY - DEFAULT_RECT.height / 2, CANVAS_HEIGHT - DEFAULT_RECT.height))
-    }, user)
-      .catch((e) => setLastError(String(e)));
+
+    const shapeDefaults = {
+      rectangle: { width: 100, height: 100, fill: '#cccccc' },
+      circle: { width: 100, height: 100, fill: '#4CAF50' },
+      line: { width: 150, height: 0, fill: '#2196F3' },
+      text: { width: 200, height: 50, text: 'Double-click to edit', fontSize: 24, fill: '#000000' }
+    };
+
+    const shapeData = {
+      type,
+      x: Math.max(0, Math.min(centerX - 50, CANVAS_WIDTH - 100)),
+      y: Math.max(0, Math.min(centerY - 50, CANVAS_HEIGHT - 100)),
+      ...shapeDefaults[type]
+    };
+
+    createShape(CANVAS_ID, shapeData, user).catch((error) => {
+      console.error("[Canvas] Failed to create shape:", error);
+      setLastError(String(error));
+    });
+  };
+
+  // Layer operations
+  const handleLayerUp = async () => {
+    if (selectedIds.length === 0) return;
+    for (const id of selectedIds) {
+      const shape = shapes.find(s => s.id === id);
+      if (shape) {
+        const newZIndex = (shape.zIndex || 0) + 1;
+        await updateShape(CANVAS_ID, id, { zIndex: newZIndex }, user);
+      }
+    }
+  };
+
+  const handleLayerDown = async () => {
+    if (selectedIds.length === 0) return;
+    for (const id of selectedIds) {
+      const shape = shapes.find(s => s.id === id);
+      if (shape) {
+        const newZIndex = Math.max(0, (shape.zIndex || 0) - 1);
+        await updateShape(CANVAS_ID, id, { zIndex: newZIndex }, user);
+      }
+    }
   };
 
   // Zoom with mousewheel
@@ -159,21 +202,35 @@ export default function Canvas() {
     return await tryLockShape(CANVAS_ID, shapeId, user.uid);
   };
 
-  // Handle shape selection
-  const handleShapeSelect = (shapeId) => {
-    // Clear previous selection
-    if (selectedId && selectedId !== shapeId) {
-      clearSelection(selectedId);
-    }
-    
-    // Set new selection
-    setSelectedId(shapeId);
-    
-    // Track selection in RTDB
-    if (user?.uid) {
-      const name = user.displayName || user.email?.split('@')[0] || 'User';
-      const color = generateUserColor(user.uid);
-      setSelection(shapeId, user.uid, name, color);
+  // Handle shape selection (with shift-click multi-select)
+  const handleShapeSelect = (shapeId, isShiftKey) => {
+    if (isShiftKey) {
+      // Multi-select: toggle shape in/out of selection
+      if (selectedIds.includes(shapeId)) {
+        // Remove from selection
+        const newIds = selectedIds.filter(id => id !== shapeId);
+        setSelectedIds(newIds);
+        clearSelection(shapeId);
+      } else {
+        // Add to selection
+        setSelectedIds([...selectedIds, shapeId]);
+        if (user?.uid) {
+          const name = user.displayName || user.email?.split('@')[0] || 'User';
+          const color = generateUserColor(user.uid);
+          setSelection(shapeId, user.uid, name, color);
+        }
+      }
+    } else {
+      // Single select: clear previous and select new
+      if (selectedIds.length > 0) {
+        selectedIds.forEach(id => clearSelection(id));
+      }
+      setSelectedIds([shapeId]);
+      if (user?.uid) {
+        const name = user.displayName || user.email?.split('@')[0] || 'User';
+        const color = generateUserColor(user.uid);
+        setSelection(shapeId, user.uid, name, color);
+      }
     }
   };
 
@@ -181,21 +238,21 @@ export default function Canvas() {
   const handleStageClick = (e) => {
     // Deselect if clicked on stage background
     if (e.target === e.target.getStage()) {
-      if (selectedId) {
-        clearSelection(selectedId);
+      if (selectedIds.length > 0) {
+        selectedIds.forEach(id => clearSelection(id));
       }
-      setSelectedId(null);
+      setSelectedIds([]);
     }
   };
 
-  // Clear selection on unmount or when selected shape changes
+  // Clear selections on unmount
   useEffect(() => {
     return () => {
-      if (selectedId) {
-        clearSelection(selectedId);
+      if (selectedIds.length > 0) {
+        selectedIds.forEach(id => clearSelection(id));
       }
     };
-  }, [selectedId]);
+  }, [selectedIds]);
 
   // Stale lock sweeper - run every 2 seconds and on visibility change
   useEffect(() => {
@@ -233,7 +290,7 @@ export default function Canvas() {
         onAddShape={handleAddShape}
         onLayerUp={handleLayerUp}
         onLayerDown={handleLayerDown}
-        selectedShape={selectedId}
+        selectedShape={selectedIds.length === 1 ? selectedIds[0] : null}
       />
       <Stage
         ref={stageRef}
@@ -264,7 +321,7 @@ export default function Canvas() {
             <ShapeRenderer
               key={shape.id}
               shape={shape}
-              isSelected={shape.id === selectedId}
+              isSelected={selectedIds.includes(shape.id)}
               currentUserId={user?.uid}
               onSelect={handleShapeSelect}
               onRequestLock={handleRequestLock}

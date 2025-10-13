@@ -91,7 +91,8 @@ export default function ShapeRenderer({
 
   const handleClick = (e) => {
     e.cancelBubble = true;
-    onSelect(shape.id);
+    const isShiftKey = e.evt?.shiftKey || false;
+    onSelect(shape.id, isShiftKey);
   };
 
   const isLockedByOther = shape.isLocked && shape.lockedBy !== currentUserId;
