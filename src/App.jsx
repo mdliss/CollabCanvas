@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import Login from "./components/Auth/Login";
+import Canvas from "./components/Canvas/Canvas"; 
 
 function Guard({ children }) {
   const { user } = useAuth();
