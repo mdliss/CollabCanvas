@@ -1,7 +1,8 @@
 import { Rect, Circle, Line, Text, Group, Transformer } from "react-konva";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import { streamDragPosition, stopDragStream } from "../../services/dragStream";
+import { updateShape } from "../../services/canvas";
 
 /**
  * ShapeRenderer - renders different shape types with transform support
@@ -11,6 +12,7 @@ export default function ShapeRenderer({
   isSelected,
   currentUserId,
   currentUserName,
+  currentUser,
   onSelect, 
   onRequestLock,
   onDragStart,
@@ -19,8 +21,6 @@ export default function ShapeRenderer({
 }) {
   const shapeRef = useRef(null);
   const transformerRef = useRef(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editText, setEditText] = useState(shape.text || '');
   const dragStreamInterval = useRef(null);
 
   // Attach transformer to selected shape
@@ -114,15 +114,21 @@ export default function ShapeRenderer({
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
     
-    // Reset scale and apply to width/height
+    // Calculate new dimensions
+    const newWidth = Math.max(10, node.width() * scaleX);
+    const newHeight = Math.max(10, node.height() * scaleY);
+    
+    // Reset scale and apply to width/height BEFORE async write
     node.scaleX(1);
     node.scaleY(1);
+    node.width(newWidth);
+    node.height(newHeight);
 
     const newAttrs = {
       x: node.x(),
       y: node.y(),
-      width: Math.max(10, node.width() * scaleX),
-      height: Math.max(10, node.height() * scaleY),
+      width: newWidth,
+      height: newHeight,
       rotation: node.rotation()
     };
 
@@ -145,43 +151,6 @@ export default function ShapeRenderer({
     e.cancelBubble = true;
     const isShiftKey = e.evt?.shiftKey || false;
     onSelect(shape.id, isShiftKey);
-  };
-
-  const handleDoubleClick = async (e) => {
-    if (shape.type !== 'text') return;
-    
-    e.cancelBubble = true;
-    
-    // Try to acquire lock for editing
-    const lockAcquired = await onRequestLock(shape.id);
-    if (!lockAcquired) {
-      console.warn("[ShapeRenderer] Cannot edit text - locked by another user");
-      return;
-    }
-    
-    setIsEditing(true);
-    setEditText(shape.text || '');
-  };
-
-  const handleTextChange = (e) => {
-    setEditText(e.target.value);
-  };
-
-  const handleTextBlur = () => {
-    setIsEditing(false);
-    if (editText !== shape.text) {
-      onTransformEnd(shape.id, { text: editText });
-    }
-  };
-
-  const handleTextKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleTextBlur();
-    } else if (e.key === 'Escape') {
-      setIsEditing(false);
-      setEditText(shape.text || '');
-    }
   };
 
   const isLockedByOther = shape.isLocked && shape.lockedBy !== currentUserId;
@@ -239,13 +208,45 @@ export default function ShapeRenderer({
             {...commonProps}
             x={shape.x}
             y={shape.y}
-            text={isEditing ? editText : (shape.text || 'Text')}
+            text={shape.text || 'Text'}
             fontSize={shape.fontSize || 24}
             fill={shape.fill || '#000000'}
             width={shape.width || 200}
             rotation={shape.rotation || 0}
-            onDblClick={handleDoubleClick}
-            onDblTap={handleDoubleClick}
+            onDblClick={async (e) => {
+              e.cancelBubble = true;
+              
+              // Check authentication
+              if (!currentUser) {
+                console.error('[Text Edit] No authenticated user');
+                alert('Please sign in to edit text');
+                return;
+              }
+              
+              const newText = window.prompt('Edit text:', shape.text || 'Text');
+              if (newText !== null && newText.trim() !== '') {
+                try {
+                  console.log('[Text Edit] Attempting update:', {
+                    shapeId: shape.id,
+                    oldText: shape.text,
+                    newText: newText,
+                    userId: currentUser.uid
+                  });
+                  
+                  await updateShape('global-canvas-v1', shape.id, { text: newText }, currentUser);
+                  
+                  console.log('[Text Edit] Update successful!');
+                } catch (error) {
+                  console.error('[Text Edit] Update failed:', error);
+                  console.error('[Text Edit] Error details:', {
+                    message: error.message,
+                    code: error.code,
+                    stack: error.stack
+                  });
+                  alert('Failed to update text: ' + (error.message || 'Unknown error'));
+                }
+              }
+            }}
           />
         );
       
@@ -268,7 +269,7 @@ export default function ShapeRenderer({
   return (
     <>
       {renderShape()}
-      {isSelected && !isLockedByOther && !isEditing && (
+      {isSelected && !isLockedByOther && (
         <Transformer
           ref={transformerRef}
           boundBoxFunc={(oldBox, newBox) => {
@@ -279,37 +280,6 @@ export default function ShapeRenderer({
             return newBox;
           }}
         />
-      )}
-      {isEditing && shape.type === 'text' && (
-        <div
-          style={{
-            position: 'absolute',
-            top: shape.y + 'px',
-            left: shape.x + 'px',
-            zIndex: 10000,
-          }}
-        >
-          <textarea
-            value={editText}
-            onChange={handleTextChange}
-            onBlur={handleTextBlur}
-            onKeyDown={handleTextKeyDown}
-            autoFocus
-            style={{
-              width: shape.width + 'px',
-              minHeight: '50px',
-              fontSize: (shape.fontSize || 24) + 'px',
-              fontFamily: 'Arial, sans-serif',
-              color: shape.fill || '#000000',
-              border: '2px solid #0066cc',
-              borderRadius: '4px',
-              padding: '4px',
-              background: 'white',
-              resize: 'none',
-              overflow: 'hidden'
-            }}
-          />
-        </div>
       )}
     </>
   );

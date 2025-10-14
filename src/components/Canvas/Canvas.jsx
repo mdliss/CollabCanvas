@@ -114,6 +114,7 @@ export default function Canvas() {
     }
   };
 
+
   // Show temporary feedback message
   const showFeedback = (message) => {
     setFeedbackMessage(message);
@@ -562,6 +563,36 @@ export default function Canvas() {
     };
   }, []);
 
+  // Debug helper for programmatic text updates (AI integration testing)
+  useEffect(() => {
+    window.debugUpdateText = (shapeId, newText) => {
+      if (!user) {
+        console.error('[debugUpdateText] No authenticated user');
+        return;
+      }
+      console.log('[debugUpdateText] Updating shape', shapeId, 'with text:', newText);
+      updateShape(CANVAS_ID, shapeId, { text: newText }, user)
+        .then(() => console.log('[debugUpdateText] Success!'))
+        .catch(err => console.error('[debugUpdateText] Failed:', err));
+    };
+
+    window.debugGetShapes = () => {
+      console.table(shapes.map(s => ({ 
+        id: s.id, 
+        type: s.type, 
+        text: s.text, 
+        x: Math.round(s.x), 
+        y: Math.round(s.y) 
+      })));
+      return shapes;
+    };
+
+    return () => {
+      delete window.debugUpdateText;
+      delete window.debugGetShapes;
+    };
+  }, [user, shapes]);
+
   // Render grid lines
   const renderGrid = () => {
     const lines = [];
@@ -700,6 +731,7 @@ export default function Canvas() {
               isSelected={selectedIds.includes(shape.id)}
               currentUserId={user?.uid}
               currentUserName={user?.displayName || user?.email?.split('@')[0] || 'User'}
+              currentUser={user}
               onSelect={handleShapeSelect}
               onRequestLock={handleRequestLock}
               onDragStart={handleShapeDragStart}
