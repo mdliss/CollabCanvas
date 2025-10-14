@@ -1,6 +1,8 @@
+import Avatar from './Avatar';
+
 /**
- * PresenceList - Shows all online users
- * Render every user with color dot + name; show count = users.length
+ * PresenceList - Shows all online users with avatars
+ * Render every user with avatar + name; show count = users.length
  */
 export default function PresenceList({ users }) {
   if (!users || users.length === 0) return null;
@@ -22,7 +24,7 @@ export default function PresenceList({ users }) {
       <div style={{ marginBottom: "8px", fontWeight: "600", color: "#333" }}>
         {users.length} online
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
         {users.map((user) => (
           <div
             key={user.uid}
@@ -32,14 +34,11 @@ export default function PresenceList({ users }) {
               gap: "8px"
             }}
           >
-            <div
-              style={{
-                width: "12px",
-                height: "12px",
-                borderRadius: "50%",
-                backgroundColor: user.color,
-                flexShrink: 0
-              }}
+            <Avatar 
+              src={user.photoURL}
+              name={user.displayName}
+              color={user.color}
+              size="sm"
             />
             <span style={{ color: "#555", fontSize: "13px" }}>
               {user.displayName}

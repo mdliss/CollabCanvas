@@ -12,7 +12,7 @@ export const generateUserColor = (uid) => {
   return colors[hash % colors.length];
 };
 
-export const setUserOnline = async (uid, name, color) => {
+export const setUserOnline = async (uid, name, color, photoURL = null) => {
   if (!uid) return;
 
   const userRef = ref(rtdb, `${BASE}/${uid}`);
@@ -23,6 +23,11 @@ export const setUserOnline = async (uid, name, color) => {
     online: true,
     lastSeen: serverTimestamp()
   };
+
+  // Add photoURL if available
+  if (photoURL) {
+    data.photoURL = photoURL;
+  }
 
   await set(userRef, data);
 
@@ -51,6 +56,7 @@ export const watchPresence = (callback) => {
         uid,
         displayName: x.displayName || 'User',
         color: x.cursorColor || '#666',
+        photoURL: x.photoURL || null,
         online: true
       }));
     console.log('[Presence] Online users count:', arr.length);

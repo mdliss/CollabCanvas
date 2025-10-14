@@ -14,11 +14,14 @@ export default function useCursors(stageRef) {
   const userNameRef = useRef(null);
 
   // Initialize user info
+  const userPhotoRef = useRef(null);
+  
   useEffect(() => {
     if (user?.uid) {
       userColorRef.current = generateUserColor(user.uid);
       userNameRef.current = user.displayName || user.email?.split('@')[0] || 'User';
-      console.debug("[useCursors] init", user.uid);
+      userPhotoRef.current = user.photoURL || null;
+      console.debug("[useCursors] init", user.uid, userPhotoRef.current ? '(with photo)' : '(no photo)');
     }
   }, [user]);
 
@@ -38,7 +41,7 @@ export default function useCursors(stageRef) {
       const x = (pointer.x - stage.position().x) / stage.scaleX();
       const y = (pointer.y - stage.position().y) / stage.scaleY();
 
-      writeCursor(uid, x, y, userNameRef.current, userColorRef.current);
+      writeCursor(uid, x, y, userNameRef.current, userColorRef.current, userPhotoRef.current);
     };
 
     // Attach mouse listener

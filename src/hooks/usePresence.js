@@ -16,10 +16,11 @@ export default function usePresence() {
     const uid = user.uid;
     const name = user.displayName || user.email?.split('@')[0] || 'User';
     const color = generateUserColor(uid) || '#1e88e5';
+    const photoURL = user.photoURL || null;
 
-    console.log('[usePresence] Setting user online:', uid, name);
+    console.log('[usePresence] Setting user online:', uid, name, photoURL ? '(with photo)' : '(no photo)');
 
-    setUserOnline(uid, name, color);
+    setUserOnline(uid, name, color, photoURL);
 
     const unsub = watchPresence(setOnlineUsers);
 

@@ -11,7 +11,7 @@ let lastX = null;
 let lastY = null;
 let disconnectSet = new Set();
 
-export const writeCursor = (uid, x, y, name, color) => {
+export const writeCursor = (uid, x, y, name, color, photoURL = null) => {
   if (!uid) return;
 
   if (lastX !== null && lastY !== null) {
@@ -23,7 +23,7 @@ export const writeCursor = (uid, x, y, name, color) => {
   const now = Date.now();
   const timeSinceLastUpdate = now - lastUpdateTime;
 
-  pendingUpdate = { uid, x, y, name, color };
+  pendingUpdate = { uid, x, y, name, color, photoURL };
 
   if (timeSinceLastUpdate >= THROTTLE_MS) {
     flushCursorUpdate();
@@ -38,17 +38,24 @@ export const writeCursor = (uid, x, y, name, color) => {
 const flushCursorUpdate = () => {
   if (!pendingUpdate) return;
 
-  const { uid, x, y, name, color } = pendingUpdate;
+  const { uid, x, y, name, color, photoURL } = pendingUpdate;
   const userRef = ref(rtdb, `${BASE}/${uid}`);
   
-  update(userRef, {
+  const updateData = {
     cursorX: Math.round(x),
     cursorY: Math.round(y),
     displayName: name,
     cursorColor: color,
     online: true,
     lastSeen: serverTimestamp()
-  });
+  };
+
+  // Add photoURL if available
+  if (photoURL) {
+    updateData.photoURL = photoURL;
+  }
+
+  update(userRef, updateData);
 
   // Set up onDisconnect once per user
   if (!disconnectSet.has(uid)) {
@@ -82,7 +89,8 @@ export const watchCursors = (callback) => {
           x: x.cursorX,
           y: x.cursorY,
           name: x.displayName || 'User',
-          color: x.cursorColor || '#666'
+          color: x.cursorColor || '#666',
+          photoURL: x.photoURL || null
         };
       }
     }

@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import Avatar from '../Collaboration/Avatar';
 
 /**
  * AuthBar - Top-center authentication status and controls
@@ -53,12 +54,20 @@ export default function AuthBar({ onShowEmailLogin }) {
     }
   };
 
-  // Get user display name
+  // Get user display info
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
-  
-  // Get user avatar (Google photo or generate initials)
   const photoURL = user?.photoURL;
-  const initials = displayName.substring(0, 2).toUpperCase();
+  
+  // Generate color for avatar fallback (consistent with presence system)
+  const getUserColor = () => {
+    if (!user?.uid) return '#4285f4';
+    const colors = [
+      "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", 
+      "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E2"
+    ];
+    const hash = user.uid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+  };
 
   if (!user) {
     // UNAUTHED STATE
@@ -215,36 +224,12 @@ export default function AuthBar({ onShowEmailLogin }) {
           }}
         >
           {/* Avatar */}
-          <div
-            style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '50%',
-              background: photoURL ? 'transparent' : '#4285f4',
-              color: 'white',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-              fontWeight: '600',
-              overflow: 'hidden',
-              border: '2px solid #e0e0e0'
-            }}
-          >
-            {photoURL ? (
-              <img 
-                src={photoURL} 
-                alt={displayName}
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
-                }}
-              />
-            ) : (
-              initials
-            )}
-          </div>
+          <Avatar 
+            src={photoURL}
+            name={displayName}
+            color={getUserColor()}
+            size="md"
+          />
 
           {/* Display name */}
           <span
