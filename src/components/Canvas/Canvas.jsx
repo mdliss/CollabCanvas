@@ -1,7 +1,7 @@
 import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper, duplicateShapes } from "../../services/canvas";
+import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper } from "../../services/canvas";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
 import ShapeToolbar from "./ShapeToolbar";
@@ -107,20 +107,6 @@ export default function Canvas() {
     };
   }, []);
 
-  // Handle duplicate shapes
-  const handleDuplicate = async () => {
-    if (selectedIds.length === 0) return;
-    
-    try {
-      const count = await duplicateShapes(CANVAS_ID, selectedIds, user);
-      showFeedback(`Duplicated ${count} shape${count > 1 ? 's' : ''}`);
-    } catch (error) {
-      console.error("[Canvas] Duplicate failed:", error.message);
-      showFeedback("Duplicate failed");
-    }
-  };
-
-
   // Show temporary feedback message
   const showFeedback = (message) => {
     setFeedbackMessage(message);
@@ -196,12 +182,6 @@ export default function Canvas() {
             }
             break;
         }
-      }
-      
-      // Duplicate (Cmd/Ctrl+D)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
-        e.preventDefault();
-        handleDuplicate();
       }
     };
     
@@ -747,9 +727,7 @@ export default function Canvas() {
       />
       <PresenceList users={onlineUsers} />
       <ShapeToolbar 
-        onAddShape={handleAddShape} 
-        onDuplicate={handleDuplicate}
-        selectedCount={selectedIds.length}
+        onAddShape={handleAddShape}
       />
       
       {/* Color Palette - shows when shapes are selected */}

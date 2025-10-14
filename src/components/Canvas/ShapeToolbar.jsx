@@ -3,7 +3,7 @@ import { useState } from 'react';
 /**
  * ShapeToolbar - Right-aligned vertical toolbar for shape creation and tools
  */
-export default function ShapeToolbar({ onAddShape, onDuplicate, selectedCount }) {
+export default function ShapeToolbar({ onAddShape }) {
   const [activeTool, setActiveTool] = useState(null);
   const [hoveredTool, setHoveredTool] = useState(null);
 
@@ -12,21 +12,15 @@ export default function ShapeToolbar({ onAddShape, onDuplicate, selectedCount })
     { id: 'circle', label: 'Circle', icon: '●', shortcut: 'C' },
     { id: 'line', label: 'Line', icon: '─', shortcut: 'L' },
     { id: 'text', label: 'Text', icon: 'T', shortcut: 'T' },
-    // Diamond removed - 'D' key is now available for other shortcuts
     { id: 'triangle', label: 'Triangle', icon: '▲', shortcut: 'Shift+T' },
-    { id: 'star', label: 'Star', icon: '★', shortcut: 'S' },
-    { id: 'duplicate', label: 'Duplicate', icon: '⧉', shortcut: 'Cmd+D', disabled: selectedCount === 0 }
+    { id: 'star', label: 'Star', icon: '★', shortcut: 'S' }
   ];
 
   const handleToolClick = (tool) => {
-    if (tool.id === 'duplicate') {
-      onDuplicate();
-    } else {
-      setActiveTool(tool.id);
-      onAddShape(tool.id);
-      // Clear active state after a short delay
-      setTimeout(() => setActiveTool(null), 200);
-    }
+    setActiveTool(tool.id);
+    onAddShape(tool.id);
+    // Clear active state after a short delay
+    setTimeout(() => setActiveTool(null), 200);
   };
 
   return (

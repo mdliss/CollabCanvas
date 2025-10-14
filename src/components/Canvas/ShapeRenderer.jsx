@@ -24,6 +24,7 @@ export default function ShapeRenderer({
   const shapeRef = useRef(null);
   const transformerRef = useRef(null);
   const dragStreamInterval = useRef(null);
+  const transformStreamInterval = useRef(null);
 
   // Attach transformer to selected shape
   useEffect(() => {
@@ -33,15 +34,23 @@ export default function ShapeRenderer({
     }
   }, [isSelected]);
 
-  // Clean up drag stream when shape is deselected or unmounted
+  // Clean up drag/transform streams when shape is deselected or unmounted
   useEffect(() => {
     return () => {
-      // Stop any active drag streaming when component unmounts or isSelected changes
+      // Stop any active drag streaming
       if (dragStreamInterval.current) {
         clearInterval(dragStreamInterval.current);
         dragStreamInterval.current = null;
         stopDragStream(shape.id);
         console.log('[ShapeRenderer] Cleanup: stopped drag stream for', shape.id);
+      }
+      
+      // Stop any active transform streaming
+      if (transformStreamInterval.current) {
+        clearInterval(transformStreamInterval.current);
+        transformStreamInterval.current = null;
+        stopDragStream(shape.id);
+        console.log('[ShapeRenderer] Cleanup: stopped transform stream for', shape.id);
       }
     };
   }, [isSelected, shape.id]);
@@ -122,6 +131,13 @@ export default function ShapeRenderer({
   };
 
   const handleTransformEnd = async (e) => {
+    // Stop streaming transform updates
+    if (transformStreamInterval.current) {
+      clearInterval(transformStreamInterval.current);
+      transformStreamInterval.current = null;
+    }
+    await stopDragStream(shape.id);
+    
     const node = shapeRef.current;
     if (!node) return;
 
@@ -159,6 +175,22 @@ export default function ShapeRenderer({
       }
       return false;
     }
+    
+    // Start streaming transform updates (rotation, scale, position) at ~60Hz
+    transformStreamInterval.current = setInterval(() => {
+      const node = shapeRef.current;
+      if (node && currentUserId) {
+        streamDragPosition(
+          shape.id,
+          currentUserId,
+          currentUserName || 'User',
+          node.x(),
+          node.y(),
+          node.rotation()  // Stream live rotation during transform
+        );
+      }
+    }, 16);
+    
     return true;
   };
 
@@ -344,7 +376,7 @@ export default function ShapeRenderer({
   return (
     <>
       {renderShape()}
-      {isSelected && !isLockedByOther && (
+      {isSelected && !isLockedByOther && !isBeingDraggedByOther && (
         <Transformer
           ref={transformerRef}
           boundBoxFunc={(oldBox, newBox) => {
