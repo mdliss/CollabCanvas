@@ -1,6 +1,7 @@
 import { Rect, Circle, Line, Text, Group, Transformer } from "react-konva";
 import { useEffect, useRef, useState } from "react";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
+import { streamDragPosition, stopDragStream } from "../../services/dragStream";
 
 /**
  * ShapeRenderer - renders different shape types with transform support
@@ -9,6 +10,7 @@ export default function ShapeRenderer({
   shape, 
   isSelected,
   currentUserId,
+  currentUserName,
   onSelect, 
   onRequestLock,
   onDragStart,
@@ -19,6 +21,7 @@ export default function ShapeRenderer({
   const transformerRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(shape.text || '');
+  const dragStreamInterval = useRef(null);
 
   // Attach transformer to selected shape
   useEffect(() => {
@@ -63,10 +66,33 @@ export default function ShapeRenderer({
       console.warn("[Shape] Drag cancelled - shape locked by another user");
       return;
     }
+    
     onDragStart();
+    
+    // Start streaming drag position at ~60Hz (16ms)
+    dragStreamInterval.current = setInterval(() => {
+      const node = shapeRef.current;
+      if (node && currentUserId) {
+        streamDragPosition(
+          shape.id,
+          currentUserId,
+          currentUserName || 'User',
+          node.x(),
+          node.y(),
+          node.rotation()
+        );
+      }
+    }, 16);
   };
 
   const handleDragEnd = (e) => {
+    // Stop streaming
+    if (dragStreamInterval.current) {
+      clearInterval(dragStreamInterval.current);
+      dragStreamInterval.current = null;
+    }
+    stopDragStream(shape.id);
+    
     const node = e.target;
     const finalPos = {
       x: node.x(),

@@ -9,8 +9,10 @@ import DebugNote from "./DebugNote";
 import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
+import LiveDragOverlay from "../Collaboration/LiveDragOverlay";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
+import useDragStreams from "../../hooks/useDragStreams";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
 import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
@@ -54,9 +56,10 @@ export default function Canvas() {
   const panStartRef = useRef(null);
   const panInitialPosRef = useRef(null);
 
-  // Presence and cursors
+  // Presence, cursors, and live drag streams
   const { onlineUsers } = usePresence();
   const { cursors } = useCursors(stageRef);
+  const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
 
   // Watch selections
@@ -696,6 +699,7 @@ export default function Canvas() {
               shape={shape}
               isSelected={selectedIds.includes(shape.id)}
               currentUserId={user?.uid}
+              currentUserName={user?.displayName || user?.email?.split('@')[0] || 'User'}
               onSelect={handleShapeSelect}
               onRequestLock={handleRequestLock}
               onDragStart={handleShapeDragStart}
@@ -703,6 +707,19 @@ export default function Canvas() {
               onTransformEnd={handleShapeTransformEnd}
             />
           ))}
+
+          {/* Render live drag overlays for shapes being dragged by other users */}
+          {Object.entries(activeDrags).map(([shapeId, dragData]) => {
+            const shape = shapes.find(s => s.id === shapeId);
+            if (!shape) return null;
+            return (
+              <LiveDragOverlay
+                key={`drag-${shapeId}`}
+                shape={shape}
+                dragData={dragData}
+              />
+            );
+          })}
 
           {/* Render selection badges (for selections and locks) */}
           {shapes.map(shape => {

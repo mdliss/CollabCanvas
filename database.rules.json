@@ -7,6 +7,14 @@
     "selections": {
       ".read": "auth != null",
       ".write": "auth != null"
+    },
+    "drags": {
+      ".read": "auth != null",
+      "global-canvas-v1": {
+        "$shapeId": {
+          ".write": "auth != null"
+        }
+      }
     }
   }
 }
