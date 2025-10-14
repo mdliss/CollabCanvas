@@ -1,6 +1,6 @@
-// Canvas dimensions (5000x5000px bounded space)
-export const CANVAS_WIDTH = 5000;
-export const CANVAS_HEIGHT = 5000;
+// Canvas dimensions (20000x20000px bounded space for infinite canvas feel)
+export const CANVAS_WIDTH = 20000;
+export const CANVAS_HEIGHT = 20000;
 
 // Default rectangle properties for new shapes
 export const DEFAULT_RECT = {

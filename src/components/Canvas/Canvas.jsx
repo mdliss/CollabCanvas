@@ -1,4 +1,4 @@
-import { Stage, Layer, Rect, Line as KonvaLine } from "react-konva";
+import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper, duplicateShapes } from "../../services/canvas";
@@ -18,7 +18,7 @@ import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 
 const CANVAS_ID = "global-canvas-v1";
-const GRID_SIZE = 20;
+const GRID_SIZE = 50; // Larger spacing for expansive canvas
 const GRID_COLOR = "#e0e0e0";
 const LOCK_TTL_MS = 8000; // 8 seconds
 
@@ -33,13 +33,18 @@ export default function Canvas() {
   const [feedbackMessage, setFeedbackMessage] = useState(null);
   
   // Load viewport from localStorage or use defaults
+  // Default: 0.5x zoom, centered on canvas for spacious infinite feel
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
-    return saved ? JSON.parse(saved).scale : 1;
+    return saved ? JSON.parse(saved).scale : 0.5;
   });
   const [stagePos, setStagePos] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
-    return saved ? JSON.parse(saved).pos : { x: 0, y: 0 };
+    if (saved) return JSON.parse(saved).pos;
+    // Center viewport on canvas center (10000, 10000) at 0.5x zoom
+    const centerX = -(CANVAS_WIDTH * 0.5 - window.innerWidth) / 2;
+    const centerY = -(CANVAS_HEIGHT * 0.5 - (window.innerHeight - 50)) / 2;
+    return { x: centerX, y: centerY };
   });
   const stageRef = useRef(null);
 
@@ -261,7 +266,7 @@ export default function Canvas() {
     const newScale = e.evt.deltaY > 0 
       ? stageScale / scaleBy 
       : stageScale * scaleBy;
-    const clampedScale = Math.max(0.2, Math.min(3, newScale));
+    const clampedScale = Math.max(0.05, Math.min(3, newScale)); // Allow 0.05x (20× zoom out) for large canvas
     
     // Calculate mouse point in canvas space before zoom
     const mousePointTo = {
@@ -281,15 +286,39 @@ export default function Canvas() {
 
   // Clamp stage position to canvas bounds
   const clampStagePos = (pos) => {
-    const maxPos = { x: 0, y: 0 };
-    const minPos = {
-      x: -(CANVAS_WIDTH * stageScale - window.innerWidth),
-      y: -(CANVAS_HEIGHT * stageScale - (window.innerHeight - 50))
-    };
+    // Calculate scaled canvas dimensions
+    const scaledCanvasWidth = CANVAS_WIDTH * stageScale;
+    const scaledCanvasHeight = CANVAS_HEIGHT * stageScale;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight - 50;
+    
+    let clampedX = pos.x;
+    let clampedY = pos.y;
+    
+    // Only clamp if canvas is larger than viewport
+    if (scaledCanvasWidth > viewportWidth) {
+      // Stage position ranges from 0 (canvas left edge at screen left)
+      // to -(scaledCanvasWidth - viewportWidth) (canvas right edge at screen right)
+      const minX = -(scaledCanvasWidth - viewportWidth);
+      const maxX = 0;
+      clampedX = Math.max(minX, Math.min(maxX, pos.x));
+    } else {
+      // Canvas smaller than viewport - allow free positioning or center
+      // For now, allow free positioning (user can pan anywhere)
+      clampedX = pos.x;
+    }
+    
+    if (scaledCanvasHeight > viewportHeight) {
+      const minY = -(scaledCanvasHeight - viewportHeight);
+      const maxY = 0;
+      clampedY = Math.max(minY, Math.min(maxY, pos.y));
+    } else {
+      clampedY = pos.y;
+    }
     
     return {
-      x: Math.max(Math.min(pos.x, maxPos.x), isFinite(minPos.x) ? minPos.x : pos.x),
-      y: Math.max(Math.min(pos.y, maxPos.y), isFinite(minPos.y) ? minPos.y : pos.y)
+      x: clampedX,
+      y: clampedY
     };
   };
 
@@ -722,6 +751,38 @@ export default function Canvas() {
           
           {/* Grid lines */}
           {renderGrid()}
+          
+          {/* Center indicator - subtle crosshair at canvas center */}
+          <Group listening={false}>
+            <KonvaLine
+              points={[
+                CANVAS_WIDTH / 2 - 30, CANVAS_HEIGHT / 2,
+                CANVAS_WIDTH / 2 + 30, CANVAS_HEIGHT / 2
+              ]}
+              stroke="#999999"
+              strokeWidth={2 / stageScale}
+              opacity={0.4}
+              perfectDrawEnabled={false}
+            />
+            <KonvaLine
+              points={[
+                CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 30,
+                CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 30
+              ]}
+              stroke="#999999"
+              strokeWidth={2 / stageScale}
+              opacity={0.4}
+              perfectDrawEnabled={false}
+            />
+            <Circle
+              x={CANVAS_WIDTH / 2}
+              y={CANVAS_HEIGHT / 2}
+              radius={4 / stageScale}
+              fill="#999999"
+              opacity={0.6}
+              perfectDrawEnabled={false}
+            />
+          </Group>
           
           {/* Render all shapes */}
           {shapes.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(shape => (
