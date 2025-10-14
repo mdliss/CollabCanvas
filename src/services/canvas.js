@@ -335,3 +335,70 @@ export const staleLockSweeper = async (canvasId, ttlMs = 5000) => {
     console.error("[staleLockSweeper] Failed:", error);
   }
 };
+
+/**
+ * Duplicate selected shapes
+ * Creates copies with new IDs, offset position, and incremented zIndex
+ * @param {string} canvasId - Canvas document ID
+ * @param {string[]} shapeIds - Array of shape IDs to duplicate
+ * @param {Object} user - User object with uid
+ * @returns {Promise<number>} Number of shapes duplicated
+ */
+export const duplicateShapes = async (canvasId, shapeIds, user) => {
+  try {
+    console.info("[duplicateShapes] Starting...", shapeIds.length, "shapes");
+    const canvasRef = getCanvasDoc(canvasId);
+    let duplicatedCount = 0;
+    
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(canvasRef);
+      
+      if (!docSnap.exists()) return;
+      
+      const shapes = docSnap.data().shapes || [];
+      const now = Date.now();
+      
+      // Find the highest zIndex
+      const maxZIndex = shapes.reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+      
+      // Create duplicates
+      const duplicates = [];
+      shapeIds.forEach((shapeId, index) => {
+        const original = shapes.find(s => s.id === shapeId);
+        if (!original) return;
+        
+        const duplicate = {
+          ...original,
+          id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          x: original.x + 8,
+          y: original.y + 8,
+          zIndex: maxZIndex + index + 1,
+          createdBy: user?.uid || 'anonymous',
+          createdAt: now,
+          lastModifiedBy: user?.uid || 'anonymous',
+          lastModifiedAt: now,
+          // Clear lock state - duplicates should never inherit locks
+          isLocked: false,
+          lockedBy: null,
+          lockedAt: null
+        };
+        
+        duplicates.push(duplicate);
+        duplicatedCount++;
+      });
+      
+      if (duplicates.length > 0) {
+        transaction.update(canvasRef, {
+          shapes: [...shapes, ...duplicates],
+          lastUpdated: serverTimestamp()
+        });
+      }
+    });
+    
+    console.info("[duplicateShapes] Success - duplicated", duplicatedCount, "shapes");
+    return duplicatedCount;
+  } catch (error) {
+    console.error("[duplicateShapes] Failed:", error);
+    throw error;
+  }
+};

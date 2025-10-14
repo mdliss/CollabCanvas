@@ -1,10 +1,10 @@
 import { Stage, Layer, Rect, Line as KonvaLine } from "react-konva";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper } from "../../services/canvas";
+import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper, duplicateShapes } from "../../services/canvas";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
-import CanvasControls from "./CanvasControls";
+import ShapeToolbar from "./ShapeToolbar";
 import DebugNote from "./DebugNote";
 import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
@@ -28,6 +28,7 @@ export default function Canvas() {
   const [isDraggingShape, setIsDraggingShape] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState(null);
   
   // Load viewport from localStorage or use defaults
   const [stageScale, setStageScale] = useState(() => {
@@ -48,6 +49,10 @@ export default function Canvas() {
   // Marquee selection state
   const [selectionBox, setSelectionBox] = useState(null);
   const selectionStartRef = useRef(null);
+  
+  // Pan tracking state (for manual pan implementation)
+  const panStartRef = useRef(null);
+  const panInitialPosRef = useRef(null);
 
   // Presence and cursors
   const { onlineUsers } = usePresence();
@@ -92,6 +97,25 @@ export default function Canvas() {
       } 
     };
   }, []);
+
+  // Handle duplicate shapes
+  const handleDuplicate = async () => {
+    if (selectedIds.length === 0) return;
+    
+    try {
+      const count = await duplicateShapes(CANVAS_ID, selectedIds, user);
+      showFeedback(`Duplicated ${count} shape${count > 1 ? 's' : ''}`);
+    } catch (error) {
+      console.error("[Canvas] Duplicate failed:", error.message);
+      showFeedback("Duplicate failed");
+    }
+  };
+
+  // Show temporary feedback message
+  const showFeedback = (message) => {
+    setFeedbackMessage(message);
+    setTimeout(() => setFeedbackMessage(null), 2000);
+  };
 
   // Handle keyboard events (shortcuts + delete)
   useEffect(() => {
@@ -155,8 +179,7 @@ export default function Canvas() {
       // Duplicate (Cmd/Ctrl+D)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
         e.preventDefault();
-        // TODO: Implement duplicate when canvas.js has duplicateShapes
-        console.info('[Canvas] Duplicate shortcut pressed (not implemented yet)');
+        handleDuplicate();
       }
     };
     
@@ -252,21 +275,18 @@ export default function Canvas() {
     setStagePos(newPos);
   };
 
-  // Clamp stage panning to canvas bounds
-  const handleStageDragMove = (e) => {
-    const stage = e.target;
+  // Clamp stage position to canvas bounds
+  const clampStagePos = (pos) => {
     const maxPos = { x: 0, y: 0 };
     const minPos = {
       x: -(CANVAS_WIDTH * stageScale - window.innerWidth),
       y: -(CANVAS_HEIGHT * stageScale - (window.innerHeight - 50))
     };
     
-    const clampedPos = {
-      x: Math.max(Math.min(stage.x(), maxPos.x), isFinite(minPos.x) ? minPos.x : stage.x()),
-      y: Math.max(Math.min(stage.y(), maxPos.y), isFinite(minPos.y) ? minPos.y : stage.y())
+    return {
+      x: Math.max(Math.min(pos.x, maxPos.x), isFinite(minPos.x) ? minPos.x : pos.x),
+      y: Math.max(Math.min(pos.y, maxPos.y), isFinite(minPos.y) ? minPos.y : pos.y)
     };
-    
-    setStagePos(clampedPos);
   };
 
   // Handle shape drag start - disable stage dragging
@@ -351,12 +371,16 @@ export default function Canvas() {
     if (e.evt.button === 1) {
       e.evt.preventDefault();
       setIsPanning(true);
+      panStartRef.current = { x: e.evt.clientX, y: e.evt.clientY };
+      panInitialPosRef.current = { ...stagePos };
       return;
     }
     
     // Space + left-mouse = pan
     if (isSpacePressed && e.evt.button === 0) {
       setIsPanning(true);
+      panStartRef.current = { x: e.evt.clientX, y: e.evt.clientY };
+      panInitialPosRef.current = { ...stagePos };
       return;
     }
     
@@ -386,6 +410,20 @@ export default function Canvas() {
     const pointerPos = stage.getPointerPosition();
     const currentTime = Date.now();
     
+    // Handle panning if active - use screen-space delta for perfect accuracy
+    if (isPanning && panStartRef.current && panInitialPosRef.current) {
+      const deltaX = e.evt.clientX - panStartRef.current.x;
+      const deltaY = e.evt.clientY - panStartRef.current.y;
+      
+      const newPos = {
+        x: panInitialPosRef.current.x + deltaX,
+        y: panInitialPosRef.current.y + deltaY
+      };
+      
+      setStagePos(clampStagePos(newPos));
+      return;
+    }
+    
     // Update HUD with throttling (~16ms for ~60fps)
     if (pointerPos && currentTime - lastUpdateTimeRef.current > 16) {
       // Convert screen coordinates to canvas coordinates
@@ -400,12 +438,6 @@ export default function Canvas() {
         lastMousePosRef.current = { x: canvasX, y: canvasY };
         lastUpdateTimeRef.current = currentTime;
       }
-    }
-    
-    // Handle panning if active (no marquee during pan)
-    if (isPanning) {
-      // Panning is handled by Stage's built-in drag when draggable=true
-      return;
     }
     
     // Handle marquee selection if active
@@ -430,6 +462,8 @@ export default function Canvas() {
     // End panning
     if (isPanning) {
       setIsPanning(false);
+      panStartRef.current = null;
+      panInitialPosRef.current = null;
       return;
     }
     
@@ -572,7 +606,35 @@ export default function Canvas() {
         cursorCount={Object.keys(cursors).length}
       />
       <PresenceList users={onlineUsers} />
-      <CanvasControls onAddShape={handleAddShape} />
+      <ShapeToolbar 
+        onAddShape={handleAddShape} 
+        onDuplicate={handleDuplicate}
+        selectedCount={selectedIds.length}
+      />
+      
+      {/* Feedback Toast */}
+      {feedbackMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: '32px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: 'rgba(0, 0, 0, 0.85)',
+            color: '#fff',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: '500',
+            zIndex: 10000,
+            pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            animation: 'fadeIn 0.2s ease'
+          }}
+        >
+          {feedbackMessage}
+        </div>
+      )}
       
       {/* Mouse Position HUD */}
       {mousePos && (
@@ -601,12 +663,11 @@ export default function Canvas() {
         ref={stageRef}
         width={window.innerWidth}
         height={window.innerHeight - 50}
-        draggable={isPanning}
+        draggable={false}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
         scaleY={stageScale}
-        onDragMove={handleStageDragMove}
         onWheel={handleWheel}
         onClick={handleStageClick}
         onMouseDown={handleStageMouseDown}
