@@ -1,4 +1,4 @@
-import { Rect, Circle, Line, Text, Group, Transformer } from "react-konva";
+import { Rect, Circle, Line, Text, Group, Transformer, Star } from "react-konva";
 import { useEffect, useRef } from "react";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import { streamDragPosition, stopDragStream } from "../../services/dragStream";
@@ -247,6 +247,55 @@ export default function ShapeRenderer({
                 }
               }
             }}
+          />
+        );
+      
+      case 'diamond':
+        return (
+          <Rect
+            {...commonProps}
+            x={shape.x}
+            y={shape.y}
+            width={shape.width || 100}
+            height={shape.height || 100}
+            fill={shape.fill}
+            rotation={(shape.rotation || 0) + 45}
+            offsetX={(shape.width || 100) / 2}
+            offsetY={(shape.height || 100) / 2}
+          />
+        );
+      
+      case 'triangle':
+        const triWidth = shape.width || 100;
+        const triHeight = shape.height || 100;
+        return (
+          <Line
+            {...commonProps}
+            x={shape.x}
+            y={shape.y}
+            points={[
+              triWidth / 2, 0,           // Top point
+              triWidth, triHeight,        // Bottom right
+              0, triHeight,               // Bottom left
+              triWidth / 2, 0             // Close path
+            ]}
+            fill={shape.fill}
+            closed={true}
+            rotation={shape.rotation || 0}
+          />
+        );
+      
+      case 'star':
+        return (
+          <Star
+            {...commonProps}
+            x={shape.x}
+            y={shape.y}
+            numPoints={5}
+            innerRadius={(shape.width || 80) * 0.25}
+            outerRadius={(shape.width || 80) * 0.5}
+            fill={shape.fill}
+            rotation={shape.rotation || 0}
           />
         );
       

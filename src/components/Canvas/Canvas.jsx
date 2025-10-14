@@ -10,6 +10,7 @@ import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
 import LiveDragOverlay from "../Collaboration/LiveDragOverlay";
+import ColorPalette from "./ColorPalette";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -171,8 +172,23 @@ export default function Canvas() {
             handleAddShape('line');
             break;
           case 't':
+            if (e.shiftKey) {
+              // Shift+T = Triangle
+              e.preventDefault();
+              handleAddShape('triangle');
+            } else {
+              // T = Text
+              e.preventDefault();
+              handleAddShape('text');
+            }
+            break;
+          case 'd':
             e.preventDefault();
-            handleAddShape('text');
+            handleAddShape('diamond');
+            break;
+          case 's':
+            e.preventDefault();
+            handleAddShape('star');
             break;
           case 'v':
             e.preventDefault();
@@ -242,6 +258,24 @@ export default function Canvas() {
         shapeData.height = 30;
         shapeData.x = Math.max(0, Math.min(centerX - 100, CANVAS_WIDTH - 200));
         shapeData.y = Math.max(0, Math.min(centerY - 15, CANVAS_HEIGHT - 30));
+        break;
+      case 'diamond':
+        shapeData.width = 100;
+        shapeData.height = 100;
+        shapeData.x = Math.max(50, Math.min(centerX, CANVAS_WIDTH - 50));
+        shapeData.y = Math.max(50, Math.min(centerY, CANVAS_HEIGHT - 50));
+        break;
+      case 'triangle':
+        shapeData.width = 100;
+        shapeData.height = 100;
+        shapeData.x = Math.max(50, Math.min(centerX, CANVAS_WIDTH - 50));
+        shapeData.y = Math.max(50, Math.min(centerY, CANVAS_HEIGHT - 50));
+        break;
+      case 'star':
+        shapeData.width = 80;
+        shapeData.height = 80;
+        shapeData.x = Math.max(40, Math.min(centerX, CANVAS_WIDTH - 40));
+        shapeData.y = Math.max(40, Math.min(centerY, CANVAS_HEIGHT - 40));
         break;
       case 'rectangle':
       default:
@@ -387,6 +421,45 @@ export default function Canvas() {
         const color = generateUserColor(user.uid);
         setSelection(shapeId, user.uid, name, color);
       }
+    }
+  };
+
+  // Handle color change for selected shapes
+  const handleColorChange = async (color) => {
+    if (selectedIds.length === 0 || !user) return;
+    
+    let changedCount = 0;
+    let lockedCount = 0;
+    
+    // Apply color to all selected shapes
+    for (const shapeId of selectedIds) {
+      const shape = shapes.find(s => s.id === shapeId);
+      if (!shape) continue;
+      
+      // Skip if locked by another user
+      if (shape.isLocked && shape.lockedBy !== user.uid) {
+        console.warn(`[ColorChange] Shape ${shapeId} locked by another user`);
+        lockedCount++;
+        continue;
+      }
+      
+      try {
+        // Apply color to fill property (works for all shape types)
+        await updateShape(CANVAS_ID, shapeId, { fill: color }, user);
+        changedCount++;
+      } catch (error) {
+        console.error(`[ColorChange] Failed to update shape ${shapeId}:`, error);
+      }
+    }
+    
+    // Show feedback
+    if (changedCount > 0) {
+      showFeedback(`Changed color of ${changedCount} shape${changedCount > 1 ? 's' : ''}`);
+    }
+    if (lockedCount > 0) {
+      setTimeout(() => {
+        showFeedback(`${lockedCount} shape${lockedCount > 1 ? 's' : ''} locked by other users`);
+      }, 2200);
     }
   };
 
@@ -674,6 +747,14 @@ export default function Canvas() {
         onDuplicate={handleDuplicate}
         selectedCount={selectedIds.length}
       />
+      
+      {/* Color Palette - shows when shapes are selected */}
+      {selectedIds.length > 0 && (
+        <ColorPalette
+          onColorSelect={handleColorChange}
+          selectedCount={selectedIds.length}
+        />
+      )}
       
       {/* Feedback Toast */}
       {feedbackMessage && (
