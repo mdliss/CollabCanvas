@@ -9,12 +9,12 @@ import DebugNote from "./DebugNote";
 import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
-import LiveDragOverlay from "../Collaboration/LiveDragOverlay";
 import ColorPalette from "./ColorPalette";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
+import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 
@@ -182,10 +182,7 @@ export default function Canvas() {
               handleAddShape('text');
             }
             break;
-          case 'd':
-            e.preventDefault();
-            handleAddShape('diamond');
-            break;
+          // 'd' key removed - diamond shape creation disabled
           case 's':
             e.preventDefault();
             handleAddShape('star');
@@ -259,12 +256,7 @@ export default function Canvas() {
         shapeData.x = Math.max(0, Math.min(centerX - 100, CANVAS_WIDTH - 200));
         shapeData.y = Math.max(0, Math.min(centerY - 15, CANVAS_HEIGHT - 30));
         break;
-      case 'diamond':
-        shapeData.width = 100;
-        shapeData.height = 100;
-        shapeData.x = Math.max(50, Math.min(centerX, CANVAS_WIDTH - 50));
-        shapeData.y = Math.max(50, Math.min(centerY, CANVAS_HEIGHT - 50));
-        break;
+      // Diamond case removed - shape type kept in renderer for backwards compatibility only
       case 'triangle':
         shapeData.width = 100;
         shapeData.height = 100;
@@ -411,9 +403,13 @@ export default function Canvas() {
         }
       }
     } else {
-      // Replace selection
+      // Replace selection - stop drag streams for previously selected shapes
       if (selectedIds.length > 0) {
-        selectedIds.forEach(id => clearSelection(id));
+        selectedIds.forEach(id => {
+          clearSelection(id);
+          // Stop any active drag streams for deselected shapes
+          stopDragStream(id);
+        });
       }
       setSelectedIds([shapeId]);
       if (user?.uid) {
@@ -630,7 +626,11 @@ export default function Canvas() {
     // But we keep it to ensure clicks without drag still deselect
     if (e.target === e.target.getStage() && !selectionBox && !selectionStartRef.current) {
       if (selectedIds.length > 0) {
-        selectedIds.forEach(id => clearSelection(id));
+        selectedIds.forEach(id => {
+          clearSelection(id);
+          // Stop any active drag streams when deselecting
+          stopDragStream(id);
+        });
       }
       setSelectedIds([]);
     }
@@ -640,7 +640,11 @@ export default function Canvas() {
   useEffect(() => {
     return () => {
       if (selectedIds.length > 0) {
-        selectedIds.forEach(id => clearSelection(id));
+        selectedIds.forEach(id => {
+          clearSelection(id);
+          // Stop any active drag streams on unmount
+          stopDragStream(id);
+        });
       }
     };
   }, [selectedIds]);
@@ -865,32 +869,35 @@ export default function Canvas() {
             />
           </Group>
           
-          {/* Render all shapes */}
-          {shapes.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(shape => (
-            <ShapeRenderer
-              key={shape.id}
-              shape={shape}
-              isSelected={selectedIds.includes(shape.id)}
-              currentUserId={user?.uid}
-              currentUserName={user?.displayName || user?.email?.split('@')[0] || 'User'}
-              currentUser={user}
-              onSelect={handleShapeSelect}
-              onRequestLock={handleRequestLock}
-              onDragStart={handleShapeDragStart}
-              onDragEnd={handleShapeDragEnd}
-              onTransformEnd={handleShapeTransformEnd}
-            />
-          ))}
-
-          {/* Render live drag overlays for shapes being dragged by other users */}
-          {Object.entries(activeDrags).map(([shapeId, dragData]) => {
-            const shape = shapes.find(s => s.id === shapeId);
-            if (!shape) return null;
+          {/* Render all shapes with live drag position updates */}
+          {shapes.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(shape => {
+            // Check if this shape is being dragged by another user
+            const dragData = activeDrags[shape.id];
+            const isDraggedByOther = dragData && dragData.uid !== user?.uid;
+            
+            // If being dragged by another user, use live position from drag stream
+            const displayShape = isDraggedByOther ? {
+              ...shape,
+              x: dragData.x,
+              y: dragData.y,
+              rotation: dragData.rotation || shape.rotation || 0
+            } : shape;
+            
             return (
-              <LiveDragOverlay
-                key={`drag-${shapeId}`}
-                shape={shape}
-                dragData={dragData}
+              <ShapeRenderer
+                key={shape.id}
+                shape={displayShape}
+                isSelected={selectedIds.includes(shape.id)}
+                currentUserId={user?.uid}
+                currentUserName={user?.displayName || user?.email?.split('@')[0] || 'User'}
+                currentUser={user}
+                onSelect={handleShapeSelect}
+                onRequestLock={handleRequestLock}
+                onDragStart={handleShapeDragStart}
+                onDragEnd={handleShapeDragEnd}
+                onTransformEnd={handleShapeTransformEnd}
+                isBeingDraggedByOther={isDraggedByOther}
+                draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />
             );
           })}

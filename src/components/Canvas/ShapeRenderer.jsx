@@ -17,7 +17,9 @@ export default function ShapeRenderer({
   onRequestLock,
   onDragStart,
   onDragEnd,
-  onTransformEnd
+  onTransformEnd,
+  isBeingDraggedByOther = false,
+  draggedByUserName = null
 }) {
   const shapeRef = useRef(null);
   const transformerRef = useRef(null);
@@ -30,6 +32,19 @@ export default function ShapeRenderer({
       transformerRef.current.getLayer().batchDraw();
     }
   }, [isSelected]);
+
+  // Clean up drag stream when shape is deselected or unmounted
+  useEffect(() => {
+    return () => {
+      // Stop any active drag streaming when component unmounts or isSelected changes
+      if (dragStreamInterval.current) {
+        clearInterval(dragStreamInterval.current);
+        dragStreamInterval.current = null;
+        stopDragStream(shape.id);
+        console.log('[ShapeRenderer] Cleanup: stopped drag stream for', shape.id);
+      }
+    };
+  }, [isSelected, shape.id]);
 
   // Drag bounds for all shape types (canvas-space coordinates)
   const dragBoundFunc = (pos) => {
@@ -154,12 +169,22 @@ export default function ShapeRenderer({
   };
 
   const isLockedByOther = shape.isLocked && shape.lockedBy !== currentUserId;
-  const strokeColor = isLockedByOther ? "#ff0000" : (isSelected ? "#0066cc" : undefined);
-  const strokeWidth = (isLockedByOther || isSelected) ? 2 : 0;
+  
+  // Visual styling: orange stroke for shapes being dragged by others
+  const strokeColor = isBeingDraggedByOther 
+    ? "#ff6600"  // Orange stroke when being dragged by another user
+    : isLockedByOther 
+      ? "#ff0000"  // Red when locked
+      : (isSelected ? "#0066cc" : undefined);  // Blue when selected by you
+  
+  const strokeWidth = (isBeingDraggedByOther || isLockedByOther || isSelected) ? 3 : 0;
+  
+  // Reduced opacity for shapes being dragged by others
+  const shapeOpacity = isBeingDraggedByOther ? 0.6 : 1.0;
 
   const commonProps = {
     ref: shapeRef,
-    draggable: !isLockedByOther,
+    draggable: !isLockedByOther && !isBeingDraggedByOther,  // Can't drag if someone else is dragging
     dragBoundFunc: dragBoundFunc,
     onClick: handleClick,
     onTap: handleClick,
@@ -170,7 +195,8 @@ export default function ShapeRenderer({
     perfectDrawEnabled: false,
     hitStrokeWidth: 8,
     stroke: strokeColor,
-    strokeWidth: strokeWidth
+    strokeWidth: strokeWidth,
+    opacity: shapeOpacity  // Reduced opacity when being dragged by another user
   };
 
   const renderShape = () => {
