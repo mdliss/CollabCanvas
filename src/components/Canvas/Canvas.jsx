@@ -17,6 +17,8 @@ import { watchSelections, setSelection, clearSelection } from "../../services/se
 import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
+import { ref, remove } from "firebase/database";
+import { rtdb } from "../../services/firebase";
 
 const CANVAS_ID = "global-canvas-v1";
 const GRID_SIZE = 50;
@@ -540,6 +542,27 @@ export default function Canvas() {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
+
+  // Extra cleanup: handle tab close/refresh for presence
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (user?.uid) {
+        console.log('[Canvas] beforeunload: cleaning up user', user.uid);
+        // Synchronous cleanup before page unloads
+        const userRef = ref(rtdb, `sessions/global-canvas-v1/${user.uid}`);
+        remove(userRef);
+        
+        // Clear selections
+        selectedIds.forEach(id => clearSelection(id));
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [user, selectedIds]);
 
   useEffect(() => {
     window.debugUpdateText = (shapeId, newText) => {

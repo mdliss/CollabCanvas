@@ -17,17 +17,15 @@ export default function usePresence() {
     const name = user.displayName || user.email?.split('@')[0] || 'User';
     const color = generateUserColor(uid) || '#1e88e5';
 
-    console.debug('[presence] start', uid);
+    console.log('[usePresence] Setting user online:', uid, name);
 
-    // Set user online
     setUserOnline(uid, name, color);
 
-    // Watch all users' presence (includes self)
     const unsub = watchPresence(setOnlineUsers);
 
-    // Cleanup on unmount
     return () => {
-      unsub?.();
+      console.log('[usePresence] CLEANUP: Removing user from presence:', uid);
+      if (unsub) unsub();
       setUserOffline(uid);
     };
   }, [user]);

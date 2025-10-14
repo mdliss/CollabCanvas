@@ -1,27 +1,19 @@
 import { rtdb } from "./firebase";
-import { ref, update, onValue, serverTimestamp } from "firebase/database";
+import { ref, update, onValue, serverTimestamp, onDisconnect } from "firebase/database";
 
 const BASE = 'sessions/global-canvas-v1';
-const THROTTLE_MS = 33; // ~30 FPS
+const THROTTLE_MS = 33;
 
 let lastUpdateTime = 0;
 let pendingUpdate = null;
 let updateTimer = null;
 let lastX = null;
 let lastY = null;
+let disconnectSet = new Set();
 
-/**
- * Write cursor position with throttling
- * @param {string} uid - User ID
- * @param {number} x - X coordinate
- * @param {number} y - Y coordinate
- * @param {string} name - Display name
- * @param {string} color - Cursor color
- */
 export const writeCursor = (uid, x, y, name, color) => {
   if (!uid) return;
 
-  // Ignore <2px deltas
   if (lastX !== null && lastY !== null) {
     const dx = Math.abs(x - lastX);
     const dy = Math.abs(y - lastY);
@@ -43,9 +35,6 @@ export const writeCursor = (uid, x, y, name, color) => {
   }
 };
 
-/**
- * Flush pending cursor update to RTDB
- */
 const flushCursorUpdate = () => {
   if (!pendingUpdate) return;
 
@@ -60,6 +49,15 @@ const flushCursorUpdate = () => {
     online: true,
     lastSeen: serverTimestamp()
   });
+
+  // Set up onDisconnect once per user
+  if (!disconnectSet.has(uid)) {
+    onDisconnect(userRef).update({
+      cursorX: null,
+      cursorY: null
+    });
+    disconnectSet.add(uid);
+  }
 
   lastX = x;
   lastY = y;
