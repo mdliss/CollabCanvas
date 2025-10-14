@@ -16,8 +16,9 @@ import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 
 const CANVAS_ID = "global-canvas-v1";
-const GRID_SIZE = 50;
+const GRID_SIZE = 20;
 const GRID_COLOR = "#e0e0e0";
+const LOCK_TTL_MS = 8000; // 8 seconds
 
 export default function Canvas() {
   const { user } = useAuth();
@@ -25,8 +26,18 @@ export default function Canvas() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [lastError, setLastError] = useState(null);
   const [isDraggingShape, setIsDraggingShape] = useState(false);
-  const [stageScale, setStageScale] = useState(1);
-  const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
+  const [isPanning, setIsPanning] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
+  
+  // Load viewport from localStorage or use defaults
+  const [stageScale, setStageScale] = useState(() => {
+    const saved = localStorage.getItem('collabcanvas-viewport');
+    return saved ? JSON.parse(saved).scale : 1;
+  });
+  const [stagePos, setStagePos] = useState(() => {
+    const saved = localStorage.getItem('collabcanvas-viewport');
+    return saved ? JSON.parse(saved).pos : { x: 0, y: 0 };
+  });
   const stageRef = useRef(null);
 
   // Mouse position HUD state (canvas coordinates)
@@ -56,6 +67,14 @@ export default function Canvas() {
     console.info("[Canvas] presence:", onlineUsers.length, "cursors:", Object.keys(cursors).length);
   }, [onlineUsers.length, cursors]);
 
+  // Persist viewport to localStorage
+  useEffect(() => {
+    localStorage.setItem('collabcanvas-viewport', JSON.stringify({
+      scale: stageScale,
+      pos: stagePos
+    }));
+  }, [stageScale, stagePos]);
+
   // Subscribe to shapes from Firestore
   useEffect(() => {
     let unsub = () => {};
@@ -74,9 +93,20 @@ export default function Canvas() {
     };
   }, []);
 
-  // Handle keyboard events (Delete/Backspace to delete selected shapes)
+  // Handle keyboard events (shortcuts + delete)
   useEffect(() => {
     const handleKeyDown = async (e) => {
+      // Ignore if typing in input/textarea
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      // Space key for pan mode
+      if (e.key === ' ' && !isSpacePressed) {
+        e.preventDefault();
+        setIsSpacePressed(true);
+        return;
+      }
+      
+      // Delete selected shapes
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
         e.preventDefault();
         try {
@@ -89,11 +119,61 @@ export default function Canvas() {
           console.error("[Canvas] Delete failed:", error.message);
           setLastError(error.message);
         }
+        return;
+      }
+      
+      // Shape creation shortcuts (no modifier keys)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+        switch (e.key.toLowerCase()) {
+          case 'r':
+            e.preventDefault();
+            handleAddShape('rectangle');
+            break;
+          case 'c':
+            e.preventDefault();
+            handleAddShape('circle');
+            break;
+          case 'l':
+            e.preventDefault();
+            handleAddShape('line');
+            break;
+          case 't':
+            e.preventDefault();
+            handleAddShape('text');
+            break;
+          case 'v':
+            e.preventDefault();
+            // V = Select tool (clear selection)
+            if (selectedIds.length > 0) {
+              selectedIds.forEach(id => clearSelection(id));
+              setSelectedIds([]);
+            }
+            break;
+        }
+      }
+      
+      // Duplicate (Cmd/Ctrl+D)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
+        e.preventDefault();
+        // TODO: Implement duplicate when canvas.js has duplicateShapes
+        console.info('[Canvas] Duplicate shortcut pressed (not implemented yet)');
       }
     };
+    
+    const handleKeyUp = (e) => {
+      if (e.key === ' ') {
+        setIsSpacePressed(false);
+        setIsPanning(false);
+      }
+    };
+    
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedIds, user]);
+    window.addEventListener("keyup", handleKeyUp);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [selectedIds, user, isSpacePressed]);
 
   // Create new shape at viewport center
   const handleAddShape = (type) => {
@@ -221,7 +301,7 @@ export default function Canvas() {
   // Handle lock request for shape
   const handleRequestLock = async (shapeId) => {
     if (!user?.uid) return false;
-    const acquired = await tryLockShape(CANVAS_ID, shapeId, user.uid);
+    const acquired = await tryLockShape(CANVAS_ID, shapeId, user.uid, LOCK_TTL_MS);
     
     if (import.meta.env.VITE_DEBUG) {
       console.debug('[Canvas] lock', shapeId, acquired ? 'acquired' : 'blocked');
@@ -257,9 +337,9 @@ export default function Canvas() {
     }
   };
 
-  // Marquee selection handlers
+  // Marquee selection and pan handlers
   const handleStageMouseDown = (e) => {
-    // Only start marquee if clicking on stage background (not on a shape)
+    // Only handle stage background clicks (not on shapes)
     if (e.target !== e.target.getStage()) {
       return;
     }
@@ -267,22 +347,38 @@ export default function Canvas() {
     const stage = e.target.getStage();
     const pointerPos = stage.getPointerPosition();
     
-    // Convert screen coordinates to canvas coordinates
-    const canvasX = (pointerPos.x - stagePos.x) / stageScale;
-    const canvasY = (pointerPos.y - stagePos.y) / stageScale;
-
-    // Check if shift key is pressed
-    const isShiftKey = e.evt?.shiftKey || false;
-    
-    // If not shift-click, clear existing selection
-    if (!isShiftKey && selectedIds.length > 0) {
-      selectedIds.forEach(id => clearSelection(id));
-      setSelectedIds([]);
+    // Middle-mouse button = pan
+    if (e.evt.button === 1) {
+      e.evt.preventDefault();
+      setIsPanning(true);
+      return;
     }
+    
+    // Space + left-mouse = pan
+    if (isSpacePressed && e.evt.button === 0) {
+      setIsPanning(true);
+      return;
+    }
+    
+    // Left-mouse on background = marquee selection
+    if (e.evt.button === 0 && !isSpacePressed) {
+      // Convert screen coordinates to canvas coordinates
+      const canvasX = (pointerPos.x - stagePos.x) / stageScale;
+      const canvasY = (pointerPos.y - stagePos.y) / stageScale;
 
-    // Start marquee selection
-    selectionStartRef.current = { x: canvasX, y: canvasY, isShiftKey };
-    setSelectionBox({ x: canvasX, y: canvasY, width: 0, height: 0 });
+      // Check if shift key is pressed
+      const isShiftKey = e.evt?.shiftKey || false;
+      
+      // If not shift-click, clear existing selection
+      if (!isShiftKey && selectedIds.length > 0) {
+        selectedIds.forEach(id => clearSelection(id));
+        setSelectedIds([]);
+      }
+
+      // Start marquee selection
+      selectionStartRef.current = { x: canvasX, y: canvasY, isShiftKey };
+      setSelectionBox({ x: canvasX, y: canvasY, width: 0, height: 0 });
+    }
   };
 
   const handleStageMouseMove = (e) => {
@@ -306,6 +402,12 @@ export default function Canvas() {
       }
     }
     
+    // Handle panning if active (no marquee during pan)
+    if (isPanning) {
+      // Panning is handled by Stage's built-in drag when draggable=true
+      return;
+    }
+    
     // Handle marquee selection if active
     if (!selectionStartRef.current) return;
 
@@ -325,6 +427,13 @@ export default function Canvas() {
   };
 
   const handleStageMouseUp = () => {
+    // End panning
+    if (isPanning) {
+      setIsPanning(false);
+      return;
+    }
+    
+    // Handle marquee selection completion
     if (!selectionStartRef.current || !selectionBox) {
       selectionStartRef.current = null;
       setSelectionBox(null);
@@ -492,7 +601,7 @@ export default function Canvas() {
         ref={stageRef}
         width={window.innerWidth}
         height={window.innerHeight - 50}
-        draggable={!isDraggingShape && !selectionBox}
+        draggable={isPanning}
         x={stagePos.x}
         y={stagePos.y}
         scaleX={stageScale}
