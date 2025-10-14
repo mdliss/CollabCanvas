@@ -18,8 +18,7 @@ export default function ShapeRenderer({
   onDragStart,
   onDragEnd,
   onTransformEnd,
-  isBeingDraggedByOther = false,
-  draggedByUserName = null
+  isBeingDraggedByOther = false
 }) {
   const shapeRef = useRef(null);
   const transformerRef = useRef(null);
@@ -37,20 +36,16 @@ export default function ShapeRenderer({
   // Clean up drag/transform streams when shape is deselected or unmounted
   useEffect(() => {
     return () => {
-      // Stop any active drag streaming
       if (dragStreamInterval.current) {
         clearInterval(dragStreamInterval.current);
         dragStreamInterval.current = null;
         stopDragStream(shape.id);
-        console.log('[ShapeRenderer] Cleanup: stopped drag stream for', shape.id);
       }
       
-      // Stop any active transform streaming
       if (transformStreamInterval.current) {
         clearInterval(transformStreamInterval.current);
         transformStreamInterval.current = null;
         stopDragStream(shape.id);
-        console.log('[ShapeRenderer] Cleanup: stopped transform stream for', shape.id);
       }
     };
   }, [isSelected, shape.id]);
@@ -130,8 +125,7 @@ export default function ShapeRenderer({
     onDragEnd(shape.id, finalPos);
   };
 
-  const handleTransformEnd = async (e) => {
-    // Stop streaming transform updates
+  const handleTransformEnd = async () => {
     if (transformStreamInterval.current) {
       clearInterval(transformStreamInterval.current);
       transformStreamInterval.current = null;
@@ -284,23 +278,9 @@ export default function ShapeRenderer({
               const newText = window.prompt('Edit text:', shape.text || 'Text');
               if (newText !== null && newText.trim() !== '') {
                 try {
-                  console.log('[Text Edit] Attempting update:', {
-                    shapeId: shape.id,
-                    oldText: shape.text,
-                    newText: newText,
-                    userId: currentUser.uid
-                  });
-                  
                   await updateShape('global-canvas-v1', shape.id, { text: newText }, currentUser);
-                  
-                  console.log('[Text Edit] Update successful!');
                 } catch (error) {
                   console.error('[Text Edit] Update failed:', error);
-                  console.error('[Text Edit] Error details:', {
-                    message: error.message,
-                    code: error.code,
-                    stack: error.stack
-                  });
                   alert('Failed to update text: ' + (error.message || 'Unknown error'));
                 }
               }
@@ -323,7 +303,7 @@ export default function ShapeRenderer({
           />
         );
       
-      case 'triangle':
+      case 'triangle': {
         const triWidth = shape.width || 100;
         const triHeight = shape.height || 100;
         return (
@@ -332,16 +312,17 @@ export default function ShapeRenderer({
             x={shape.x}
             y={shape.y}
             points={[
-              triWidth / 2, 0,           // Top point
-              triWidth, triHeight,        // Bottom right
-              0, triHeight,               // Bottom left
-              triWidth / 2, 0             // Close path
+              triWidth / 2, 0,
+              triWidth, triHeight,
+              0, triHeight,
+              triWidth / 2, 0
             ]}
             fill={shape.fill}
             closed={true}
             rotation={shape.rotation || 0}
           />
         );
+      }
       
       case 'star':
         return (

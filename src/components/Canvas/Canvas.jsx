@@ -19,22 +19,19 @@ import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 
 const CANVAS_ID = "global-canvas-v1";
-const GRID_SIZE = 50; // Larger spacing for expansive canvas
+const GRID_SIZE = 50;
 const GRID_COLOR = "#e0e0e0";
-const LOCK_TTL_MS = 8000; // 8 seconds
+const LOCK_TTL_MS = 8000;
 
 export default function Canvas() {
   const { user } = useAuth();
   const [shapes, setShapes] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [lastError, setLastError] = useState(null);
-  const [isDraggingShape, setIsDraggingShape] = useState(false);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState(null);
   
-  // Load viewport from localStorage or use defaults
-  // Default: 0.5x zoom, centered on canvas for spacious infinite feel
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
     return saved ? JSON.parse(saved).scale : 0.5;
@@ -42,33 +39,24 @@ export default function Canvas() {
   const [stagePos, setStagePos] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
     if (saved) return JSON.parse(saved).pos;
-    // Center viewport on canvas center (10000, 10000) at 0.5x zoom
     const centerX = -(CANVAS_WIDTH * 0.5 - window.innerWidth) / 2;
     const centerY = -(CANVAS_HEIGHT * 0.5 - (window.innerHeight - 50)) / 2;
     return { x: centerX, y: centerY };
   });
   const stageRef = useRef(null);
-
-  // Mouse position HUD state (canvas coordinates)
   const [mousePos, setMousePos] = useState(null);
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const lastUpdateTimeRef = useRef(0);
-
-  // Marquee selection state
   const [selectionBox, setSelectionBox] = useState(null);
   const selectionStartRef = useRef(null);
-  
-  // Pan tracking state (for manual pan implementation)
   const panStartRef = useRef(null);
   const panInitialPosRef = useRef(null);
 
-  // Presence, cursors, and live drag streams
   const { onlineUsers } = usePresence();
   const { cursors } = useCursors(stageRef);
   const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
 
-  // Watch selections
   useEffect(() => {
     const unsubscribe = watchSelections(setSelections);
     return () => {
@@ -76,12 +64,6 @@ export default function Canvas() {
     };
   }, []);
 
-  // Log presence and cursor counts
-  useEffect(() => {
-    console.info("[Canvas] presence:", onlineUsers.length, "cursors:", Object.keys(cursors).length);
-  }, [onlineUsers.length, cursors]);
-
-  // Persist viewport to localStorage
   useEffect(() => {
     localStorage.setItem('collabcanvas-viewport', JSON.stringify({
       scale: stageScale,
@@ -89,14 +71,10 @@ export default function Canvas() {
     }));
   }, [stageScale, stagePos]);
 
-  // Subscribe to shapes from Firestore
   useEffect(() => {
     let unsub = () => {};
     (async () => {
-      unsub = await subscribeToShapes(CANVAS_ID, (arr) => {
-        console.log("[Canvas] shapes =", arr.length);
-        setShapes(arr);
-      });
+      unsub = await subscribeToShapes(CANVAS_ID, setShapes);
     })();
     return () => { 
       try { 
@@ -107,26 +85,21 @@ export default function Canvas() {
     };
   }, []);
 
-  // Show temporary feedback message
   const showFeedback = (message) => {
     setFeedbackMessage(message);
     setTimeout(() => setFeedbackMessage(null), 2000);
   };
 
-  // Handle keyboard events (shortcuts + delete)
   useEffect(() => {
     const handleKeyDown = async (e) => {
-      // Ignore if typing in input/textarea
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       
-      // Space key for pan mode
       if (e.key === ' ' && !isSpacePressed) {
         e.preventDefault();
         setIsSpacePressed(true);
         return;
       }
       
-      // Delete selected shapes
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
         e.preventDefault();
         try {
@@ -142,7 +115,6 @@ export default function Canvas() {
         return;
       }
       
-      // Shape creation shortcuts (no modifier keys)
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         switch (e.key.toLowerCase()) {
           case 'r':
@@ -158,24 +130,15 @@ export default function Canvas() {
             handleAddShape('line');
             break;
           case 't':
-            if (e.shiftKey) {
-              // Shift+T = Triangle
-              e.preventDefault();
-              handleAddShape('triangle');
-            } else {
-              // T = Text
-              e.preventDefault();
-              handleAddShape('text');
-            }
+            e.preventDefault();
+            handleAddShape(e.shiftKey ? 'triangle' : 'text');
             break;
-          // 'd' key removed - diamond shape creation disabled
           case 's':
             e.preventDefault();
             handleAddShape('star');
             break;
           case 'v':
             e.preventDefault();
-            // V = Select tool (clear selection)
             if (selectedIds.length > 0) {
               selectedIds.forEach(id => clearSelection(id));
               setSelectedIds([]);
@@ -200,9 +163,7 @@ export default function Canvas() {
     };
   }, [selectedIds, user, isSpacePressed]);
 
-  // Create new shape at viewport center
   const handleAddShape = (type) => {
-    // Calculate center of current viewport
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
     const centerY = (-stagePos.y + (window.innerHeight - 50) / 2) / stageScale;
     
@@ -213,7 +174,6 @@ export default function Canvas() {
       y: centerY
     };
 
-    // Type-specific defaults
     switch (type) {
       case 'circle':
         shapeData.width = 100; // diameter
@@ -236,7 +196,6 @@ export default function Canvas() {
         shapeData.x = Math.max(0, Math.min(centerX - 100, CANVAS_WIDTH - 200));
         shapeData.y = Math.max(0, Math.min(centerY - 15, CANVAS_HEIGHT - 30));
         break;
-      // Diamond case removed - shape type kept in renderer for backwards compatibility only
       case 'triangle':
         shapeData.width = 100;
         shapeData.height = 100;
@@ -262,7 +221,6 @@ export default function Canvas() {
       .catch((e) => setLastError(String(e)));
   };
 
-  // Zoom with mousewheel
   const handleWheel = (e) => {
     e.evt.preventDefault();
     const stage = e.target.getStage();
@@ -272,15 +230,13 @@ export default function Canvas() {
     const newScale = e.evt.deltaY > 0 
       ? stageScale / scaleBy 
       : stageScale * scaleBy;
-    const clampedScale = Math.max(0.05, Math.min(3, newScale)); // Allow 0.05x (20× zoom out) for large canvas
+    const clampedScale = Math.max(0.05, Math.min(3, newScale));
     
-    // Calculate mouse point in canvas space before zoom
     const mousePointTo = {
       x: (pointer.x - stagePos.x) / stageScale,
       y: (pointer.y - stagePos.y) / stageScale
     };
     
-    // Calculate new position to keep mouse point anchored
     const newPos = {
       x: pointer.x - mousePointTo.x * clampedScale,
       y: pointer.y - mousePointTo.y * clampedScale
@@ -290,9 +246,7 @@ export default function Canvas() {
     setStagePos(newPos);
   };
 
-  // Clamp stage position to canvas bounds
   const clampStagePos = (pos) => {
-    // Calculate scaled canvas dimensions
     const scaledCanvasWidth = CANVAS_WIDTH * stageScale;
     const scaledCanvasHeight = CANVAS_HEIGHT * stageScale;
     const viewportWidth = window.innerWidth;
@@ -301,63 +255,41 @@ export default function Canvas() {
     let clampedX = pos.x;
     let clampedY = pos.y;
     
-    // Only clamp if canvas is larger than viewport
     if (scaledCanvasWidth > viewportWidth) {
-      // Stage position ranges from 0 (canvas left edge at screen left)
-      // to -(scaledCanvasWidth - viewportWidth) (canvas right edge at screen right)
       const minX = -(scaledCanvasWidth - viewportWidth);
       const maxX = 0;
       clampedX = Math.max(minX, Math.min(maxX, pos.x));
-    } else {
-      // Canvas smaller than viewport - allow free positioning or center
-      // For now, allow free positioning (user can pan anywhere)
-      clampedX = pos.x;
     }
     
     if (scaledCanvasHeight > viewportHeight) {
       const minY = -(scaledCanvasHeight - viewportHeight);
       const maxY = 0;
       clampedY = Math.max(minY, Math.min(maxY, pos.y));
-    } else {
-      clampedY = pos.y;
     }
     
-    return {
-      x: clampedX,
-      y: clampedY
-    };
+    return { x: clampedX, y: clampedY };
   };
 
-  // Handle shape drag start - disable stage dragging
   const handleShapeDragStart = () => {
-    setIsDraggingShape(true);
+    // Shape drag started (prevent stage dragging)
   };
 
-  // Handle shape drag end - persist to Firestore, unlock, and re-enable stage dragging
   const handleShapeDragEnd = async (shapeId, pos) => {
-    setIsDraggingShape(false);
-    
     if (import.meta.env.VITE_DEBUG) {
       console.debug('[Canvas] dragEnd persist', shapeId, pos);
     }
-    
     await updateShape(CANVAS_ID, shapeId, pos, user);
-    // Release lock after drag completes
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
 
-  // Handle shape transform end - persist width/height/rotation
   const handleShapeTransformEnd = async (shapeId, attrs) => {
     if (import.meta.env.VITE_DEBUG) {
       console.debug('[Canvas] transformEnd persist', shapeId, attrs);
     }
-    
     await updateShape(CANVAS_ID, shapeId, attrs, user);
-    // Release lock after transform completes
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
 
-  // Handle lock request for shape
   const handleRequestLock = async (shapeId) => {
     if (!user?.uid) return false;
     const acquired = await tryLockShape(CANVAS_ID, shapeId, user.uid, LOCK_TTL_MS);
@@ -369,10 +301,8 @@ export default function Canvas() {
     return acquired;
   };
 
-  // Handle shape selection (with shift-click multi-select)
   const handleShapeSelect = (shapeId, isShiftKey) => {
     if (isShiftKey) {
-      // Add to selection
       if (!selectedIds.includes(shapeId)) {
         const newIds = [...selectedIds, shapeId];
         setSelectedIds(newIds);
@@ -383,11 +313,9 @@ export default function Canvas() {
         }
       }
     } else {
-      // Replace selection - stop drag streams for previously selected shapes
       if (selectedIds.length > 0) {
         selectedIds.forEach(id => {
           clearSelection(id);
-          // Stop any active drag streams for deselected shapes
           stopDragStream(id);
         });
       }
@@ -400,19 +328,16 @@ export default function Canvas() {
     }
   };
 
-  // Handle color change for selected shapes
   const handleColorChange = async (color) => {
     if (selectedIds.length === 0 || !user) return;
     
     let changedCount = 0;
     let lockedCount = 0;
     
-    // Apply color to all selected shapes
     for (const shapeId of selectedIds) {
       const shape = shapes.find(s => s.id === shapeId);
       if (!shape) continue;
       
-      // Skip if locked by another user
       if (shape.isLocked && shape.lockedBy !== user.uid) {
         console.warn(`[ColorChange] Shape ${shapeId} locked by another user`);
         lockedCount++;
@@ -420,7 +345,6 @@ export default function Canvas() {
       }
       
       try {
-        // Apply color to fill property (works for all shape types)
         await updateShape(CANVAS_ID, shapeId, { fill: color }, user);
         changedCount++;
       } catch (error) {
@@ -428,7 +352,6 @@ export default function Canvas() {
       }
     }
     
-    // Show feedback
     if (changedCount > 0) {
       showFeedback(`Changed color of ${changedCount} shape${changedCount > 1 ? 's' : ''}`);
     }
@@ -439,9 +362,7 @@ export default function Canvas() {
     }
   };
 
-  // Marquee selection and pan handlers
   const handleStageMouseDown = (e) => {
-    // Only handle stage background clicks (not on shapes)
     if (e.target !== e.target.getStage()) {
       return;
     }
@@ -449,7 +370,6 @@ export default function Canvas() {
     const stage = e.target.getStage();
     const pointerPos = stage.getPointerPosition();
     
-    // Middle-mouse button = pan
     if (e.evt.button === 1) {
       e.evt.preventDefault();
       setIsPanning(true);
@@ -458,7 +378,6 @@ export default function Canvas() {
       return;
     }
     
-    // Space + left-mouse = pan
     if (isSpacePressed && e.evt.button === 0) {
       setIsPanning(true);
       panStartRef.current = { x: e.evt.clientX, y: e.evt.clientY };
@@ -466,22 +385,16 @@ export default function Canvas() {
       return;
     }
     
-    // Left-mouse on background = marquee selection
     if (e.evt.button === 0 && !isSpacePressed) {
-      // Convert screen coordinates to canvas coordinates
       const canvasX = (pointerPos.x - stagePos.x) / stageScale;
       const canvasY = (pointerPos.y - stagePos.y) / stageScale;
-
-      // Check if shift key is pressed
       const isShiftKey = e.evt?.shiftKey || false;
       
-      // If not shift-click, clear existing selection
       if (!isShiftKey && selectedIds.length > 0) {
         selectedIds.forEach(id => clearSelection(id));
         setSelectedIds([]);
       }
 
-      // Start marquee selection
       selectionStartRef.current = { x: canvasX, y: canvasY, isShiftKey };
       setSelectionBox({ x: canvasX, y: canvasY, width: 0, height: 0 });
     }
@@ -492,7 +405,6 @@ export default function Canvas() {
     const pointerPos = stage.getPointerPosition();
     const currentTime = Date.now();
     
-    // Handle panning if active - use screen-space delta for perfect accuracy
     if (isPanning && panStartRef.current && panInitialPosRef.current) {
       const deltaX = e.evt.clientX - panStartRef.current.x;
       const deltaY = e.evt.clientY - panStartRef.current.y;
@@ -506,13 +418,10 @@ export default function Canvas() {
       return;
     }
     
-    // Update HUD with throttling (~16ms for ~60fps)
     if (pointerPos && currentTime - lastUpdateTimeRef.current > 16) {
-      // Convert screen coordinates to canvas coordinates
       const canvasX = Math.round((pointerPos.x - stagePos.x) / stageScale);
       const canvasY = Math.round((pointerPos.y - stagePos.y) / stageScale);
       
-      // Only update if moved >2px
       const delta = Math.abs(canvasX - lastMousePosRef.current.x) + 
                     Math.abs(canvasY - lastMousePosRef.current.y);
       if (delta > 2) {
@@ -522,13 +431,10 @@ export default function Canvas() {
       }
     }
     
-    // Handle marquee selection if active
     if (!selectionStartRef.current) return;
 
-    // Convert screen coordinates to canvas coordinates
     const canvasX = (pointerPos.x - stagePos.x) / stageScale;
     const canvasY = (pointerPos.y - stagePos.y) / stageScale;
-
     const startX = selectionStartRef.current.x;
     const startY = selectionStartRef.current.y;
 
@@ -541,7 +447,6 @@ export default function Canvas() {
   };
 
   const handleStageMouseUp = () => {
-    // End panning
     if (isPanning) {
       setIsPanning(false);
       panStartRef.current = null;
@@ -549,14 +454,12 @@ export default function Canvas() {
       return;
     }
     
-    // Handle marquee selection completion
     if (!selectionStartRef.current || !selectionBox) {
       selectionStartRef.current = null;
       setSelectionBox(null);
       return;
     }
 
-    // Find shapes that intersect with the selection box
     const intersectingShapes = shapes.filter(shape =>
       shapeIntersectsBox(shape, selectionBox)
     );
@@ -565,7 +468,6 @@ export default function Canvas() {
 
     if (intersectingShapes.length > 0) {
       if (isShiftKey) {
-        // Add to existing selection
         const newIds = [...selectedIds];
         intersectingShapes.forEach(shape => {
           if (!newIds.includes(shape.id)) {
@@ -579,7 +481,6 @@ export default function Canvas() {
         });
         setSelectedIds(newIds);
       } else {
-        // Replace selection
         const newIds = intersectingShapes.map(s => s.id);
         setSelectedIds(newIds);
         if (user?.uid) {
@@ -590,25 +491,19 @@ export default function Canvas() {
       }
     }
 
-    // Clear marquee state
     selectionStartRef.current = null;
     setSelectionBox(null);
   };
 
   const handleStageMouseLeave = () => {
-    // Hide HUD when mouse leaves stage
     setMousePos(null);
   };
 
-  // Handle stage click (deselect) - kept for backward compatibility
   const handleStageClick = (e) => {
-    // This is now mostly handled by mousedown/mouseup
-    // But we keep it to ensure clicks without drag still deselect
     if (e.target === e.target.getStage() && !selectionBox && !selectionStartRef.current) {
       if (selectedIds.length > 0) {
         selectedIds.forEach(id => {
           clearSelection(id);
-          // Stop any active drag streams when deselecting
           stopDragStream(id);
         });
       }
@@ -616,20 +511,17 @@ export default function Canvas() {
     }
   };
 
-  // Clear selections on unmount
   useEffect(() => {
     return () => {
       if (selectedIds.length > 0) {
         selectedIds.forEach(id => {
           clearSelection(id);
-          // Stop any active drag streams on unmount
           stopDragStream(id);
         });
       }
     };
   }, [selectedIds]);
 
-  // Stale lock sweeper - run every 2 seconds and on visibility change
   useEffect(() => {
     const interval = setInterval(() => {
       staleLockSweeper(CANVAS_ID);
@@ -649,7 +541,6 @@ export default function Canvas() {
     };
   }, []);
 
-  // Debug helper for programmatic text updates (AI integration testing)
   useEffect(() => {
     window.debugUpdateText = (shapeId, newText) => {
       if (!user) {
@@ -679,32 +570,29 @@ export default function Canvas() {
     };
   }, [user, shapes]);
 
-  // Render grid lines
   const renderGrid = () => {
     const lines = [];
     
-    // Vertical lines
     for (let i = 0; i <= CANVAS_WIDTH; i += GRID_SIZE) {
       lines.push(
         <KonvaLine
           key={`v-${i}`}
           points={[i, 0, i, CANVAS_HEIGHT]}
           stroke={GRID_COLOR}
-          strokeWidth={1 / stageScale} // Keep line width constant when zoomed
+          strokeWidth={1 / stageScale}
           listening={false}
           perfectDrawEnabled={false}
         />
       );
     }
     
-    // Horizontal lines
     for (let i = 0; i <= CANVAS_HEIGHT; i += GRID_SIZE) {
       lines.push(
         <KonvaLine
           key={`h-${i}`}
           points={[0, i, CANVAS_WIDTH, i]}
           stroke={GRID_COLOR}
-          strokeWidth={1 / stageScale} // Keep line width constant when zoomed
+          strokeWidth={1 / stageScale}
           listening={false}
           perfectDrawEnabled={false}
         />
