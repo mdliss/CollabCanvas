@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { getDatabase, ref, onValue, onDisconnect } from 'firebase/database';
+import { getDatabase, ref, onValue } from 'firebase/database';
 import { offlineQueue } from '../../services/offline';
 
 export default function ConnectionStatus() {
-  const [status, setStatus] = useState('connected'); // 'connected' | 'reconnecting' | 'offline'
+  const [status, setStatus] = useState('connected');
   const [pendingCount, setPendingCount] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
-  const [autoHideTimeout, setAutoHideTimeout] = useState(null);
 
   // Monitor Firebase RTDB connection
   useEffect(() => {
@@ -17,40 +16,22 @@ export default function ConnectionStatus() {
       const isConnected = snapshot.val();
       
       if (isConnected) {
-        console.debug('[ConnectionStatus] Connected to Firebase');
         setStatus('connected');
         setIsVisible(true);
-        
-        // Auto-hide after 2 seconds
-        const timeout = setTimeout(() => {
-          setIsVisible(false);
-        }, 2000);
-        setAutoHideTimeout(timeout);
+        const timeout = setTimeout(() => setIsVisible(false), 2000);
+        return () => clearTimeout(timeout);
       } else {
-        console.debug('[ConnectionStatus] Disconnected from Firebase');
         setStatus('offline');
         setIsVisible(true);
-        
-        // Clear auto-hide timeout
-        if (autoHideTimeout) {
-          clearTimeout(autoHideTimeout);
-          setAutoHideTimeout(null);
-        }
       }
     });
 
-    return () => {
-      unsubscribe();
-      if (autoHideTimeout) {
-        clearTimeout(autoHideTimeout);
-      }
-    };
-  }, [autoHideTimeout]);
+    return () => unsubscribe();
+  }, []);
 
   // Monitor browser online/offline
   useEffect(() => {
     const handleOnline = () => {
-      console.debug('[ConnectionStatus] Browser online');
       if (status === 'offline') {
         setStatus('reconnecting');
         setIsVisible(true);
@@ -58,7 +39,6 @@ export default function ConnectionStatus() {
     };
 
     const handleOffline = () => {
-      console.debug('[ConnectionStatus] Browser offline');
       setStatus('offline');
       setIsVisible(true);
     };
@@ -66,7 +46,6 @@ export default function ConnectionStatus() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial check
     if (!navigator.onLine) {
       setStatus('offline');
       setIsVisible(true);
@@ -80,7 +59,7 @@ export default function ConnectionStatus() {
 
   // Monitor offline queue
   useEffect(() => {
-    const updateQueueCount = async () => {
+    const updateCount = async () => {
       try {
         const count = await offlineQueue.count();
         setPendingCount(count);
@@ -89,14 +68,9 @@ export default function ConnectionStatus() {
       }
     };
 
-    // Initial update
-    updateQueueCount();
-
-    // Listen for queue changes
-    const removeListener = offlineQueue.addListener(updateQueueCount);
-
-    // Poll every 5 seconds as backup
-    const interval = setInterval(updateQueueCount, 5000);
+    updateCount();
+    const removeListener = offlineQueue.addListener(updateCount);
+    const interval = setInterval(updateCount, 5000);
 
     return () => {
       removeListener();
@@ -106,7 +80,7 @@ export default function ConnectionStatus() {
 
   if (!isVisible) return null;
 
-  const getStatusConfig = () => {
+  const getConfig = () => {
     switch (status) {
       case 'connected':
         return {
@@ -132,99 +106,67 @@ export default function ConnectionStatus() {
           color: '#fff'
         };
       default:
-        return {
-          bg: '#6b7280',
-          icon: '•',
-          text: 'Unknown',
-          color: '#fff'
-        };
+        return { bg: '#6b7280', icon: '•', text: 'Unknown', color: '#fff' };
     }
   };
 
-  const config = getStatusConfig();
-
-  const styles = {
-    banner: {
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      background: config.bg,
-      color: config.color,
-      padding: '8px 16px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '8px',
-      fontSize: '13px',
-      fontWeight: '500',
-      zIndex: 100000,
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-      animation: 'slideDown 0.3s ease-out',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-    },
-    icon: {
-      fontSize: '16px',
-      animation: status === 'reconnecting' ? 'spin 1s linear infinite' : 'none'
-    },
-    text: {
-      letterSpacing: '0.02em'
-    },
-    closeButton: {
-      marginLeft: '16px',
-      background: 'rgba(255, 255, 255, 0.2)',
-      border: 'none',
-      color: '#fff',
-      width: '20px',
-      height: '20px',
-      borderRadius: '50%',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '12px',
-      transition: 'background 0.2s',
-      padding: 0
-    }
-  };
+  const config = getConfig();
 
   return (
     <>
       <style>{`
         @keyframes slideDown {
-          from {
-            transform: translateY(-100%);
-          }
-          to {
-            transform: translateY(0);
-          }
+          from { transform: translateY(-100%); }
+          to { transform: translateY(0); }
         }
-
         @keyframes spin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-
-        [data-connection-close]:hover {
-          background: rgba(255, 255, 255, 0.3) !important;
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
         }
       `}</style>
-      <div style={styles.banner}>
-        <span style={styles.icon}>{config.icon}</span>
-        <span style={styles.text}>{config.text}</span>
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        background: config.bg,
+        color: config.color,
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: '8px',
+        fontSize: '13px',
+        fontWeight: '500',
+        zIndex: 100000,
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+        animation: 'slideDown 0.3s ease-out',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      }}>
+        <span style={{
+          fontSize: '16px',
+          animation: status === 'reconnecting' ? 'spin 1s linear infinite' : 'none'
+        }}>{config.icon}</span>
+        <span>{config.text}</span>
         {status === 'connected' && (
           <button
-            data-connection-close
-            style={styles.closeButton}
+            style={{
+              marginLeft: '16px',
+              background: 'rgba(255, 255, 255, 0.2)',
+              border: 'none',
+              color: '#fff',
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '12px',
+              padding: 0
+            }}
             onClick={() => setIsVisible(false)}
-            aria-label="Dismiss"
-          >
-            ×
-          </button>
+          >×</button>
         )}
       </div>
     </>

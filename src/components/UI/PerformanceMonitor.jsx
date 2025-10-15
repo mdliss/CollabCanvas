@@ -174,8 +174,8 @@ export default function PerformanceMonitor({ isVisible, onToggle }) {
         </span>
       </div>
 
-      {/* Optimization Stats Section */}
-      {metrics.optimizations && (metrics.optimizations.dragUpdatesSkipped > 0 || metrics.optimizations.cursorUpdatesSkipped > 0) && (
+      {/* Optimization Stats Section - Always show */}
+      {metrics.optimizations && (
         <>
           <div style={{
             marginTop: '10px',

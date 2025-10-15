@@ -25,6 +25,7 @@ export default function ShapeRenderer({
   const transformerRef = useRef(null);
   const dragStreamInterval = useRef(null);
   const transformStreamInterval = useRef(null);
+  const firestoreCheckpointInterval = useRef(null);
 
   // Attach transformer to selected shape
   useEffect(() => {
@@ -47,6 +48,11 @@ export default function ShapeRenderer({
         clearInterval(transformStreamInterval.current);
         transformStreamInterval.current = null;
         stopDragStream(shape.id);
+      }
+      
+      if (firestoreCheckpointInterval.current) {
+        clearInterval(firestoreCheckpointInterval.current);
+        firestoreCheckpointInterval.current = null;
       }
     };
   }, [isSelected, shape.id]);
@@ -103,6 +109,24 @@ export default function ShapeRenderer({
         );
       }
     }, 10);
+    
+    // Periodic Firestore checkpoint (every 500ms) during drag
+    // This ensures shape appears at last drag position if user refreshes
+    firestoreCheckpointInterval.current = setInterval(() => {
+      const node = shapeRef.current;
+      if (node && currentUser) {
+        const checkpointData = {
+          x: node.x(),
+          y: node.y(),
+          rotation: node.rotation()
+        };
+        
+        updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
+          .catch(err => {
+            console.debug('[Shape] Checkpoint save failed (non-critical):', err.message);
+          });
+      }
+    }, 500);
   };
 
   const handleDragEnd = (e) => {
@@ -112,6 +136,12 @@ export default function ShapeRenderer({
       dragStreamInterval.current = null;
     }
     stopDragStream(shape.id);
+    
+    // Stop Firestore checkpoints
+    if (firestoreCheckpointInterval.current) {
+      clearInterval(firestoreCheckpointInterval.current);
+      firestoreCheckpointInterval.current = null;
+    }
     
     const node = e.target;
     const finalPos = {
@@ -132,6 +162,12 @@ export default function ShapeRenderer({
       transformStreamInterval.current = null;
     }
     await stopDragStream(shape.id);
+    
+    // Stop Firestore checkpoints
+    if (firestoreCheckpointInterval.current) {
+      clearInterval(firestoreCheckpointInterval.current);
+      firestoreCheckpointInterval.current = null;
+    }
     
     const node = shapeRef.current;
     if (!node) return;
@@ -190,6 +226,27 @@ export default function ShapeRenderer({
         );
       }
     }, 10);
+    
+    // Periodic Firestore checkpoint (every 500ms) during transform
+    firestoreCheckpointInterval.current = setInterval(() => {
+      const node = shapeRef.current;
+      if (node && currentUser) {
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        const checkpointData = {
+          x: node.x(),
+          y: node.y(),
+          width: Math.max(10, node.width() * scaleX),
+          height: Math.max(10, node.height() * scaleY),
+          rotation: node.rotation()
+        };
+        
+        updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
+          .catch(err => {
+            console.debug('[Shape] Transform checkpoint save failed (non-critical):', err.message);
+          });
+      }
+    }, 500);
     
     return true;
   };
