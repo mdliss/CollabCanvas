@@ -16,7 +16,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
   const [scrollIndex, setScrollIndex] = useState(0);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showGradientPicker, setShowGradientPicker] = useState(false);
-  const { history, addColor } = useColorHistory();
+  const { history, addColor, addGradient } = useColorHistory();
   const paletteRef = useRef(null);
   
   const VISIBLE_COLORS = 10; // Show 10 colors at a time
@@ -84,25 +84,39 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
     setScrollIndex(prev => Math.min(maxScroll, prev + 1));
   };
 
-  // Handle color selection (add to history)
+  // Handle color selection (add to history with opacity)
   const handleColorClick = (color, opacity = 100) => {
-    addColor(color);
+    addColor(color, opacity / 100); // Store as 0-1 range
     onColorSelect(color, opacity);
   };
 
   // Handle custom color picker
   const handleCustomColor = (color, opacity) => {
-    addColor(color);
+    addColor(color, opacity / 100); // Store as 0-1 range
     onColorSelect(color, opacity);
     setShowColorPicker(false);
   };
 
   // Handle gradient picker
   const handleGradient = (gradient) => {
+    addGradient(gradient); // Add gradient to history
     if (onGradientSelect) {
       onGradientSelect(gradient);
     }
     setShowGradientPicker(false);
+  };
+
+  // Handle clicking on history item (reapply color or gradient)
+  const handleHistoryClick = (historyItem) => {
+    if (historyItem.type === 'solid') {
+      // Reapply solid color with opacity
+      onColorSelect(historyItem.color, historyItem.opacity * 100);
+    } else if (historyItem.type === 'gradient') {
+      // Reapply gradient
+      if (onGradientSelect) {
+        onGradientSelect(historyItem.gradient);
+      }
+    }
   };
 
   return (
@@ -142,7 +156,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           {selectedCount} selected
         </span>
 
-        {/* Color History */}
+        {/* Color History - Shows last 4 colors/gradients with opacity */}
         {history.length > 0 && (
           <>
             <div
@@ -154,32 +168,87 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
                 borderRight: '1px solid rgba(0, 0, 0, 0.1)'
               }}
             >
-              {history.slice(0, 4).map((color, idx) => (
-                <button
-                  key={`${color}-${idx}`}
-                  onClick={() => handleColorClick(color)}
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    backgroundColor: color,
-                    border: '2px solid rgba(0, 0, 0, 0.2)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    padding: '0',
-                    outline: 'none'
-                  }}
-                  title={`Recent: ${color}`}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = 'scale(1.1)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.5)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = 'scale(1)';
-                    e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.2)';
-                  }}
-                />
-              ))}
+              {history.slice(0, 4).map((item, idx) => {
+                // Generate unique key based on item type
+                const itemKey = item.type === 'solid' 
+                  ? `solid-${item.color}-${item.opacity}-${idx}`
+                  : `gradient-${item.gradient.color1}-${item.gradient.color2}-${idx}`;
+                
+                // Determine display style based on type
+                let backgroundStyle = {};
+                let title = '';
+                
+                if (item.type === 'solid') {
+                  // Solid color with checkerboard for transparency
+                  const hasTransparency = item.opacity < 1.0;
+                  title = `${item.color} (${Math.round(item.opacity * 100)}% opacity)`;
+                  
+                  if (hasTransparency) {
+                    backgroundStyle = {
+                      // Checkerboard pattern
+                      backgroundImage: `
+                        linear-gradient(45deg, #ccc 25%, transparent 25%),
+                        linear-gradient(-45deg, #ccc 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #ccc 75%),
+                        linear-gradient(-45deg, transparent 75%, #ccc 75%)
+                      `,
+                      backgroundSize: '8px 8px',
+                      backgroundPosition: '0 0, 0 4px, 4px -4px, -4px 0px'
+                    };
+                  }
+                } else if (item.type === 'gradient') {
+                  // Gradient
+                  const g = item.gradient;
+                  title = `Gradient: ${g.color1} → ${g.color2} (${g.angle}°)`;
+                  backgroundStyle = {
+                    background: `linear-gradient(${g.angle}deg, ${g.color1}, ${g.color2})`
+                  };
+                }
+                
+                return (
+                  <button
+                    key={itemKey}
+                    onClick={() => handleHistoryClick(item)}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      border: '2px solid rgba(0, 0, 0, 0.2)',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                      padding: '0',
+                      outline: 'none',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      ...backgroundStyle
+                    }}
+                    title={title}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.1)';
+                      e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.5)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+                    }}
+                  >
+                    {/* Overlay for solid colors (shows color with opacity) */}
+                    {item.type === 'solid' && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          backgroundColor: item.color,
+                          opacity: item.opacity
+                        }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
             </div>
           </>
         )}
