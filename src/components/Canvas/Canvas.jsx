@@ -10,15 +10,18 @@ import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
 import ColorPalette from "./ColorPalette";
+import PerformanceMonitor, { PerformanceToggleButton } from "../UI/PerformanceMonitor";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
+import { usePerformance } from "../../hooks/usePerformance";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
 import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 import { ref, remove } from "firebase/database";
 import { rtdb } from "../../services/firebase";
+import { performanceMonitor } from "../../services/performance";
 
 const CANVAS_ID = "global-canvas-v1";
 const GRID_SIZE = 50;
@@ -58,12 +61,19 @@ export default function Canvas() {
   const { cursors } = useCursors(stageRef);
   const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
+  const { setEditing, isVisible, toggleVisibility } = usePerformance();
 
   useEffect(() => {
     const unsubscribe = watchSelections(setSelections);
     return () => {
       if (unsubscribe) unsubscribe();
     };
+  }, []);
+
+  // Initialize performance monitoring
+  useEffect(() => {
+    performanceMonitor.init();
+    return () => performanceMonitor.destroy();
   }, []);
 
   useEffect(() => {
@@ -274,20 +284,28 @@ export default function Canvas() {
 
   const handleShapeDragStart = () => {
     // Shape drag started (prevent stage dragging)
+    setEditing(true);
   };
 
   const handleShapeDragEnd = async (shapeId, pos) => {
     if (import.meta.env.VITE_DEBUG) {
       console.debug('[Canvas] dragEnd persist', shapeId, pos);
     }
+    setEditing(false);
     await updateShape(CANVAS_ID, shapeId, pos, user);
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
+  };
+
+  const handleShapeTransformStart = () => {
+    // Transform started (scaling, rotating)
+    setEditing(true);
   };
 
   const handleShapeTransformEnd = async (shapeId, attrs) => {
     if (import.meta.env.VITE_DEBUG) {
       console.debug('[Canvas] transformEnd persist', shapeId, attrs);
     }
+    setEditing(false);
     await updateShape(CANVAS_ID, shapeId, attrs, user);
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
@@ -627,6 +645,8 @@ export default function Canvas() {
 
   return (
     <div>
+      <PerformanceMonitor />
+      <PerformanceToggleButton onClick={toggleVisibility} isVisible={isVisible} />
       <DebugNote 
         projectId={import.meta.env.VITE_FB_PROJECT_ID} 
         docPath={`canvas/${CANVAS_ID}`} 
@@ -784,6 +804,7 @@ export default function Canvas() {
                 onRequestLock={handleRequestLock}
                 onDragStart={handleShapeDragStart}
                 onDragEnd={handleShapeDragEnd}
+                onTransformStart={handleShapeTransformStart}
                 onTransformEnd={handleShapeTransformEnd}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}

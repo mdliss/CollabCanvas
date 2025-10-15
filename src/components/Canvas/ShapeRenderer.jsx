@@ -17,6 +17,7 @@ export default function ShapeRenderer({
   onRequestLock,
   onDragStart,
   onDragEnd,
+  onTransformStart,
   onTransformEnd,
   isBeingDraggedByOther = false
 }) {
@@ -168,6 +169,11 @@ export default function ShapeRenderer({
         transformerRef.current.nodes([]);
       }
       return false;
+    }
+    
+    // Notify parent (for performance tracking)
+    if (onTransformStart) {
+      onTransformStart();
     }
     
     // Start streaming transform updates (rotation, scale, position) at ~60Hz

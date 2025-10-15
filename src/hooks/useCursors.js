@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { writeCursor, watchCursors, clearCursor } from "../services/cursors";
 import { generateUserColor } from "../services/presence";
+import { performanceMonitor } from "../services/performance";
 
 /**
  * Hook to manage cursor positions
@@ -42,6 +43,7 @@ export default function useCursors(stageRef) {
       const y = (pointer.y - stage.position().y) / stage.scaleY();
 
       writeCursor(uid, x, y, userNameRef.current, userColorRef.current, userPhotoRef.current);
+      performanceMonitor.trackCursorUpdate();
     };
 
     // Attach mouse listener

@@ -3,6 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
+import { getAnalytics } from "firebase/analytics";
 
 // Fail fast if required env vars are missing
 const projectId = import.meta.env.VITE_FB_PROJECT_ID;
@@ -37,3 +38,5 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 export const rtdb = getDatabase(app);
 export const storage = getStorage(app);
+export const analytics = getAnalytics(app);
+export { app };
