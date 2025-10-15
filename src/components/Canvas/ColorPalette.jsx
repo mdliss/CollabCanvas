@@ -25,31 +25,37 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
 
   // Handle Shift+Scroll for palette navigation
   const handleWheel = (e) => {
-    if (e.shiftKey) {
-      e.preventDefault();
-      e.stopPropagation();
+    // Only intercept if Shift is held
+    if (!e.shiftKey) return;
+    
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const maxScroll = Math.max(0, COLOR_PALETTE.length - VISIBLE_COLORS);
+    
+    // deltaY > 0 = scroll DOWN (wheel away from you) = show NEXT colors (scroll RIGHT)
+    // deltaY < 0 = scroll UP (wheel toward you) = show PREVIOUS colors (scroll LEFT)
+    // Use Math.sign() to normalize scroll delta to -1, 0, or 1 (prevents over-scrolling on trackpads)
+    const scrollAmount = Math.sign(e.deltaY);
+    
+    setScrollIndex(prev => {
+      const next = prev + scrollAmount;
+      const clamped = Math.max(0, Math.min(next, maxScroll));
       
-      // Determine direction: deltaY > 0 = scroll down = move RIGHT (show next colors)
-      //                      deltaY < 0 = scroll up = move LEFT (show previous colors)
-      const direction = e.deltaY > 0 ? 1 : -1;
-      const maxScroll = Math.max(0, COLOR_PALETTE.length - VISIBLE_COLORS);
-      
-      setScrollIndex(prev => {
-        const next = prev + direction;
-        const clamped = Math.max(0, Math.min(next, maxScroll));
-        console.log('[ColorPalette] Shift+Scroll:', {
-          deltaY: e.deltaY,
-          direction,
-          prev,
-          next,
-          clamped,
-          maxScroll,
-          totalColors: COLOR_PALETTE.length,
-          visibleColors: VISIBLE_COLORS
-        });
-        return clamped;
+      // Debug logging (helps verify behavior)
+      console.log('[ColorPalette] Shift+Scroll:', {
+        deltaY: e.deltaY,
+        scrollAmount,
+        direction: scrollAmount > 0 ? 'RIGHT (next)' : scrollAmount < 0 ? 'LEFT (prev)' : 'NONE',
+        prev,
+        next,
+        clamped,
+        maxScroll,
+        showing: `colors ${clamped} to ${clamped + VISIBLE_COLORS - 1} of ${COLOR_PALETTE.length}`
       });
-    }
+      
+      return clamped;
+    });
   };
 
   // Handle color selection (add to history)

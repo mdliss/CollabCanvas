@@ -413,19 +413,37 @@ export default function Canvas() {
   };
 
   const handleGradientChange = async (gradient) => {
-    if (selectedIds.length === 0 || !user) return;
+    if (selectedIds.length === 0 || !user) {
+      console.warn('[GradientChange] Cannot apply: no selection or user');
+      return;
+    }
+    
+    console.group('[GradientChange] Starting gradient application');
+    console.log('Gradient config:', gradient);
+    console.log('Selected shapes:', selectedIds);
+    console.log('User:', user.uid);
     
     let changedCount = 0;
     let lockedCount = 0;
-    
-    console.log('[GradientChange] Applying gradient:', gradient);
+    let errors = [];
     
     for (const shapeId of selectedIds) {
       const shape = shapes.find(s => s.id === shapeId);
-      if (!shape) continue;
+      if (!shape) {
+        console.warn(`[GradientChange] Shape ${shapeId} not found in local state`);
+        continue;
+      }
+      
+      console.log(`[GradientChange] Processing shape ${shapeId}:`, {
+        type: shape.type,
+        size: `${shape.width}x${shape.height}`,
+        currentFill: shape.fill,
+        isLocked: shape.isLocked,
+        lockedBy: shape.lockedBy
+      });
       
       if (shape.isLocked && shape.lockedBy !== user.uid) {
-        console.warn(`[GradientChange] Shape ${shapeId} locked by another user`);
+        console.warn(`[GradientChange] Shape ${shapeId} locked by ${shape.lockedBy}`);
         lockedCount++;
         continue;
       }
@@ -453,10 +471,6 @@ export default function Canvas() {
           y: centerY + radius * Math.sin(angleRad)
         };
         
-        console.log('[GradientChange] Shape:', shapeId, 'size:', width, 'x', height);
-        console.log('[GradientChange] Gradient points:', startPoint, 'to', endPoint);
-        console.log('[GradientChange] Color stops:', [0, gradient.color1, 1, gradient.color2]);
-        
         // Build update object
         const updates = {
           fill: undefined, // Clear solid fill (undefined removes it from Firestore)
@@ -466,16 +480,37 @@ export default function Canvas() {
           opacity: 1.0 // Reset opacity for gradients
         };
         
+        console.log(`[GradientChange] Update payload for ${shapeId}:`, {
+          startPoint,
+          endPoint,
+          colorStops: [0, gradient.color1, 1, gradient.color2],
+          clearingFill: true
+        });
+        
         await updateShape(CANVAS_ID, shapeId, updates, user);
-        console.log('[GradientChange] Successfully updated shape:', shapeId);
+        console.log(`[GradientChange] ✅ Successfully updated ${shapeId}`);
         changedCount++;
       } catch (error) {
-        console.error(`[GradientChange] Failed to update shape ${shapeId}:`, error);
+        console.error(`[GradientChange] ❌ Failed to update ${shapeId}:`, error);
+        errors.push({ shapeId, error: error.message });
       }
     }
     
+    console.log('[GradientChange] Summary:', {
+      total: selectedIds.length,
+      succeeded: changedCount,
+      locked: lockedCount,
+      failed: errors.length
+    });
+    console.groupEnd();
+    
+    // Show user feedback
     if (changedCount > 0) {
       showFeedback(`Applied gradient to ${changedCount} shape${changedCount > 1 ? 's' : ''}`);
+    }
+    if (errors.length > 0) {
+      console.error('[GradientChange] Error details:', errors);
+      showFeedback(`Failed to update ${errors.length} shape(s) - check console`);
     }
     if (lockedCount > 0) {
       setTimeout(() => {

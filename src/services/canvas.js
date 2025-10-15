@@ -85,7 +85,16 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(canvasRef);
       
-      if (!docSnap.exists()) return;
+      // Check if document exists
+      if (!docSnap.exists()) {
+        console.warn('[updateShape] Document does not exist, creating it first');
+        transaction.set(canvasRef, {
+          canvasId,
+          shapes: [],
+          lastUpdated: serverTimestamp()
+        });
+        return; // Exit early - can't update shapes that don't exist
+      }
       
       const shapes = docSnap.data().shapes || [];
       const updatedShapes = shapes.map(shape => {
@@ -125,6 +134,12 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
     });
   } catch (error) {
     console.error("[updateShape] Failed:", error);
+    console.error("[updateShape] Error details:", {
+      code: error.code,
+      message: error.message,
+      shapeId,
+      updates
+    });
     throw error;
   }
 };
@@ -136,7 +151,10 @@ export const deleteShape = async (canvasId, shapeId) => {
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(canvasRef);
       
-      if (!docSnap.exists()) return;
+      if (!docSnap.exists()) {
+        console.warn('[deleteShape] Document does not exist');
+        return;
+      }
       
       const shapes = docSnap.data().shapes || [];
       const filteredShapes = shapes.filter(shape => shape.id !== shapeId);
@@ -148,6 +166,11 @@ export const deleteShape = async (canvasId, shapeId) => {
     });
   } catch (error) {
     console.error("[deleteShape] Failed:", error);
+    console.error("[deleteShape] Error details:", {
+      code: error.code,
+      message: error.message,
+      shapeId
+    });
     throw error;
   }
 };
@@ -249,9 +272,13 @@ export const staleLockSweeper = async (canvasId, ttlMs = 5000) => {
       
       const updatedShapes = shapes.map(shape => {
         if (shape.isLocked && shape.lockedAt) {
-          const lockAge = now - shape.lockedAt.toMillis();
+          // FIX: lockedAt is already a number (from Date.now()), not a Firestore Timestamp
+          // Don't call .toMillis() - just subtract directly
+          const lockAge = now - shape.lockedAt;
+          
           if (lockAge > ttlMs) {
             cleaned++;
+            console.log(`[staleLockSweeper] Cleaning stale lock on ${shape.id}, age: ${lockAge}ms`);
             return {
               ...shape,
               isLocked: false,
@@ -264,11 +291,16 @@ export const staleLockSweeper = async (canvasId, ttlMs = 5000) => {
       });
       
       if (cleaned > 0) {
+        console.log(`[staleLockSweeper] Cleaned ${cleaned} stale lock(s)`);
         transaction.update(docRef, { shapes: updatedShapes });
       }
     });
   } catch (error) {
     console.error("[staleLockSweeper] Failed:", error);
+    console.error("[staleLockSweeper] Error details:", {
+      code: error.code,
+      message: error.message
+    });
   }
 };
 
