@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import useUserProfile from '../../hooks/useUserProfile';
 import Avatar from '../Collaboration/Avatar';
 
 /**
@@ -9,8 +10,11 @@ import Avatar from '../Collaboration/Avatar';
  */
 export default function AuthBar({ onShowEmailLogin }) {
   const { user, loginWithGoogle, logout, error } = useAuth();
+  const { profile, saveBio } = useUserProfile();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [bioText, setBioText] = useState('');
   const dropdownRef = useRef(null);
 
   // Show error toast when auth error occurs
@@ -22,19 +26,35 @@ export default function AuthBar({ onShowEmailLogin }) {
     }
   }, [error]);
 
-  // Close dropdown when clicking outside
+  // Close dropdown when clicking outside or pressing Escape
   useEffect(() => {
+    if (!showDropdown) return;
+
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
+        setIsEditingBio(false);
       }
     };
 
-    if (showDropdown) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [showDropdown]);
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        if (isEditingBio) {
+          setIsEditingBio(false);
+        } else {
+          setShowDropdown(false);
+        }
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEscape);
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [showDropdown, isEditingBio]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -52,6 +72,32 @@ export default function AuthBar({ onShowEmailLogin }) {
     } catch (err) {
       console.error('[AuthBar] Sign out failed:', err);
     }
+  };
+
+  const startEditingBio = () => {
+    setBioText(profile?.bio || '');
+    setIsEditingBio(true);
+  };
+
+  const handleBioSave = async () => {
+    try {
+      await saveBio(bioText);
+      setIsEditingBio(false);
+    } catch (err) {
+      console.error('[AuthBar] Failed to save bio:', err);
+      alert('Failed to save bio. Please try again.');
+    }
+  };
+
+  const handleBioCancel = () => {
+    setIsEditingBio(false);
+    setBioText('');
+  };
+
+  const formatDate = (timestamp) => {
+    if (!timestamp) return '';
+    const date = new Date(timestamp);
+    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
   // Get user display info
@@ -263,7 +309,7 @@ export default function AuthBar({ onShowEmailLogin }) {
           </svg>
         </button>
 
-        {/* Dropdown menu */}
+        {/* Enhanced Dropdown menu */}
         {showDropdown && (
           <div
             style={{
@@ -272,66 +318,273 @@ export default function AuthBar({ onShowEmailLogin }) {
               right: 0,
               marginTop: '8px',
               background: 'white',
-              borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-              border: '1px solid #e0e0e0',
-              minWidth: '180px',
-              overflow: 'hidden',
+              borderRadius: '12px',
+              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+              border: '1px solid rgba(0, 0, 0, 0.1)',
+              width: '320px',
+              maxHeight: '500px',
+              overflowY: 'auto',
               zIndex: 10001
             }}
           >
-            {/* Status chip */}
+            {/* Profile Section */}
             <div
               style={{
-                padding: '12px 16px',
-                borderBottom: '1px solid #f0f0f0',
-                fontSize: '13px',
-                color: '#666'
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                borderBottom: '1px solid rgba(0, 0, 0, 0.06)'
               }}
             >
-              Signed in as <strong>{displayName}</strong>
+              {/* Large Avatar */}
+              <div style={{ marginBottom: '12px' }}>
+                <Avatar 
+                  src={photoURL}
+                  name={displayName}
+                  color={getUserColor()}
+                  size="lg"
+                  style={{ 
+                    width: '64px', 
+                    height: '64px',
+                    fontSize: '24px',
+                    borderWidth: '3px'
+                  }}
+                />
+              </div>
+
+              {/* Name */}
+              <h3
+                style={{
+                  fontSize: '18px',
+                  fontWeight: '600',
+                  color: '#1a1a1a',
+                  margin: '0 0 4px 0',
+                  textAlign: 'center'
+                }}
+              >
+                {displayName}
+              </h3>
+
+              {/* Email */}
+              <p
+                style={{
+                  fontSize: '13px',
+                  color: '#6b7280',
+                  margin: 0,
+                  textAlign: 'center',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  maxWidth: '280px'
+                }}
+              >
+                {user?.email}
+              </p>
             </div>
 
-            {/* Menu items */}
-            <button
-              onClick={() => setShowDropdown(false)}
+            {/* Bio Section */}
+            <div
               style={{
-                width: '100%',
-                padding: '12px 16px',
-                background: 'transparent',
-                border: 'none',
-                borderBottom: '1px solid #f0f0f0',
-                fontSize: '14px',
-                color: '#333',
-                textAlign: 'left',
-                cursor: 'pointer',
-                transition: 'background 0.15s ease'
+                padding: '16px 20px',
+                borderBottom: '1px solid rgba(0, 0, 0, 0.06)'
               }}
-              onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
-              onMouseLeave={(e) => e.target.style.background = 'transparent'}
             >
-              My Account
-            </button>
+              <label
+                style={{
+                  display: 'block',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: '#374151',
+                  marginBottom: '8px'
+                }}
+              >
+                Bio
+              </label>
 
-            <button
-              onClick={handleSignOut}
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                background: 'transparent',
-                border: 'none',
-                fontSize: '14px',
-                color: '#dc2626',
-                textAlign: 'left',
-                cursor: 'pointer',
-                fontWeight: '500',
-                transition: 'background 0.15s ease'
-              }}
-              onMouseEnter={(e) => e.target.style.background = '#fef2f2'}
-              onMouseLeave={(e) => e.target.style.background = 'transparent'}
-            >
-              Sign out
-            </button>
+              {isEditingBio ? (
+                <div>
+                  <textarea
+                    value={bioText}
+                    onChange={(e) => setBioText(e.target.value.slice(0, 200))}
+                    placeholder="Tell us about yourself..."
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      lineHeight: '1.5',
+                      resize: 'none',
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box'
+                    }}
+                    rows={3}
+                    maxLength={200}
+                    autoFocus
+                  />
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginTop: '8px'
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '11px',
+                        color: '#9ca3af'
+                      }}
+                    >
+                      {bioText.length}/200
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        onClick={handleBioCancel}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '13px',
+                          color: '#6b7280',
+                          background: 'transparent',
+                          border: '1px solid #d1d5db',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '500',
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                        onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleBioSave}
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '13px',
+                          color: 'white',
+                          background: '#3b82f6',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: '500',
+                          transition: 'background 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                        onMouseLeave={(e) => e.target.style.background = '#3b82f6'}
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={startEditingBio}
+                  style={{
+                    padding: '10px',
+                    fontSize: '14px',
+                    color: profile?.bio ? '#1f2937' : '#9ca3af',
+                    fontStyle: profile?.bio ? 'normal' : 'italic',
+                    lineHeight: '1.5',
+                    minHeight: '60px',
+                    cursor: 'pointer',
+                    borderRadius: '6px',
+                    border: '1px solid transparent',
+                    transition: 'all 0.15s ease',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#f9fafb';
+                    e.target.style.borderColor = '#e5e7eb';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.borderColor = 'transparent';
+                  }}
+                >
+                  {profile?.bio || 'Add a bio...'}
+                </div>
+              )}
+            </div>
+
+            {/* Stats Section */}
+            {profile?.createdAt && (
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderBottom: '1px solid rgba(0, 0, 0, 0.06)'
+                }}
+              >
+                <p
+                  style={{
+                    fontSize: '13px',
+                    color: '#6b7280',
+                    margin: 0
+                  }}
+                >
+                  Member since {formatDate(profile.createdAt)}
+                </p>
+                {profile?.stats?.shapesCreated > 0 && (
+                  <p
+                    style={{
+                      fontSize: '13px',
+                      color: '#6b7280',
+                      margin: '4px 0 0 0'
+                    }}
+                  >
+                    {profile.stats.shapesCreated} shape{profile.stats.shapesCreated !== 1 ? 's' : ''} created
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Actions Section */}
+            <div style={{ padding: '8px' }}>
+              <button
+                onClick={() => setShowDropdown(false)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '14px',
+                  color: '#374151',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  transition: 'background 0.15s ease',
+                  fontWeight: '500'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+              >
+                My Account
+              </button>
+
+              <button
+                onClick={handleSignOut}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  background: 'transparent',
+                  border: 'none',
+                  fontSize: '14px',
+                  color: '#dc2626',
+                  textAlign: 'left',
+                  cursor: 'pointer',
+                  borderRadius: '6px',
+                  fontWeight: '500',
+                  transition: 'background 0.15s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.background = '#fef2f2'}
+                onMouseLeave={(e) => e.target.style.background = 'transparent'}
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -47,6 +47,24 @@ service cloud.firestore {
         // Consider using Cloud Functions for complex validation.
     }
     
+    // User profile documents
+    match /users/{userId} {
+      // Any authenticated user can read profiles (for profile popups)
+      allow read: if isAuthenticated();
+      
+      // Users can create/update their own profile
+      allow create: if isAuthenticated() && request.auth.uid == userId
+        && request.resource.data.keys().hasAll(['uid', 'email'])
+        && request.resource.data.uid == userId;
+      
+      // Users can update their own profile with validation
+      allow update: if isAuthenticated() && request.auth.uid == userId
+        // Validate bio field if present (max 200 chars)
+        && (!request.resource.data.keys().hasAny(['bio']) 
+            || (request.resource.data.bio is string 
+                && request.resource.data.bio.size() <= 200));
+    }
+    
     // Block all other reads/writes by default
     match /{document=**} {
       allow read, write: if false;
