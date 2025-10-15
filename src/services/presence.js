@@ -49,17 +49,21 @@ export const setUserOffline = async (uid) => {
 export const watchPresence = (callback) => {
   return onValue(ref(rtdb, BASE), (s) => {
     const v = s.val() || {};
-    // Only include users who are actually online (they exist in the tree)
+    // Only include users who are actually online with valid data
     const arr = Object.entries(v)
-      .filter(([, x]) => x.online !== false)
+      .filter(([, x]) => {
+        // CRITICAL FIX: Only include entries that are explicitly online AND have valid displayName
+        // This prevents "User" fallback for corrupted/partial entries
+        return x && x.online === true && x.displayName && x.displayName.trim().length > 0;
+      })
       .map(([uid, x]) => ({
         uid,
-        displayName: x.displayName || 'User',
+        displayName: x.displayName,
         color: x.cursorColor || '#666',
         photoURL: x.photoURL || null,
         online: true
       }));
-    console.log('[Presence] Online users count:', arr.length);
+    console.log('[Presence] Online users count:', arr.length, '(filtered valid entries only)');
     callback(arr);
   });
 };
