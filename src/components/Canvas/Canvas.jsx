@@ -15,11 +15,13 @@ import HelpMenu from "../UI/HelpMenu";
 import ConnectionStatus from "../UI/ConnectionStatus";
 import TextFormattingToolbar from "../UI/TextFormattingToolbar";
 import LayersPanel from "../UI/LayersPanel";
+import HistoryTimeline from "../UI/HistoryTimeline";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
 import { usePerformance } from "../../hooks/usePerformance";
 import { useUndo } from "../../contexts/UndoContext";
+import { CreateShapeCommand, UpdateShapeCommand, DeleteShapeCommand, MoveShapeCommand } from "../../utils/commands";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
 import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
@@ -59,6 +61,7 @@ export default function Canvas() {
   });
   const stageRef = useRef(null);
   const [mousePos, setMousePos] = useState(null);
+  const dragStartStateRef = useRef({}); // Store initial state for undo
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const lastUpdateTimeRef = useRef(0);
   const [selectionBox, setSelectionBox] = useState(null);
@@ -71,7 +74,7 @@ export default function Canvas() {
   const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
   const { setEditing, isVisible, toggleVisibility } = usePerformance();
-  const { undo, redo, canUndo, canRedo } = useUndo();
+  const { undo, redo, canUndo, canRedo, execute } = useUndo();
 
   useEffect(() => {
     const unsubscribe = watchSelections(setSelections);
@@ -182,7 +185,18 @@ export default function Canvas() {
         e.preventDefault();
         try {
           for (const id of selectedIds) {
-            await deleteShape(CANVAS_ID, id, user);
+            // Get shape data before deleting so we can undo
+            const shape = shapes.find(s => s.id === id);
+            if (shape) {
+              const command = new DeleteShapeCommand(
+                CANVAS_ID,
+                shape,
+                user,
+                createShape,
+                deleteShape
+              );
+              await execute(command);
+            }
           }
           selectedIds.forEach(id => clearSelection(id));
           setSelectedIds([]);
@@ -250,11 +264,12 @@ export default function Canvas() {
     };
   }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo]);
 
-  const handleAddShape = (type) => {
+  const handleAddShape = async (type) => {
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
     const centerY = (-stagePos.y + (window.innerHeight - 50) / 2) / stageScale;
     
     let shapeData = {
+      id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type,
       fill: '#cccccc',
       x: centerX,
@@ -304,8 +319,20 @@ export default function Canvas() {
         break;
     }
     
-    createShape(CANVAS_ID, shapeData, user)
-      .catch((e) => setLastError(String(e)));
+    // Wrap in command for undo/redo
+    const command = new CreateShapeCommand(
+      CANVAS_ID,
+      shapeData,
+      user,
+      createShape,
+      deleteShape
+    );
+    
+    try {
+      await execute(command);
+    } catch (e) {
+      setLastError(String(e));
+    }
   };
 
   const handleWheel = (e) => {
@@ -357,8 +384,16 @@ export default function Canvas() {
     return { x: clampedX, y: clampedY };
   };
 
-  const handleShapeDragStart = () => {
-    // Shape drag started (prevent stage dragging)
+  const handleShapeDragStart = (shapeId) => {
+    // Shape drag started - store initial position for undo
+    const shape = shapes.find(s => s.id === shapeId);
+    if (shape) {
+      dragStartStateRef.current[shapeId] = {
+        x: shape.x,
+        y: shape.y,
+        rotation: shape.rotation
+      };
+    }
     setEditing(true);
   };
 
@@ -367,7 +402,33 @@ export default function Canvas() {
       console.debug('[Canvas] dragEnd persist', shapeId, pos);
     }
     setEditing(false);
-    await updateShape(CANVAS_ID, shapeId, pos, user);
+    
+    // Get the old position from dragStart
+    const oldPosition = dragStartStateRef.current[shapeId];
+    if (oldPosition) {
+      // Wrap in command for undo/redo
+      const command = new MoveShapeCommand(
+        CANVAS_ID,
+        shapeId,
+        pos, // new position
+        oldPosition, // old position
+        user,
+        updateShape
+      );
+      
+      try {
+        await execute(command);
+      } catch (error) {
+        console.error('[Canvas] Move failed:', error);
+      }
+      
+      // Clean up stored state
+      delete dragStartStateRef.current[shapeId];
+    } else {
+      // Fallback if no initial state (shouldn't happen)
+      await updateShape(CANVAS_ID, shapeId, pos, user);
+    }
+    
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
 
@@ -461,8 +522,28 @@ export default function Canvas() {
           updates.fillLinearGradientColorStops = undefined;
         }
         
+        // Store old properties for undo
+        const oldProps = {
+          fill: shape.fill,
+          opacity: shape.opacity,
+          fillLinearGradientStartPoint: shape.fillLinearGradientStartPoint,
+          fillLinearGradientEndPoint: shape.fillLinearGradientEndPoint,
+          fillLinearGradientColorStops: shape.fillLinearGradientColorStops
+        };
+        
         console.log('[ColorChange] Updating shape:', shapeId, 'with:', updates);
-        await updateShape(CANVAS_ID, shapeId, updates, user);
+        
+        // Wrap in command for undo/redo
+        const command = new UpdateShapeCommand(
+          CANVAS_ID,
+          shapeId,
+          updates, // new properties
+          oldProps, // old properties
+          user,
+          updateShape
+        );
+        
+        await execute(command);
         changedCount++;
       } catch (error) {
         console.error(`[ColorChange] Failed to update shape ${shapeId}:`, error);
@@ -949,6 +1030,9 @@ export default function Canvas() {
           user={user}
         />
       )}
+      
+      {/* History Timeline */}
+      <HistoryTimeline />
       
       <DebugNote 
         projectId={import.meta.env.VITE_FB_PROJECT_ID} 

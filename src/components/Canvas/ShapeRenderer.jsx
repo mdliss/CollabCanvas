@@ -98,7 +98,7 @@ export default function ShapeRenderer({
       return;
     }
     
-    onDragStart();
+    onDragStart(shape.id);
     
     // Start streaming drag position at ~100Hz (10ms) for smoother updates
     dragStreamInterval.current = setInterval(() => {
