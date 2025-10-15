@@ -193,35 +193,35 @@ export default function HelpMenu({ isVisible, onClose }) {
           <div style={styles.metric}>
             <div style={styles.metricName}>FPS</div>
             <div style={styles.metricDesc}>
-              Frames per second during editing. Target: 60+ (green).
+              How smoothly the canvas renders. 60 FPS = butter smooth. Green is good, yellow means slight lag, red means performance issues.
             </div>
           </div>
           
           <div style={styles.metric}>
             <div style={styles.metricName}>Sync Latency (p95)</div>
             <div style={styles.metricDesc}>
-              Time for changes to sync across users. 95th percentile measurement. Target: &lt;100ms (green).
+              How fast your changes appear on other users' screens. Under 100ms (green) = instant. Over 150ms (red) = noticeable delay. This measures the slowest 5% of syncs.
             </div>
           </div>
           
           <div style={styles.metric}>
             <div style={styles.metricName}>Cursor Frequency</div>
             <div style={styles.metricDesc}>
-              How often cursor positions update. ~30Hz is optimal.
+              How many times per second other users see your cursor move. 30 updates/second is smooth. Lower means choppy cursor movement.
             </div>
           </div>
           
           <div style={styles.metric}>
             <div style={styles.metricName}>Drag Saved (30s)</div>
             <div style={styles.metricDesc}>
-              RTDB writes prevented by delta compression in last 30 seconds. High number = good! System attempts 100 writes/second during drag, but only sends when position/rotation changes. Smooth drags = more saves.
+              Network bandwidth saved by smart updates. When you drag smoothly, the system tries to send 100 updates/second but skips ones where nothing changed. High number = efficient! This counts skipped updates in the last 30 seconds.
             </div>
           </div>
           
           <div style={styles.metric}>
             <div style={styles.metricName}>Cursor Saved (30s)</div>
             <div style={styles.metricDesc}>
-              Cursor updates skipped due to 2px movement filter in last 30 seconds. Prevents noise from tiny mouse movements.
+              How many cursor updates were skipped because you barely moved your mouse (less than 2 pixels). Filters out jitter and saves bandwidth. High number = good!
             </div>
           </div>
         </div>
@@ -232,19 +232,19 @@ export default function HelpMenu({ isVisible, onClose }) {
           
           <div style={styles.item}>
             <span style={styles.desc}>
-              <strong>Object Locking:</strong> First user to touch a shape locks it for 8 seconds. Locked shapes show red outline + 🔒 badge.
+              <strong>Object Locking:</strong> When you grab a shape, it's yours for 8 seconds (prevents edit conflicts). You'll see your own shape normally, others see it with a red outline and lock icon 🔒.
             </span>
           </div>
           
           <div style={styles.item}>
             <span style={styles.desc}>
-              <strong>Live Cursors:</strong> See other users&apos; cursors in real-time with their names. Updates every 33ms.
+              <strong>Live Cursors:</strong> See where everyone else is pointing in real-time. Each cursor shows the user's name and updates 30 times per second for smooth tracking.
             </span>
           </div>
           
           <div style={styles.item}>
             <span style={styles.desc}>
-              <strong>Drag Streaming:</strong> Shape positions stream at 100Hz (every 10ms) during drag for smooth synchronization.
+              <strong>Drag Streaming:</strong> When you drag a shape, other users see it move in real-time (100 updates/second). When you pause mid-drag, they still see the shape (it doesn't disappear). Orange outline means someone else is dragging.
             </span>
           </div>
           

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { enableIndexedDbPersistence } from "firebase/firestore";
 import { getDatabase } from "firebase/database";
 import { getStorage } from "firebase/storage";
 import { getAnalytics } from "firebase/analytics";
@@ -39,4 +40,20 @@ export const db = getFirestore(app);
 export const rtdb = getDatabase(app);
 export const storage = getStorage(app);
 export const analytics = getAnalytics(app);
+
+// Enable Firestore offline persistence (40MB cache)
+enableIndexedDbPersistence(db, {
+  cacheSizeBytes: 40 * 1024 * 1024 // 40MB
+}).then(() => {
+  console.log('[Firestore] Offline persistence enabled');
+}).catch((err) => {
+  if (err.code === 'failed-precondition') {
+    console.warn('[Firestore] Persistence failed: Multiple tabs open. Only first tab gets persistence.');
+  } else if (err.code === 'unimplemented') {
+    console.warn('[Firestore] Persistence not available in this browser.');
+  } else {
+    console.error('[Firestore] Persistence error:', err);
+  }
+});
+
 export { app };

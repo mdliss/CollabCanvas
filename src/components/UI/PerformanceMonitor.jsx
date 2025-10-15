@@ -12,7 +12,7 @@ export function PerformanceToggleButton({ onClick, isVisible }) {
     width: '32px',
     height: '32px',
     borderRadius: '6px',
-    backgroundColor: isVisible ? '#22c55e' : 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     color: '#fff',
     border: '1px solid rgba(255, 255, 255, 0.2)',
     cursor: 'pointer',
@@ -28,7 +28,7 @@ export function PerformanceToggleButton({ onClick, isVisible }) {
   };
 
   if (isHovered) {
-    buttonStyle.backgroundColor = isVisible ? '#16a34a' : 'rgba(0, 0, 0, 0.8)';
+    buttonStyle.backgroundColor = 'rgba(0, 0, 0, 0.8)';
   }
 
   return (
@@ -45,8 +45,8 @@ export function PerformanceToggleButton({ onClick, isVisible }) {
   );
 }
 
-export default function PerformanceMonitor() {
-  const { metrics, isVisible, toggleVisibility } = usePerformance();
+export default function PerformanceMonitor({ isVisible, onToggle }) {
+  const { metrics } = usePerformance();
 
   // Keyboard shortcut: Backtick (`) key only
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function PerformanceMonitor() {
         e.preventDefault();
         e.stopPropagation();
         console.log('[PerformanceMonitor] Performance monitor toggled!');
-        toggleVisibility();
+        onToggle();
       }
     };
 
@@ -73,7 +73,7 @@ export default function PerformanceMonitor() {
       console.log('[PerformanceMonitor] Keyboard listener unmounted');
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [toggleVisibility]);
+  }, [onToggle]);
 
   if (!isVisible || !metrics) return null;
 
@@ -205,6 +205,9 @@ export default function PerformanceMonitor() {
 
       <div style={styles.hint}>
         Press ` to toggle (last 30s)
+      </div>
+      <div style={{...styles.hint, marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '6px'}}>
+        Press H for help menu
       </div>
     </div>
   );

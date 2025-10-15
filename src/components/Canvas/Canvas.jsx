@@ -12,6 +12,7 @@ import SelectionBadge from "../Collaboration/SelectionBadge";
 import ColorPalette from "./ColorPalette";
 import PerformanceMonitor, { PerformanceToggleButton } from "../UI/PerformanceMonitor";
 import HelpMenu from "../UI/HelpMenu";
+import ConnectionStatus from "../UI/ConnectionStatus";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -651,7 +652,8 @@ export default function Canvas() {
 
   return (
     <div>
-      <PerformanceMonitor />
+      <ConnectionStatus />
+      <PerformanceMonitor isVisible={isVisible} onToggle={toggleVisibility} />
       <PerformanceToggleButton onClick={toggleVisibility} isVisible={isVisible} />
       <HelpMenu isVisible={isHelpVisible} onClose={() => setIsHelpVisible(false)} />
       <DebugNote 
