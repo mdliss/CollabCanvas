@@ -4,19 +4,35 @@
  */
 
 class UndoManager {
-  constructor(maxHistorySize = 100) {
+  constructor(maxHistorySize = 1000) {
     this.undoStack = [];
     this.redoStack = [];
     this.maxHistorySize = maxHistorySize;
     this.listeners = new Set();
+    this.batchMode = false;
+    this.batchCommands = [];
+    this.batchDescription = '';
   }
 
   /**
    * Execute a command and add it to the undo stack
    */
-  async execute(command) {
+  async execute(command, user = null) {
     try {
+      // Add metadata to command
+      if (!command.metadata) {
+        command.metadata = {};
+      }
+      command.metadata.timestamp = Date.now();
+      command.metadata.user = user;
+      
       await command.execute();
+      
+      // If in batch mode, collect commands
+      if (this.batchMode) {
+        this.batchCommands.push(command);
+        return true;
+      }
       
       // Add to undo stack
       this.undoStack.push(command);
@@ -35,6 +51,53 @@ class UndoManager {
       console.error('[UndoManager] Execute failed:', error);
       return false;
     }
+  }
+
+  /**
+   * Start batching commands
+   */
+  startBatch(description = 'Batch operation') {
+    this.batchMode = true;
+    this.batchCommands = [];
+    this.batchDescription = description;
+  }
+
+  /**
+   * End batching and execute all collected commands as one
+   */
+  async endBatch() {
+    this.batchMode = false;
+    
+    if (this.batchCommands.length === 0) {
+      return true;
+    }
+    
+    // Import MultiShapeCommand dynamically to avoid circular dependency
+    const { MultiShapeCommand } = await import('../utils/commands.js');
+    
+    // Create a batch command with the first command's metadata
+    const batchCommand = new MultiShapeCommand(
+      this.batchCommands, 
+      this.batchDescription
+    );
+    
+    // Use the metadata from the first command
+    if (this.batchCommands[0]?.metadata) {
+      batchCommand.metadata = { ...this.batchCommands[0].metadata };
+    }
+    
+    // Add to undo stack
+    this.undoStack.push(batchCommand);
+    this.redoStack = [];
+    
+    if (this.undoStack.length > this.maxHistorySize) {
+      this.undoStack.shift();
+    }
+    
+    this.notifyListeners();
+    this.batchCommands = [];
+    this.batchDescription = '';
+    return true;
   }
 
   /**
@@ -187,6 +250,68 @@ class UndoManager {
       undoCount: this.undoStack.length,
       redoCount: this.redoStack.length
     };
+  }
+
+  /**
+   * Revert to a specific point in history
+   * @param {number} index - The index in the undo stack to revert to (0 = oldest, length-1 = newest)
+   */
+  async revertToPoint(index) {
+    if (index < 0 || index >= this.undoStack.length) {
+      console.error('[UndoManager] Invalid index for revert:', index);
+      return false;
+    }
+
+    try {
+      const currentIndex = this.undoStack.length - 1;
+      
+      if (index < currentIndex) {
+        // We need to undo commands
+        const stepsToUndo = currentIndex - index;
+        for (let i = 0; i < stepsToUndo; i++) {
+          await this.undo();
+        }
+      } else if (index > currentIndex) {
+        // We need to redo commands
+        const stepsToRedo = index - currentIndex;
+        for (let i = 0; i < stepsToRedo; i++) {
+          await this.redo();
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('[UndoManager] Revert to point failed:', error);
+      return false;
+    }
+  }
+
+  /**
+   * Get the full history with metadata
+   */
+  getFullHistory() {
+    const currentIndex = this.undoStack.length - 1;
+    
+    return [
+      ...this.undoStack.map((cmd, idx) => ({
+        id: `history-${idx}`,
+        index: idx,
+        description: cmd.getDescription(),
+        timestamp: cmd.metadata?.timestamp || Date.now(),
+        user: cmd.metadata?.user,
+        status: 'done',
+        isCurrent: idx === currentIndex
+      })),
+      ...this.redoStack.slice().reverse().map((cmd, idx) => ({
+        id: `redo-${idx}`,
+        index: currentIndex + idx + 1,
+        description: cmd.getDescription(),
+        timestamp: cmd.metadata?.timestamp || Date.now(),
+        user: cmd.metadata?.user,
+        status: 'undone',
+        isCurrent: false
+      }))
+    ];
   }
 }
 

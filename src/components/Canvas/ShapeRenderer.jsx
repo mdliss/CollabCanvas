@@ -212,9 +212,9 @@ export default function ShapeRenderer({
       return false;
     }
     
-    // Notify parent (for performance tracking)
+    // Notify parent (for performance tracking and undo state capture)
     if (onTransformStart) {
-      onTransformStart();
+      onTransformStart(shape.id);
     }
     
     // Start streaming transform updates (rotation, scale, position) at ~100Hz (10ms)

@@ -74,7 +74,7 @@ export default function Canvas() {
   const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
   const { setEditing, isVisible, toggleVisibility } = usePerformance();
-  const { undo, redo, canUndo, canRedo, execute } = useUndo();
+  const { undo, redo, canUndo, canRedo, execute, startBatch, endBatch } = useUndo();
 
   useEffect(() => {
     const unsubscribe = watchSelections(setSelections);
@@ -184,20 +184,34 @@ export default function Canvas() {
       if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
         e.preventDefault();
         try {
-          for (const id of selectedIds) {
-            // Get shape data before deleting so we can undo
-            const shape = shapes.find(s => s.id === id);
-            if (shape) {
-              const command = new DeleteShapeCommand(
-                CANVAS_ID,
-                shape,
-                user,
-                createShape,
-                deleteShape
-              );
-              await execute(command);
+          // Start batching if deleting multiple shapes
+          const shouldBatch = selectedIds.length > 1;
+          if (shouldBatch) {
+            startBatch(`Deleted ${selectedIds.length} shapes`);
+          }
+
+          try {
+            for (const id of selectedIds) {
+              // Get shape data before deleting so we can undo
+              const shape = shapes.find(s => s.id === id);
+              if (shape) {
+                const command = new DeleteShapeCommand(
+                  CANVAS_ID,
+                  shape,
+                  user,
+                  createShape,
+                  deleteShape
+                );
+                await execute(command, user);
+              }
+            }
+          } finally {
+            // End batch if we started one
+            if (shouldBatch) {
+              await endBatch();
             }
           }
+
           selectedIds.forEach(id => clearSelection(id));
           setSelectedIds([]);
         } catch (error) {
@@ -329,7 +343,7 @@ export default function Canvas() {
     );
     
     try {
-      await execute(command);
+      await execute(command, user);
     } catch (e) {
       setLastError(String(e));
     }
@@ -417,7 +431,7 @@ export default function Canvas() {
       );
       
       try {
-        await execute(command);
+        await execute(command, user);
       } catch (error) {
         console.error('[Canvas] Move failed:', error);
       }
@@ -432,9 +446,26 @@ export default function Canvas() {
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
 
-  const handleShapeTransformStart = () => {
-    // Transform started (scaling, rotating)
+  const handleShapeTransformStart = (shapeId) => {
+    // Transform started (scaling, rotating) - store initial state for undo
     setEditing(true);
+    
+    // Store the initial transform state
+    const shape = shapes.find(s => s.id === shapeId);
+    if (shape && !dragStartStateRef.current[shapeId]) {
+      dragStartStateRef.current[shapeId] = {
+        x: shape.x,
+        y: shape.y,
+        width: shape.width,
+        height: shape.height,
+        rotation: shape.rotation || 0,
+        scaleX: shape.scaleX || 1,
+        scaleY: shape.scaleY || 1,
+        radius: shape.radius,
+        radiusX: shape.radiusX,
+        radiusY: shape.radiusY
+      };
+    }
   };
 
   const handleShapeTransformEnd = async (shapeId, attrs) => {
@@ -442,7 +473,33 @@ export default function Canvas() {
       console.debug('[Canvas] transformEnd persist', shapeId, attrs);
     }
     setEditing(false);
-    await updateShape(CANVAS_ID, shapeId, attrs, user);
+    
+    // Get the initial state
+    const oldState = dragStartStateRef.current[shapeId];
+    if (oldState) {
+      // Create command for undo/redo
+      const command = new UpdateShapeCommand(
+        CANVAS_ID,
+        shapeId,
+        attrs, // new properties
+        oldState, // old properties
+        user,
+        updateShape
+      );
+      
+      try {
+        await execute(command, user);
+      } catch (error) {
+        console.error('[Canvas] Transform failed:', error);
+      }
+      
+      // Clean up stored state
+      delete dragStartStateRef.current[shapeId];
+    } else {
+      // Fallback if no initial state (shouldn't happen)
+      await updateShape(CANVAS_ID, shapeId, attrs, user);
+    }
+    
     await unlockShape(CANVAS_ID, shapeId, user?.uid);
   };
 
@@ -494,59 +551,73 @@ export default function Canvas() {
     // Keep color as hex, set opacity separately
     const opacityValue = opacity / 100;
     
-    for (const shapeId of selectedIds) {
-      const shape = shapes.find(s => s.id === shapeId);
-      if (!shape) continue;
-      
-      if (shape.isLocked && shape.lockedBy !== user.uid) {
-        console.warn(`[ColorChange] Shape ${shapeId} locked by another user`);
-        lockedCount++;
-        continue;
+    // Start batching if multiple shapes are being updated
+    const shouldBatch = selectedIds.length > 1;
+    if (shouldBatch) {
+      const opacityText = opacity < 100 ? ` (${opacity}% opacity)` : '';
+      startBatch(`Changed color to ${color}${opacityText} for ${selectedIds.length} shapes`);
+    }
+    
+    try {
+      for (const shapeId of selectedIds) {
+        const shape = shapes.find(s => s.id === shapeId);
+        if (!shape) continue;
+        
+        if (shape.isLocked && shape.lockedBy !== user.uid) {
+          console.warn(`[ColorChange] Shape ${shapeId} locked by another user`);
+          lockedCount++;
+          continue;
+        }
+        
+        try {
+          // Build update object - only include properties we want to change
+          const updates = { 
+            fill: color, 
+            opacity: opacityValue
+          };
+          
+          // Clear gradient properties by setting them to undefined (Firestore removes undefined fields)
+          if (shape.fillLinearGradientStartPoint) {
+            updates.fillLinearGradientStartPoint = undefined;
+          }
+          if (shape.fillLinearGradientEndPoint) {
+            updates.fillLinearGradientEndPoint = undefined;
+          }
+          if (shape.fillLinearGradientColorStops) {
+            updates.fillLinearGradientColorStops = undefined;
+          }
+          
+          // Store old properties for undo
+          const oldProps = {
+            fill: shape.fill,
+            opacity: shape.opacity,
+            fillLinearGradientStartPoint: shape.fillLinearGradientStartPoint,
+            fillLinearGradientEndPoint: shape.fillLinearGradientEndPoint,
+            fillLinearGradientColorStops: shape.fillLinearGradientColorStops
+          };
+          
+          console.log('[ColorChange] Updating shape:', shapeId, 'with:', updates);
+          
+          // Wrap in command for undo/redo
+          const command = new UpdateShapeCommand(
+            CANVAS_ID,
+            shapeId,
+            updates, // new properties
+            oldProps, // old properties
+            user,
+            updateShape
+          );
+          
+          await execute(command, user);
+          changedCount++;
+        } catch (error) {
+          console.error(`[ColorChange] Failed to update shape ${shapeId}:`, error);
+        }
       }
-      
-      try {
-        // Build update object - only include properties we want to change
-        const updates = { 
-          fill: color, 
-          opacity: opacityValue
-        };
-        
-        // Clear gradient properties by setting them to undefined (Firestore removes undefined fields)
-        if (shape.fillLinearGradientStartPoint) {
-          updates.fillLinearGradientStartPoint = undefined;
-        }
-        if (shape.fillLinearGradientEndPoint) {
-          updates.fillLinearGradientEndPoint = undefined;
-        }
-        if (shape.fillLinearGradientColorStops) {
-          updates.fillLinearGradientColorStops = undefined;
-        }
-        
-        // Store old properties for undo
-        const oldProps = {
-          fill: shape.fill,
-          opacity: shape.opacity,
-          fillLinearGradientStartPoint: shape.fillLinearGradientStartPoint,
-          fillLinearGradientEndPoint: shape.fillLinearGradientEndPoint,
-          fillLinearGradientColorStops: shape.fillLinearGradientColorStops
-        };
-        
-        console.log('[ColorChange] Updating shape:', shapeId, 'with:', updates);
-        
-        // Wrap in command for undo/redo
-        const command = new UpdateShapeCommand(
-          CANVAS_ID,
-          shapeId,
-          updates, // new properties
-          oldProps, // old properties
-          user,
-          updateShape
-        );
-        
-        await execute(command);
-        changedCount++;
-      } catch (error) {
-        console.error(`[ColorChange] Failed to update shape ${shapeId}:`, error);
+    } finally {
+      // End batch if we started one
+      if (shouldBatch) {
+        await endBatch();
       }
     }
     
@@ -576,72 +647,104 @@ export default function Canvas() {
     let lockedCount = 0;
     let errors = [];
     
-    for (const shapeId of selectedIds) {
-      const shape = shapes.find(s => s.id === shapeId);
-      if (!shape) {
-        console.warn(`[GradientChange] Shape ${shapeId} not found in local state`);
-        continue;
-      }
-      
-      console.log(`[GradientChange] Processing shape ${shapeId}:`, {
-        type: shape.type,
-        size: `${shape.width}x${shape.height}`,
-        currentFill: shape.fill,
-        isLocked: shape.isLocked,
-        lockedBy: shape.lockedBy
-      });
-      
-      if (shape.isLocked && shape.lockedBy !== user.uid) {
-        console.warn(`[GradientChange] Shape ${shapeId} locked by ${shape.lockedBy}`);
-        lockedCount++;
-        continue;
-      }
-      
-      try {
-        // Calculate gradient direction based on angle (in degrees)
-        // Konva expects actual pixel coordinates relative to shape
-        // 0° = up, 90° = right, 180° = down, 270° = left
-        const angleRad = ((gradient.angle - 90) * Math.PI) / 180; // Adjust so 0° is up
-        const width = shape.width || 100;
-        const height = shape.height || 100;
+    // Start batching if multiple shapes are being updated
+    const shouldBatch = selectedIds.length > 1;
+    if (shouldBatch) {
+      startBatch(`Applied gradient to ${selectedIds.length} shapes`);
+    }
+    
+    try {
+      for (const shapeId of selectedIds) {
+        const shape = shapes.find(s => s.id === shapeId);
+        if (!shape) {
+          console.warn(`[GradientChange] Shape ${shapeId} not found in local state`);
+          continue;
+        }
         
-        // Calculate start and end points for the gradient
-        const centerX = width / 2;
-        const centerY = height / 2;
-        const radius = Math.sqrt(centerX * centerX + centerY * centerY);
-        
-        const startPoint = {
-          x: centerX - radius * Math.cos(angleRad),
-          y: centerY - radius * Math.sin(angleRad)
-        };
-        
-        const endPoint = {
-          x: centerX + radius * Math.cos(angleRad),
-          y: centerY + radius * Math.sin(angleRad)
-        };
-        
-        // Build update object
-        const updates = {
-          fill: undefined, // Clear solid fill (undefined removes it from Firestore)
-          fillLinearGradientStartPoint: startPoint,
-          fillLinearGradientEndPoint: endPoint,
-          fillLinearGradientColorStops: [0, gradient.color1, 1, gradient.color2],
-          opacity: 1.0 // Reset opacity for gradients
-        };
-        
-        console.log(`[GradientChange] Update payload for ${shapeId}:`, {
-          startPoint,
-          endPoint,
-          colorStops: [0, gradient.color1, 1, gradient.color2],
-          clearingFill: true
+        console.log(`[GradientChange] Processing shape ${shapeId}:`, {
+          type: shape.type,
+          size: `${shape.width}x${shape.height}`,
+          currentFill: shape.fill,
+          isLocked: shape.isLocked,
+          lockedBy: shape.lockedBy
         });
         
-        await updateShape(CANVAS_ID, shapeId, updates, user);
-        console.log(`[GradientChange] ✅ Successfully updated ${shapeId}`);
-        changedCount++;
-      } catch (error) {
-        console.error(`[GradientChange] ❌ Failed to update ${shapeId}:`, error);
-        errors.push({ shapeId, error: error.message });
+        if (shape.isLocked && shape.lockedBy !== user.uid) {
+          console.warn(`[GradientChange] Shape ${shapeId} locked by ${shape.lockedBy}`);
+          lockedCount++;
+          continue;
+        }
+        
+        try {
+          // Calculate gradient direction based on angle (in degrees)
+          // Konva expects actual pixel coordinates relative to shape
+          // 0° = up, 90° = right, 180° = down, 270° = left
+          const angleRad = ((gradient.angle - 90) * Math.PI) / 180; // Adjust so 0° is up
+          const width = shape.width || 100;
+          const height = shape.height || 100;
+          
+          // Calculate start and end points for the gradient
+          const centerX = width / 2;
+          const centerY = height / 2;
+          const radius = Math.sqrt(centerX * centerX + centerY * centerY);
+          
+          const startPoint = {
+            x: centerX - radius * Math.cos(angleRad),
+            y: centerY - radius * Math.sin(angleRad)
+          };
+          
+          const endPoint = {
+            x: centerX + radius * Math.cos(angleRad),
+            y: centerY + radius * Math.sin(angleRad)
+          };
+          
+          // Build update object
+          const updates = {
+            fill: undefined, // Clear solid fill (undefined removes it from Firestore)
+            fillLinearGradientStartPoint: startPoint,
+            fillLinearGradientEndPoint: endPoint,
+            fillLinearGradientColorStops: [0, gradient.color1, 1, gradient.color2],
+            opacity: 1.0 // Reset opacity for gradients
+          };
+          
+          // Store old properties for undo
+          const oldProps = {
+            fill: shape.fill,
+            fillLinearGradientStartPoint: shape.fillLinearGradientStartPoint,
+            fillLinearGradientEndPoint: shape.fillLinearGradientEndPoint,
+            fillLinearGradientColorStops: shape.fillLinearGradientColorStops,
+            opacity: shape.opacity
+          };
+          
+          console.log(`[GradientChange] Update payload for ${shapeId}:`, {
+            startPoint,
+            endPoint,
+            colorStops: [0, gradient.color1, 1, gradient.color2],
+            clearingFill: true
+          });
+          
+          // Wrap in command for undo/redo
+          const command = new UpdateShapeCommand(
+            CANVAS_ID,
+            shapeId,
+            updates,
+            oldProps,
+            user,
+            updateShape
+          );
+          
+          await execute(command, user);
+          console.log(`[GradientChange] ✅ Successfully updated ${shapeId}`);
+          changedCount++;
+        } catch (error) {
+          console.error(`[GradientChange] ❌ Failed to update ${shapeId}:`, error);
+          errors.push({ shapeId, error: error.message });
+        }
+      }
+    } finally {
+      // End batch if we started one
+      if (shouldBatch) {
+        await endBatch();
       }
     }
     

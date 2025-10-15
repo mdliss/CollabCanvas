@@ -15,8 +15,8 @@ export function UndoProvider({ children }) {
     return removeListener;
   }, []);
 
-  const execute = useCallback(async (command) => {
-    return await undoManager.execute(command);
+  const execute = useCallback(async (command, user = null) => {
+    return await undoManager.execute(command, user);
   }, []);
 
   const undo = useCallback(async () => {
@@ -31,12 +31,32 @@ export function UndoProvider({ children }) {
     undoManager.clear();
   }, []);
 
+  const revertToPoint = useCallback(async (index) => {
+    return await undoManager.revertToPoint(index);
+  }, []);
+
+  const startBatch = useCallback((description) => {
+    undoManager.startBatch(description);
+  }, []);
+
+  const endBatch = useCallback(async () => {
+    return await undoManager.endBatch();
+  }, []);
+
+  const getFullHistory = useCallback(() => {
+    return undoManager.getFullHistory();
+  }, []);
+
   const value = {
     ...state,
     execute,
     undo,
     redo,
     clear,
+    revertToPoint,
+    startBatch,
+    endBatch,
+    getFullHistory,
     getStackSizes: () => undoManager.getStackSizes()
   };
 

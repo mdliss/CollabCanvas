@@ -1,35 +1,22 @@
 import { useState, useEffect } from 'react';
 import { useUndo } from '../../contexts/UndoContext';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function HistoryTimeline() {
   const { getStackSizes, undoStackSize, redoStackSize } = useUndo();
   const [isExpanded, setIsExpanded] = useState(false);
   const [history, setHistory] = useState([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(null);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
 
   useEffect(() => {
     // Listen for changes to the undo manager
     const interval = setInterval(() => {
       if (window.undoManager) {
-        const undoStack = window.undoManager.undoStack || [];
-        const redoStack = window.undoManager.redoStack || [];
-        
-        // Build history from undo and redo stacks
-        const allCommands = [
-          ...undoStack.map((cmd, idx) => ({
-            id: `undo-${idx}`,
-            description: cmd.getDescription(),
-            timestamp: Date.now() - (undoStack.length - idx) * 1000,
-            status: 'done'
-          })),
-          ...redoStack.reverse().map((cmd, idx) => ({
-            id: `redo-${idx}`,
-            description: cmd.getDescription(),
-            timestamp: Date.now() + idx * 1000,
-            status: 'undone'
-          }))
-        ];
-        
-        setHistory(allCommands.slice(-50)); // Keep last 50 operations
+        // Use the new getFullHistory method
+        const fullHistory = window.undoManager.getFullHistory();
+        setHistory(fullHistory.slice(-1000)); // Keep up to 1000 operations
       }
     }, 500);
 
@@ -45,6 +32,33 @@ export default function HistoryTimeline() {
     if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
     if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
     return date.toLocaleDateString();
+  };
+
+  const handleHistoryItemClick = (item) => {
+    if (item.status === 'done' && !item.isCurrent) {
+      setSelectedHistoryIndex(item.index);
+      setSelectedHistoryItem(item);
+      setShowConfirmModal(true);
+    }
+  };
+
+  const handleConfirmRevert = async () => {
+    if (selectedHistoryIndex !== null && window.undoManager) {
+      try {
+        await window.undoManager.revertToPoint(selectedHistoryIndex);
+        setShowConfirmModal(false);
+        setSelectedHistoryIndex(null);
+        setSelectedHistoryItem(null);
+      } catch (error) {
+        console.error('Failed to revert to history point:', error);
+      }
+    }
+  };
+
+  const handleCancelRevert = () => {
+    setShowConfirmModal(false);
+    setSelectedHistoryIndex(null);
+    setSelectedHistoryItem(null);
   };
 
   const styles = {
@@ -97,18 +111,23 @@ export default function HistoryTimeline() {
       transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
     },
     historyList: {
-      maxHeight: isExpanded ? '300px' : '0',
+      maxHeight: isExpanded ? '400px' : '0',
       overflowY: 'auto',
       overflowX: 'hidden',
       transition: 'max-height 0.3s ease'
     },
     historyItem: {
-      padding: '8px 16px',
+      padding: '10px 16px',
       borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
       display: 'flex',
       alignItems: 'center',
       gap: '8px',
-      transition: 'background 0.2s ease'
+      transition: 'all 0.2s ease',
+      cursor: 'pointer'
+    },
+    historyItemCurrent: {
+      background: 'rgba(96, 165, 250, 0.15)',
+      borderLeft: '3px solid #60a5fa'
     },
     bullet: {
       width: '6px',
@@ -142,6 +161,12 @@ export default function HistoryTimeline() {
     itemTime: {
       color: '#9ca3af',
       fontSize: '10px'
+    },
+    itemUser: {
+      color: '#60a5fa',
+      fontSize: '10px',
+      fontWeight: '500',
+      marginTop: '2px'
     },
     empty: {
       padding: '24px 16px',
@@ -180,42 +205,72 @@ export default function HistoryTimeline() {
                 Create, move, or edit shapes to build history.
               </div>
             ) : (
-              history.map((item) => (
-                <div
-                  key={item.id}
-                  style={styles.historyItem}
-                  onMouseOver={(e) => {
-                    e.currentTarget.style.background = 'rgba(96, 165, 250, 0.1)';
-                  }}
-                  onMouseOut={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  <div 
+              history.map((item) => {
+                const userName = item.user?.displayName || 'Unknown';
+                const isCurrent = item.isCurrent;
+                
+                return (
+                  <div
+                    key={item.id}
                     style={{
-                      ...styles.bullet,
-                      ...(item.status === 'done' ? styles.bulletDone : styles.bulletUndone)
+                      ...styles.historyItem,
+                      ...(isCurrent ? styles.historyItemCurrent : {})
                     }}
-                  />
-                  <div style={styles.itemContent}>
+                    onClick={() => handleHistoryItemClick(item)}
+                    onMouseOver={(e) => {
+                      if (!isCurrent) {
+                        e.currentTarget.style.background = 'rgba(96, 165, 250, 0.1)';
+                        e.currentTarget.style.transform = 'translateX(4px)';
+                      }
+                    }}
+                    onMouseOut={(e) => {
+                      if (!isCurrent) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.transform = 'translateX(0)';
+                      }
+                    }}
+                    title={isCurrent ? 'Current state' : `Click to revert to this point`}
+                  >
                     <div 
                       style={{
-                        ...styles.itemDescription,
-                        ...(item.status === 'undone' ? styles.itemDescriptionUndone : {})
+                        ...styles.bullet,
+                        ...(item.status === 'done' ? styles.bulletDone : styles.bulletUndone)
                       }}
-                    >
-                      {item.description}
-                    </div>
-                    <div style={styles.itemTime}>
-                      {formatTime(item.timestamp)}
+                    />
+                    <div style={styles.itemContent}>
+                      <div 
+                        style={{
+                          ...styles.itemDescription,
+                          ...(item.status === 'undone' ? styles.itemDescriptionUndone : {})
+                        }}
+                      >
+                        {item.description}
+                      </div>
+                      <div style={styles.itemUser}>
+                        {userName}
+                      </div>
+                      <div style={styles.itemTime}>
+                        {formatTime(item.timestamp)}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onConfirm={handleConfirmRevert}
+        onCancel={handleCancelRevert}
+        title="Revert to History Point"
+        message={`Are you sure you want to revert to: "${selectedHistoryItem?.description}"? This will undo all changes made after this point.`}
+        confirmText="Revert"
+        cancelText="Cancel"
+      />
     </div>
   );
 }

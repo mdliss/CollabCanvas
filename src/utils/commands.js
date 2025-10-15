@@ -20,6 +20,10 @@ export class Command {
   getDescription() {
     return 'Unknown command';
   }
+
+  getUserName() {
+    return this.metadata?.user?.displayName || 'Unknown';
+  }
 }
 
 // Create Shape Command
@@ -42,7 +46,12 @@ export class CreateShapeCommand extends Command {
   }
 
   getDescription() {
+    const userName = this.metadata?.user?.displayName || this.user?.displayName || 'Unknown';
     return `Created ${this.shape.type}`;
+  }
+
+  getUserName() {
+    return this.metadata?.user?.displayName || this.user?.displayName || 'Unknown';
   }
 }
 
@@ -67,8 +76,77 @@ export class UpdateShapeCommand extends Command {
   }
 
   getDescription() {
-    const props = Object.keys(this.newProps).join(', ');
-    return `Updated ${props}`;
+    const props = Object.keys(this.newProps);
+    
+    // Check for gradient changes
+    if (props.includes('fillLinearGradientColorStops') || 
+        props.includes('fillLinearGradientStartPoint') ||
+        props.includes('fillLinearGradientEndPoint')) {
+      return 'Applied gradient';
+    }
+    
+    // Check for solid color changes
+    if (props.includes('fill') && this.newProps.fill !== undefined) {
+      const color = this.newProps.fill;
+      const opacityText = (props.includes('opacity') && this.newProps.opacity < 1) 
+        ? ` (${Math.round(this.newProps.opacity * 100)}% opacity)` 
+        : '';
+      return `Changed color to ${color}${opacityText}`;
+    }
+    
+    // Check for rotation
+    if (props.includes('rotation')) {
+      const degrees = Math.round(this.newProps.rotation || 0);
+      return `Rotated to ${degrees}°`;
+    }
+    
+    // Check for resize (width, height, or scale changes)
+    if (props.some(p => ['width', 'height', 'scaleX', 'scaleY', 'radiusX', 'radiusY', 'radius'].includes(p))) {
+      const sizeInfo = [];
+      if (this.newProps.width !== undefined) sizeInfo.push(`W: ${Math.round(this.newProps.width)}`);
+      if (this.newProps.height !== undefined) sizeInfo.push(`H: ${Math.round(this.newProps.height)}`);
+      if (this.newProps.radius !== undefined) sizeInfo.push(`R: ${Math.round(this.newProps.radius)}`);
+      if (this.newProps.radiusX !== undefined) sizeInfo.push(`RX: ${Math.round(this.newProps.radiusX)}`);
+      if (this.newProps.radiusY !== undefined) sizeInfo.push(`RY: ${Math.round(this.newProps.radiusY)}`);
+      
+      if (sizeInfo.length > 0) {
+        return `Resized shape (${sizeInfo.join(', ')})`;
+      }
+      return 'Resized shape';
+    }
+    
+    // Check for opacity only
+    if (props.includes('opacity') && props.length === 1) {
+      const opacityPercent = Math.round(this.newProps.opacity * 100);
+      return `Changed opacity to ${opacityPercent}%`;
+    }
+    
+    // Check for position changes (shouldn't happen often, MoveShapeCommand handles this)
+    if (props.includes('x') || props.includes('y')) {
+      return 'Moved shape';
+    }
+    
+    // Check for text changes
+    if (props.includes('text')) {
+      return 'Changed text';
+    }
+    
+    // Check for text formatting
+    if (props.some(p => ['fontSize', 'fontFamily', 'fontStyle', 'align', 'verticalAlign'].includes(p))) {
+      return 'Changed text formatting';
+    }
+    
+    // Check for stroke changes
+    if (props.some(p => ['stroke', 'strokeWidth'].includes(p))) {
+      return 'Changed stroke';
+    }
+    
+    // Default fallback
+    return `Updated ${props.join(', ')}`;
+  }
+
+  getUserName() {
+    return this.metadata?.user?.displayName || this.user?.displayName || 'Unknown';
   }
 }
 
@@ -93,6 +171,10 @@ export class DeleteShapeCommand extends Command {
 
   getDescription() {
     return `Deleted ${this.shape.type}`;
+  }
+
+  getUserName() {
+    return this.metadata?.user?.displayName || this.user?.displayName || 'Unknown';
   }
 }
 
@@ -119,6 +201,10 @@ export class MoveShapeCommand extends Command {
   getDescription() {
     return `Moved shape`;
   }
+
+  getUserName() {
+    return this.metadata?.user?.displayName || this.user?.displayName || 'Unknown';
+  }
 }
 
 // Multi-Shape Command (for batch operations)
@@ -143,7 +229,19 @@ export class MultiShapeCommand extends Command {
   }
 
   getDescription() {
+    if (this.commands.length > 0) {
+      return `${this.description} (${this.commands.length} changes)`;
+    }
     return this.description;
+  }
+
+  getUserName() {
+    // Use the first command's user
+    if (this.commands.length > 0) {
+      const firstCmd = this.commands[0];
+      return firstCmd.metadata?.user?.displayName || firstCmd.user?.displayName || 'Unknown';
+    }
+    return this.metadata?.user?.displayName || 'Unknown';
   }
 }
 
