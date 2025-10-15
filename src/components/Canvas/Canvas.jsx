@@ -11,6 +11,7 @@ import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
 import ColorPalette from "./ColorPalette";
 import PerformanceMonitor, { PerformanceToggleButton } from "../UI/PerformanceMonitor";
+import HelpMenu from "../UI/HelpMenu";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -36,6 +37,7 @@ export default function Canvas() {
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState(null);
+  const [isHelpVisible, setIsHelpVisible] = useState(false);
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
@@ -129,6 +131,10 @@ export default function Canvas() {
       
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         switch (e.key.toLowerCase()) {
+          case 'h':
+            e.preventDefault();
+            setIsHelpVisible(prev => !prev);
+            break;
           case 'r':
             e.preventDefault();
             handleAddShape('rectangle');
@@ -647,6 +653,7 @@ export default function Canvas() {
     <div>
       <PerformanceMonitor />
       <PerformanceToggleButton onClick={toggleVisibility} isVisible={isVisible} />
+      <HelpMenu isVisible={isHelpVisible} onClose={() => setIsHelpVisible(false)} />
       <DebugNote 
         projectId={import.meta.env.VITE_FB_PROJECT_ID} 
         docPath={`canvas/${CANVAS_ID}`} 
