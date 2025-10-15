@@ -268,8 +268,10 @@ export default function ShapeRenderer({
   
   const strokeWidth = (isBeingDraggedByOther || isLockedByOther || isSelected) ? 3 : 0;
   
-  // Reduced opacity for shapes being dragged by others
-  const shapeOpacity = isBeingDraggedByOther ? 0.6 : 1.0;
+  // Calculate opacity: use shape's opacity if set, otherwise 1.0
+  // Reduce to 0.6 if being dragged by another user
+  const baseOpacity = shape.opacity !== undefined ? shape.opacity : 1.0;
+  const shapeOpacity = isBeingDraggedByOther ? 0.6 : baseOpacity;
 
   const commonProps = {
     ref: shapeRef,
@@ -285,7 +287,7 @@ export default function ShapeRenderer({
     hitStrokeWidth: 8,
     stroke: strokeColor,
     strokeWidth: strokeWidth,
-    opacity: shapeOpacity  // Reduced opacity when being dragged by another user
+    opacity: shapeOpacity  // Combines shape's opacity with drag state
   };
 
   const renderShape = () => {
@@ -298,6 +300,9 @@ export default function ShapeRenderer({
             y={shape.y}
             radius={shape.width / 2 || 50}
             fill={shape.fill}
+            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
             rotation={shape.rotation || 0}
           />
         );
@@ -411,6 +416,9 @@ export default function ShapeRenderer({
             width={shape.width}
             height={shape.height}
             fill={shape.fill}
+            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
             rotation={shape.rotation || 0}
           />
         );

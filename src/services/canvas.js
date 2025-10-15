@@ -94,12 +94,26 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
             console.warn("[updateShape] Shape locked by another user", shapeId);
             return shape;
           }
-          return {
+          
+          // Start with existing shape
+          const updatedShape = {
             ...shape,
-            ...updates,
             lastModifiedBy: user?.uid || 'anonymous',
             lastModifiedAt: Date.now()
           };
+          
+          // Apply updates, explicitly delete properties set to undefined
+          Object.keys(updates).forEach(key => {
+            if (updates[key] === undefined) {
+              // Delete the property
+              delete updatedShape[key];
+            } else {
+              // Update the property
+              updatedShape[key] = updates[key];
+            }
+          });
+          
+          return updatedShape;
         }
         return shape;
       });

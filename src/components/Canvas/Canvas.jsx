@@ -355,11 +355,15 @@ export default function Canvas() {
     }
   };
 
-  const handleColorChange = async (color) => {
+  const handleColorChange = async (color, opacity = 100) => {
     if (selectedIds.length === 0 || !user) return;
     
     let changedCount = 0;
     let lockedCount = 0;
+    
+    // Use Konva's opacity property (0-1) instead of mixing with rgba
+    // Keep color as hex, set opacity separately
+    const opacityValue = opacity / 100;
     
     for (const shapeId of selectedIds) {
       const shape = shapes.find(s => s.id === shapeId);
@@ -372,7 +376,25 @@ export default function Canvas() {
       }
       
       try {
-        await updateShape(CANVAS_ID, shapeId, { fill: color }, user);
+        // Build update object - only include properties we want to change
+        const updates = { 
+          fill: color, 
+          opacity: opacityValue
+        };
+        
+        // Clear gradient properties by setting them to undefined (Firestore removes undefined fields)
+        if (shape.fillLinearGradientStartPoint) {
+          updates.fillLinearGradientStartPoint = undefined;
+        }
+        if (shape.fillLinearGradientEndPoint) {
+          updates.fillLinearGradientEndPoint = undefined;
+        }
+        if (shape.fillLinearGradientColorStops) {
+          updates.fillLinearGradientColorStops = undefined;
+        }
+        
+        console.log('[ColorChange] Updating shape:', shapeId, 'with:', updates);
+        await updateShape(CANVAS_ID, shapeId, updates, user);
         changedCount++;
       } catch (error) {
         console.error(`[ColorChange] Failed to update shape ${shapeId}:`, error);
@@ -380,7 +402,80 @@ export default function Canvas() {
     }
     
     if (changedCount > 0) {
-      showFeedback(`Changed color of ${changedCount} shape${changedCount > 1 ? 's' : ''}`);
+      const opacityText = opacity < 100 ? ` (${opacity}% opacity)` : '';
+      showFeedback(`Changed color of ${changedCount} shape${changedCount > 1 ? 's' : ''}${opacityText}`);
+    }
+    if (lockedCount > 0) {
+      setTimeout(() => {
+        showFeedback(`${lockedCount} shape${lockedCount > 1 ? 's' : ''} locked by other users`);
+      }, 2200);
+    }
+  };
+
+  const handleGradientChange = async (gradient) => {
+    if (selectedIds.length === 0 || !user) return;
+    
+    let changedCount = 0;
+    let lockedCount = 0;
+    
+    console.log('[GradientChange] Applying gradient:', gradient);
+    
+    for (const shapeId of selectedIds) {
+      const shape = shapes.find(s => s.id === shapeId);
+      if (!shape) continue;
+      
+      if (shape.isLocked && shape.lockedBy !== user.uid) {
+        console.warn(`[GradientChange] Shape ${shapeId} locked by another user`);
+        lockedCount++;
+        continue;
+      }
+      
+      try {
+        // Calculate gradient direction based on angle (in degrees)
+        // Konva expects actual pixel coordinates relative to shape
+        // 0° = up, 90° = right, 180° = down, 270° = left
+        const angleRad = ((gradient.angle - 90) * Math.PI) / 180; // Adjust so 0° is up
+        const width = shape.width || 100;
+        const height = shape.height || 100;
+        
+        // Calculate start and end points for the gradient
+        const centerX = width / 2;
+        const centerY = height / 2;
+        const radius = Math.sqrt(centerX * centerX + centerY * centerY);
+        
+        const startPoint = {
+          x: centerX - radius * Math.cos(angleRad),
+          y: centerY - radius * Math.sin(angleRad)
+        };
+        
+        const endPoint = {
+          x: centerX + radius * Math.cos(angleRad),
+          y: centerY + radius * Math.sin(angleRad)
+        };
+        
+        console.log('[GradientChange] Shape:', shapeId, 'size:', width, 'x', height);
+        console.log('[GradientChange] Gradient points:', startPoint, 'to', endPoint);
+        console.log('[GradientChange] Color stops:', [0, gradient.color1, 1, gradient.color2]);
+        
+        // Build update object
+        const updates = {
+          fill: undefined, // Clear solid fill (undefined removes it from Firestore)
+          fillLinearGradientStartPoint: startPoint,
+          fillLinearGradientEndPoint: endPoint,
+          fillLinearGradientColorStops: [0, gradient.color1, 1, gradient.color2],
+          opacity: 1.0 // Reset opacity for gradients
+        };
+        
+        await updateShape(CANVAS_ID, shapeId, updates, user);
+        console.log('[GradientChange] Successfully updated shape:', shapeId);
+        changedCount++;
+      } catch (error) {
+        console.error(`[GradientChange] Failed to update shape ${shapeId}:`, error);
+      }
+    }
+    
+    if (changedCount > 0) {
+      showFeedback(`Applied gradient to ${changedCount} shape${changedCount > 1 ? 's' : ''}`);
     }
     if (lockedCount > 0) {
       setTimeout(() => {
@@ -674,6 +769,7 @@ export default function Canvas() {
       {selectedIds.length > 0 && (
         <ColorPalette
           onColorSelect={handleColorChange}
+          onGradientSelect={handleGradientChange}
           selectedCount={selectedIds.length}
         />
       )}
