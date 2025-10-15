@@ -12,8 +12,6 @@ export default function PresenceList({ users }) {
   const [isLoading, setIsLoading] = useState(false);
   const popupRef = useRef(null);
 
-  if (!users || users.length === 0) return null;
-
   // Fetch profile when user is selected
   useEffect(() => {
     if (!selectedUserId) {
@@ -57,6 +55,9 @@ export default function PresenceList({ users }) {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [selectedUserId]);
+
+  // MOVED: Early return AFTER hooks
+  if (!users || users.length === 0) return null;
 
   const handleUserClick = (userId) => {
     if (selectedUserId === userId) {
@@ -315,4 +316,3 @@ export default function PresenceList({ users }) {
     </div>
   );
 }
-

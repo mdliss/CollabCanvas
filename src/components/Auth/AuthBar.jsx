@@ -2,6 +2,10 @@ import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import useUserProfile from '../../hooks/useUserProfile';
 import Avatar from '../Collaboration/Avatar';
+import { replaceProfilePicture } from '../../services/profilePicture';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { db } from '../../services/firebase';
+import { updateProfile } from 'firebase/auth';
 
 /**
  * AuthBar - Top-center authentication status and controls
@@ -14,8 +18,36 @@ export default function AuthBar({ onShowEmailLogin }) {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showError, setShowError] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
   const [bioText, setBioText] = useState('');
+  const [nameText, setNameText] = useState('');
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const dropdownRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Watch Firestore for photoURL changes
+  const [currentPhotoURL, setCurrentPhotoURL] = useState(user?.photoURL || null);
+
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    console.log('[AuthBar] Setting up photoURL watcher for user:', user.uid);
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const profile = docSnap.data();
+        const newPhotoURL = profile.photoURL || null;
+        
+        console.log('[AuthBar] Firestore photoURL changed:', newPhotoURL);
+        setCurrentPhotoURL(newPhotoURL);
+      }
+    }, (error) => {
+      console.error('[AuthBar] Firestore snapshot error:', error);
+    });
+
+    return unsubscribe;
+  }, [user?.uid]);
 
   // Show error toast when auth error occurs
   useEffect(() => {
@@ -34,6 +66,7 @@ export default function AuthBar({ onShowEmailLogin }) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
         setIsEditingBio(false);
+        setIsEditingName(false);
       }
     };
 
@@ -41,6 +74,8 @@ export default function AuthBar({ onShowEmailLogin }) {
       if (event.key === 'Escape') {
         if (isEditingBio) {
           setIsEditingBio(false);
+        } else if (isEditingName) {
+          setIsEditingName(false);
         } else {
           setShowDropdown(false);
         }
@@ -54,7 +89,7 @@ export default function AuthBar({ onShowEmailLogin }) {
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [showDropdown, isEditingBio]);
+  }, [showDropdown, isEditingBio, isEditingName]);
 
   const handleGoogleSignIn = async () => {
     try {
@@ -94,15 +129,86 @@ export default function AuthBar({ onShowEmailLogin }) {
     setBioText('');
   };
 
+  const startEditingName = () => {
+    const currentName = user?.displayName || user?.email?.split('@')[0] || '';
+    setNameText(currentName);
+    setIsEditingName(true);
+  };
+
+  const handleNameSave = async () => {
+    if (!nameText.trim()) {
+      alert('Name cannot be empty');
+      return;
+    }
+
+    try {
+      console.log('[AuthBar] Updating display name to:', nameText);
+
+      // Update Firebase Auth profile
+      await updateProfile(user, {
+        displayName: nameText.trim()
+      });
+
+      // Update Firestore user profile
+      const userDocRef = doc(db, 'users', user.uid);
+      await updateDoc(userDocRef, {
+        displayName: nameText.trim(),
+        updatedAt: Date.now()
+      });
+
+      console.log('[AuthBar] Display name updated successfully');
+      setIsEditingName(false);
+    } catch (err) {
+      console.error('[AuthBar] Failed to update name:', err);
+      alert('Failed to update name. Please try again.');
+    }
+  };
+
+  const handleNameCancel = () => {
+    setIsEditingName(false);
+    setNameText('');
+  };
+
   const formatDate = (timestamp) => {
     if (!timestamp) return '';
     const date = new Date(timestamp);
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
+  const handlePhotoUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file || !user?.uid) return;
+
+    try {
+      setUploadingPhoto(true);
+      const oldPhotoURL = currentPhotoURL;
+      const newPhotoURL = await replaceProfilePicture(user.uid, file, oldPhotoURL);
+      
+      console.log('[AuthBar] Profile picture updated:', newPhotoURL);
+      
+      // Trigger a re-render by forcing the auth state to update
+      // The photoURL will be updated in Firestore and sync automatically
+      setUploadingPhoto(false);
+      
+      // Optional: Show success message
+      // You could add a toast notification here if desired
+    } catch (err) {
+      console.error('[AuthBar] Failed to upload profile picture:', err);
+      alert(err.message || 'Failed to upload image. Please try again.');
+      setUploadingPhoto(false);
+    }
+    
+    // Reset input so same file can be selected again
+    event.target.value = '';
+  };
+
+  const triggerPhotoUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   // Get user display info
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
-  const photoURL = user?.photoURL;
+  const photoURL = currentPhotoURL;
   
   // Generate color for avatar fallback (consistent with presence system)
   const getUserColor = () => {
@@ -337,34 +443,225 @@ export default function AuthBar({ onShowEmailLogin }) {
                 borderBottom: '1px solid rgba(0, 0, 0, 0.06)'
               }}
             >
-              {/* Large Avatar */}
-              <div style={{ marginBottom: '12px' }}>
-                <Avatar 
-                  src={photoURL}
-                  name={displayName}
-                  color={getUserColor()}
-                  size="lg"
-                  style={{ 
-                    width: '64px', 
-                    height: '64px',
-                    fontSize: '24px',
-                    borderWidth: '3px'
+              {/* Clickable Avatar with Upload */}
+              <div style={{ marginBottom: '12px', position: 'relative' }}>
+                <button
+                  onClick={triggerPhotoUpload}
+                  disabled={uploadingPhoto}
+                  title="Click to change profile picture"
+                  style={{
+                    position: 'relative',
+                    border: 'none',
+                    borderRadius: '50%',
+                    overflow: 'hidden',
+                    cursor: uploadingPhoto ? 'wait' : 'pointer',
+                    padding: 0,
+                    background: 'transparent',
+                    transition: 'transform 0.15s ease'
                   }}
+                  onMouseEnter={(e) => {
+                    if (!uploadingPhoto) e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  <Avatar 
+                    src={photoURL}
+                    name={displayName}
+                    color={getUserColor()}
+                    size="lg"
+                    style={{ 
+                      width: '64px', 
+                      height: '64px',
+                      fontSize: '24px',
+                      borderWidth: '3px'
+                    }}
+                  />
+                  
+                  {/* Hover overlay */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(0, 0, 0, 0)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'background 0.2s ease',
+                      borderRadius: '50%'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!uploadingPhoto) e.currentTarget.style.background = 'rgba(0, 0, 0, 0.4)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'rgba(0, 0, 0, 0)';
+                    }}
+                  >
+                    <span
+                      style={{
+                        color: 'white',
+                        fontSize: '11px',
+                        fontWeight: '600',
+                        opacity: 0,
+                        transition: 'opacity 0.2s ease',
+                        textAlign: 'center',
+                        pointerEvents: 'none'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!uploadingPhoto) e.currentTarget.style.opacity = '1';
+                      }}
+                    >
+                      {uploadingPhoto ? 'Uploading...' : 'Change'}
+                    </span>
+                  </div>
+                </button>
+                
+                {/* Edit icon badge */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: '-4px',
+                    right: '-4px',
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '50%',
+                    background: 'white',
+                    border: '2px solid #e5e7eb',
+                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    pointerEvents: 'none'
+                  }}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#4b5563"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </div>
+                
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                  onChange={handlePhotoUpload}
+                  style={{ display: 'none' }}
                 />
               </div>
 
-              {/* Name */}
-              <h3
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '600',
-                  color: '#1a1a1a',
-                  margin: '0 0 4px 0',
-                  textAlign: 'center'
-                }}
-              >
-                {displayName}
-              </h3>
+              {/* Name - Editable */}
+              {isEditingName ? (
+                <div style={{ width: '100%', marginBottom: '8px' }}>
+                  <input
+                    type="text"
+                    value={nameText}
+                    onChange={(e) => setNameText(e.target.value.slice(0, 50))}
+                    placeholder="Enter your name"
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      textAlign: 'center',
+                      fontFamily: 'inherit',
+                      boxSizing: 'border-box'
+                    }}
+                    maxLength={50}
+                    autoFocus
+                  />
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      gap: '8px',
+                      marginTop: '8px'
+                    }}
+                  >
+                    <button
+                      onClick={handleNameCancel}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '13px',
+                        color: '#6b7280',
+                        background: 'transparent',
+                        border: '1px solid #d1d5db',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#f3f4f6'}
+                      onMouseLeave={(e) => e.target.style.background = 'transparent'}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleNameSave}
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '13px',
+                        color: 'white',
+                        background: '#3b82f6',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontWeight: '500',
+                        transition: 'background 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#2563eb'}
+                      onMouseLeave={(e) => e.target.style.background = '#3b82f6'}
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onClick={startEditingName}
+                  style={{
+                    cursor: 'pointer',
+                    padding: '6px 12px',
+                    borderRadius: '6px',
+                    border: '1px solid transparent',
+                    transition: 'all 0.15s ease',
+                    marginBottom: '4px'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.target.style.background = '#f9fafb';
+                    e.target.style.borderColor = '#e5e7eb';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.background = 'transparent';
+                    e.target.style.borderColor = 'transparent';
+                  }}
+                  title="Click to edit name"
+                >
+                  <h3
+                    style={{
+                      fontSize: '18px',
+                      fontWeight: '600',
+                      color: '#1a1a1a',
+                      margin: 0,
+                      textAlign: 'center'
+                    }}
+                  >
+                    {displayName}
+                  </h3>
+                </div>
+              )}
 
               {/* Email */}
               <p
@@ -591,4 +888,3 @@ export default function AuthBar({ onShowEmailLogin }) {
     </div>
   );
 }
-

@@ -17,9 +17,9 @@ service cloud.firestore {
     function isValidShape(shape) {
       return shape.keys().hasAll(['id', 'type', 'x', 'y', 'createdBy', 'createdAt'])
         && shape.id is string
-        && shape.type in ['rectangle', 'circle', 'line', 'text']
-        && shape.x is number && shape.x >= 0 && shape.x <= 5000
-        && shape.y is number && shape.y >= 0 && shape.y <= 5000
+        && shape.type in ['rectangle', 'circle', 'line', 'text', 'triangle', 'star']
+        && shape.x is number && shape.x >= 0 && shape.x <= 20000
+        && shape.y is number && shape.y >= 0 && shape.y <= 20000
         && shape.createdBy is string
         && shape.createdAt is timestamp;
     }
