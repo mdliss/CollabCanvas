@@ -27,6 +27,11 @@ export default function ShapeRenderer({
   const transformStreamInterval = useRef(null);
   const firestoreCheckpointInterval = useRef(null);
 
+  // Don't render hidden shapes
+  if (shape.hidden) {
+    return null;
+  }
+
   // Attach transformer to selected shape
   useEffect(() => {
     if (isSelected && shapeRef.current && transformerRef.current) {
@@ -110,23 +115,23 @@ export default function ShapeRenderer({
       }
     }, 10);
     
-    // Periodic Firestore checkpoint (every 500ms) during drag
-    // This ensures shape appears at last drag position if user refreshes
-    firestoreCheckpointInterval.current = setInterval(() => {
-      const node = shapeRef.current;
-      if (node && currentUser) {
-        const checkpointData = {
-          x: node.x(),
-          y: node.y(),
-          rotation: node.rotation()
-        };
-        
-        updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
-          .catch(err => {
-            console.debug('[Shape] Checkpoint save failed (non-critical):', err.message);
-          });
-      }
-    }, 500);
+    // Periodic Firestore checkpoint - DISABLED due to concurrency issues
+    // TODO: Re-enable when shapes are stored as individual documents (not array)
+    // firestoreCheckpointInterval.current = setInterval(() => {
+    //   const node = shapeRef.current;
+    //   if (node && currentUser) {
+    //     const checkpointData = {
+    //       x: node.x(),
+    //       y: node.y(),
+    //       rotation: node.rotation()
+    //     };
+    //     
+    //     updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
+    //       .catch(err => {
+    //         console.debug('[Shape] Checkpoint save failed (non-critical):', err.message);
+    //       });
+    //   }
+    // }, 500);
   };
 
   const handleDragEnd = (e) => {
@@ -227,26 +232,27 @@ export default function ShapeRenderer({
       }
     }, 10);
     
-    // Periodic Firestore checkpoint (every 500ms) during transform
-    firestoreCheckpointInterval.current = setInterval(() => {
-      const node = shapeRef.current;
-      if (node && currentUser) {
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        const checkpointData = {
-          x: node.x(),
-          y: node.y(),
-          width: Math.max(10, node.width() * scaleX),
-          height: Math.max(10, node.height() * scaleY),
-          rotation: node.rotation()
-        };
-        
-        updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
-          .catch(err => {
-            console.debug('[Shape] Transform checkpoint save failed (non-critical):', err.message);
-          });
-      }
-    }, 500);
+    // Periodic Firestore checkpoint - DISABLED due to concurrency issues
+    // TODO: Re-enable when shapes are stored as individual documents (not array)
+    // firestoreCheckpointInterval.current = setInterval(() => {
+    //   const node = shapeRef.current;
+    //   if (node && currentUser) {
+    //     const scaleX = node.scaleX();
+    //     const scaleY = node.scaleY();
+    //     const checkpointData = {
+    //       x: node.x(),
+    //       y: node.y(),
+    //       width: Math.max(10, node.width() * scaleX),
+    //       height: Math.max(10, node.height() * scaleY),
+    //       rotation: node.rotation()
+    //     };
+    //     
+    //     updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
+    //       .catch(err => {
+    //         console.debug('[Shape] Transform checkpoint save failed (non-critical):', err.message);
+    //       });
+    //   }
+    // }, 500);
     
     return true;
   };
@@ -330,7 +336,16 @@ export default function ShapeRenderer({
             y={shape.y}
             text={shape.text || 'Text'}
             fontSize={shape.fontSize || 24}
+            fontFamily={shape.fontFamily || 'Inter'}
+            fontStyle={shape.fontStyle || 'normal'}
+            fontWeight={shape.fontWeight || 'normal'}
+            textDecoration={shape.textDecoration || ''}
+            align={shape.align || 'left'}
+            lineHeight={shape.lineHeight || 1.2}
             fill={shape.fill || '#000000'}
+            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
             width={shape.width || 200}
             rotation={shape.rotation || 0}
             onDblClick={async (e) => {

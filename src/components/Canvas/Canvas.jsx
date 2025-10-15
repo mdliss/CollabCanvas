@@ -13,10 +13,13 @@ import ColorPalette from "./ColorPalette";
 import PerformanceMonitor, { PerformanceToggleButton } from "../UI/PerformanceMonitor";
 import HelpMenu from "../UI/HelpMenu";
 import ConnectionStatus from "../UI/ConnectionStatus";
+import TextFormattingToolbar from "../UI/TextFormattingToolbar";
+import LayersPanel from "../UI/LayersPanel";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
 import { usePerformance } from "../../hooks/usePerformance";
+import { useUndo } from "../../contexts/UndoContext";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
 import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
@@ -39,6 +42,9 @@ export default function Canvas() {
   const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState(null);
   const [isHelpVisible, setIsHelpVisible] = useState(false);
+  const [textToolbarVisible, setTextToolbarVisible] = useState(false);
+  const [textToolbarPosition, setTextToolbarPosition] = useState({ x: 0, y: 0 });
+  const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
@@ -65,6 +71,7 @@ export default function Canvas() {
   const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
   const { setEditing, isVisible, toggleVisibility } = usePerformance();
+  const { undo, redo, canUndo, canRedo } = useUndo();
 
   useEffect(() => {
     const unsubscribe = watchSelections(setSelections);
@@ -100,6 +107,29 @@ export default function Canvas() {
     };
   }, []);
 
+  // Show text formatting toolbar when a single text shape is selected
+  useEffect(() => {
+    if (selectedIds.length === 1 && stageRef.current) {
+      const shape = shapes.find(s => s.id === selectedIds[0]);
+      if (shape && shape.type === 'text') {
+        // Calculate toolbar position based on shape position
+        const stage = stageRef.current;
+        const screenX = (shape.x * stageScale) + stagePos.x;
+        const screenY = (shape.y * stageScale) + stagePos.y;
+        
+        setTextToolbarPosition({
+          x: Math.max(10, Math.min(screenX, window.innerWidth - 450)),
+          y: Math.max(60, screenY - 150)
+        });
+        setTextToolbarVisible(true);
+      } else {
+        setTextToolbarVisible(false);
+      }
+    } else {
+      setTextToolbarVisible(false);
+    }
+  }, [selectedIds, shapes, stageScale, stagePos]);
+
   const showFeedback = (message) => {
     setFeedbackMessage(message);
     setTimeout(() => setFeedbackMessage(null), 2000);
@@ -108,6 +138,39 @@ export default function Canvas() {
   useEffect(() => {
     const handleKeyDown = async (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      // Undo/Redo shortcuts (Cmd/Ctrl + Z, Cmd/Ctrl + Shift + Z)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          // Redo
+          if (canRedo) {
+            try {
+              const description = await redo();
+              if (description) {
+                showFeedback(`Redo: ${description}`);
+              }
+            } catch (error) {
+              console.error('[Redo] Failed:', error);
+              showFeedback('Redo failed');
+            }
+          }
+        } else {
+          // Undo
+          if (canUndo) {
+            try {
+              const description = await undo();
+              if (description) {
+                showFeedback(`Undo: ${description}`);
+              }
+            } catch (error) {
+              console.error('[Undo] Failed:', error);
+              showFeedback('Undo failed');
+            }
+          }
+        }
+        return;
+      }
       
       if (e.key === ' ' && !isSpacePressed) {
         e.preventDefault();
@@ -136,6 +199,15 @@ export default function Canvas() {
             e.preventDefault();
             setIsHelpVisible(prev => !prev);
             break;
+          case 'l':
+            if (e.shiftKey) {
+              e.preventDefault();
+              setIsLayersPanelVisible(prev => !prev);
+            } else {
+              e.preventDefault();
+              handleAddShape('line');
+            }
+            break;
           case 'r':
             e.preventDefault();
             handleAddShape('rectangle');
@@ -143,10 +215,6 @@ export default function Canvas() {
           case 'c':
             e.preventDefault();
             handleAddShape('circle');
-            break;
-          case 'l':
-            e.preventDefault();
-            handleAddShape('line');
             break;
           case 't':
             e.preventDefault();
@@ -180,7 +248,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedIds, user, isSpacePressed]);
+  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo]);
 
   const handleAddShape = (type) => {
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
@@ -519,6 +587,77 @@ export default function Canvas() {
     }
   };
 
+  const handleTextFormatChange = async (formatProps) => {
+    if (selectedIds.length !== 1 || !user) return;
+    
+    const shapeId = selectedIds[0];
+    const shape = shapes.find(s => s.id === shapeId);
+    
+    if (!shape || shape.type !== 'text') return;
+    if (shape.isLocked && shape.lockedBy !== user.uid) {
+      showFeedback('Shape is locked by another user');
+      return;
+    }
+    
+    try {
+      await updateShape(CANVAS_ID, shapeId, formatProps, user);
+      console.log('[TextFormat] Updated:', shapeId, formatProps);
+    } catch (error) {
+      console.error('[TextFormat] Update failed:', error);
+      showFeedback('Failed to update text formatting');
+    }
+  };
+
+  const handleLayerRename = async (shapeId, newName) => {
+    if (!user) return;
+    
+    try {
+      await updateShape(CANVAS_ID, shapeId, { name: newName }, user);
+      showFeedback(`Renamed to "${newName}"`);
+    } catch (error) {
+      console.error('[LayerRename] Failed:', error);
+      showFeedback('Failed to rename layer');
+    }
+  };
+
+  const handleToggleVisibility = async (shapeId) => {
+    if (!user) return;
+    
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape) return;
+    
+    try {
+      await updateShape(CANVAS_ID, shapeId, { hidden: !shape.hidden }, user);
+    } catch (error) {
+      console.error('[ToggleVisibility] Failed:', error);
+      showFeedback('Failed to toggle visibility');
+    }
+  };
+
+  const handleToggleLock = async (shapeId) => {
+    if (!user) return;
+    
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape) return;
+    
+    // Only allow unlocking if user owns the lock
+    if (shape.isLocked && shape.lockedBy !== user.uid) {
+      showFeedback('Cannot unlock - shape locked by another user');
+      return;
+    }
+    
+    try {
+      if (shape.isLocked) {
+        await unlockShape(CANVAS_ID, shapeId, user);
+      } else {
+        await tryLockShape(CANVAS_ID, shapeId, user, LOCK_TTL_MS);
+      }
+    } catch (error) {
+      console.error('[ToggleLock] Failed:', error);
+      showFeedback('Failed to toggle lock');
+    }
+  };
+
   const handleStageMouseDown = (e) => {
     if (e.target !== e.target.getStage()) {
       return;
@@ -786,6 +925,31 @@ export default function Canvas() {
       <PerformanceMonitor isVisible={isVisible} onToggle={toggleVisibility} />
       <PerformanceToggleButton onClick={toggleVisibility} isVisible={isVisible} />
       <HelpMenu isVisible={isHelpVisible} onClose={() => setIsHelpVisible(false)} />
+      
+      {/* Text Formatting Toolbar */}
+      {textToolbarVisible && selectedIds.length === 1 && (
+        <TextFormattingToolbar
+          shape={shapes.find(s => s.id === selectedIds[0])}
+          position={textToolbarPosition}
+          onUpdate={handleTextFormatChange}
+          onClose={() => setTextToolbarVisible(false)}
+        />
+      )}
+      
+      {/* Layers Panel */}
+      {isLayersPanelVisible && (
+        <LayersPanel
+          shapes={shapes}
+          selectedIds={selectedIds}
+          onSelect={handleShapeSelect}
+          onRename={handleLayerRename}
+          onToggleVisibility={handleToggleVisibility}
+          onToggleLock={handleToggleLock}
+          onClose={() => setIsLayersPanelVisible(false)}
+          user={user}
+        />
+      )}
+      
       <DebugNote 
         projectId={import.meta.env.VITE_FB_PROJECT_ID} 
         docPath={`canvas/${CANVAS_ID}`} 
@@ -798,6 +962,34 @@ export default function Canvas() {
       <PresenceList users={onlineUsers} />
       <ShapeToolbar 
         onAddShape={handleAddShape}
+        onUndo={async () => {
+          if (canUndo) {
+            try {
+              const description = await undo();
+              if (description) {
+                showFeedback(`Undo: ${description}`);
+              }
+            } catch (error) {
+              console.error('[Undo] Failed:', error);
+              showFeedback('Undo failed');
+            }
+          }
+        }}
+        onRedo={async () => {
+          if (canRedo) {
+            try {
+              const description = await redo();
+              if (description) {
+                showFeedback(`Redo: ${description}`);
+              }
+            } catch (error) {
+              console.error('[Redo] Failed:', error);
+              showFeedback('Redo failed');
+            }
+          }
+        }}
+        canUndo={canUndo}
+        canRedo={canRedo}
       />
       
       {/* Color Palette - shows when shapes are selected */}

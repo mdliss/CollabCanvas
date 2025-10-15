@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { UndoProvider } from "./contexts/UndoContext";
 import AuthBar from "./components/Auth/AuthBar";
 import EmailLoginModal from "./components/Auth/EmailLoginModal";
 import Canvas from "./components/Canvas/Canvas";
@@ -139,7 +140,9 @@ function AppContent() {
 export default function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <UndoProvider>
+        <AppContent />
+      </UndoProvider>
     </AuthProvider>
   );
 }
