@@ -18,6 +18,11 @@ class PerformanceMonitor {
     this.frameCount = 0;
     this.lastFrameTime = performance.now();
     this.isEditing = false;
+    
+    // Optimization metrics (30-second sliding window)
+    this.dragUpdatesSkipped = []; // Array of timestamps
+    this.cursorUpdatesSkipped = []; // Array of timestamps
+    this.WINDOW_DURATION = 30000; // 30 seconds in milliseconds
   }
 
   init() {
@@ -95,8 +100,38 @@ class PerformanceMonitor {
     return sorted[index];
   }
 
+  // Clean old timestamps outside 30-second window
+  cleanOldTimestamps(arr) {
+    const now = Date.now();
+    const cutoff = now - this.WINDOW_DURATION;
+    // Remove timestamps older than 30 seconds
+    return arr.filter(timestamp => timestamp > cutoff);
+  }
+
+  // Track skipped drag update (delta compression saved bandwidth)
+  trackDragUpdateSkipped() {
+    this.dragUpdatesSkipped.push(Date.now());
+    // Keep array size manageable (max 10,000 entries)
+    if (this.dragUpdatesSkipped.length > 10000) {
+      this.dragUpdatesSkipped = this.cleanOldTimestamps(this.dragUpdatesSkipped);
+    }
+  }
+
+  // Track skipped cursor update (2px filter saved bandwidth)
+  trackCursorUpdateSkipped() {
+    this.cursorUpdatesSkipped.push(Date.now());
+    // Keep array size manageable (max 10,000 entries)
+    if (this.cursorUpdatesSkipped.length > 10000) {
+      this.cursorUpdatesSkipped = this.cleanOldTimestamps(this.cursorUpdatesSkipped);
+    }
+  }
+
   // Get current metrics snapshot
   getMetrics() {
+    // Clean old timestamps before counting (30-second sliding window)
+    this.dragUpdatesSkipped = this.cleanOldTimestamps(this.dragUpdatesSkipped);
+    this.cursorUpdatesSkipped = this.cleanOldTimestamps(this.cursorUpdatesSkipped);
+
     return {
       syncLatency: {
         p50: this.getPercentile(this.metrics.syncLatency, 50),
@@ -123,6 +158,11 @@ class PerformanceMonitor {
         avg: this.metrics.networkRTT.length > 0
           ? this.metrics.networkRTT.reduce((a, b) => a + b, 0) / this.metrics.networkRTT.length
           : 0
+      },
+      optimizations: {
+        dragUpdatesSkipped: this.dragUpdatesSkipped.length,
+        cursorUpdatesSkipped: this.cursorUpdatesSkipped.length,
+        windowDuration: 30 // seconds
       }
     };
   }
@@ -157,4 +197,9 @@ class PerformanceMonitor {
 
 // Singleton instance
 export const performanceMonitor = new PerformanceMonitor();
+
+// Make available globally for tracking from other services
+if (typeof window !== 'undefined') {
+  window.performanceMonitor = performanceMonitor;
+}
 

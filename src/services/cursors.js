@@ -14,10 +14,18 @@ let disconnectSet = new Set();
 export const writeCursor = (uid, x, y, name, color, photoURL = null) => {
   if (!uid) return;
 
+  // 2px delta filter: Skip updates if movement is less than 2 pixels
+  // This reduces unnecessary network traffic for tiny cursor movements
   if (lastX !== null && lastY !== null) {
     const dx = Math.abs(x - lastX);
     const dy = Math.abs(y - lastY);
-    if (dx < 2 && dy < 2) return;
+    if (dx < 2 && dy < 2) {
+      // Track skipped update for performance metrics
+      if (typeof window !== 'undefined' && window.performanceMonitor) {
+        window.performanceMonitor.trackCursorUpdateSkipped();
+      }
+      return;
+    }
   }
 
   const now = Date.now();

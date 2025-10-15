@@ -89,7 +89,7 @@ export default function ShapeRenderer({
     
     onDragStart();
     
-    // Start streaming drag position at ~60Hz (16ms)
+    // Start streaming drag position at ~100Hz (10ms) for smoother updates
     dragStreamInterval.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUserId) {
@@ -102,7 +102,7 @@ export default function ShapeRenderer({
           node.rotation()
         );
       }
-    }, 16);
+    }, 10);
   };
 
   const handleDragEnd = (e) => {
@@ -176,7 +176,7 @@ export default function ShapeRenderer({
       onTransformStart();
     }
     
-    // Start streaming transform updates (rotation, scale, position) at ~60Hz
+    // Start streaming transform updates (rotation, scale, position) at ~100Hz (10ms)
     transformStreamInterval.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUserId) {
@@ -189,7 +189,7 @@ export default function ShapeRenderer({
           node.rotation()  // Stream live rotation during transform
         );
       }
-    }, 16);
+    }, 10);
     
     return true;
   };

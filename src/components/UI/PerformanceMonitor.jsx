@@ -37,7 +37,7 @@ export function PerformanceToggleButton({ onClick, isVisible }) {
       onClick={onClick}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      title="Toggle Performance Monitor (⚡ Cmd+Shift+P, Cmd+K, or `)"
+      title="Toggle Performance Monitor (Press ` key)"
       aria-label="Toggle Performance Monitor"
     >
       ⚡
@@ -48,7 +48,7 @@ export function PerformanceToggleButton({ onClick, isVisible }) {
 export default function PerformanceMonitor() {
   const { metrics, isVisible, toggleVisibility } = usePerformance();
 
-  // Multiple keyboard shortcuts with better detection
+  // Keyboard shortcut: Backtick (`) key only
   useEffect(() => {
     console.log('[PerformanceMonitor] Keyboard listener mounted');
     
@@ -58,28 +58,8 @@ export default function PerformanceMonitor() {
         return;
       }
 
-      // Debug logging - remove after confirming it works
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey) {
-        console.log('[PerformanceMonitor] Key pressed:', {
-          key: e.key,
-          code: e.code,
-          metaKey: e.metaKey,
-          ctrlKey: e.ctrlKey,
-          shiftKey: e.shiftKey
-        });
-      }
-
-      // Option 1: Cmd/Ctrl + Shift + P (original) - check multiple ways
-      const isPKey = e.key === 'P' || e.key === 'p' || e.code === 'KeyP';
-      const option1 = (e.metaKey || e.ctrlKey) && e.shiftKey && isPKey;
-      
-      // Option 2: Cmd/Ctrl + K (common DevTools pattern)
-      const option2 = (e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K') && !e.shiftKey;
-      
-      // Option 3: Backtick key ` (easy to reach, uncommon shortcut)
-      const option3 = e.key === '`' && !e.metaKey && !e.ctrlKey && !e.shiftKey;
-
-      if (option1 || option2 || option3) {
+      // Only backtick key (`) toggles the dashboard
+      if (e.key === '`' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
         console.log('[PerformanceMonitor] Performance monitor toggled!');
@@ -194,8 +174,37 @@ export default function PerformanceMonitor() {
         </span>
       </div>
 
+      {/* Optimization Stats Section */}
+      {metrics.optimizations && (metrics.optimizations.dragUpdatesSkipped > 0 || metrics.optimizations.cursorUpdatesSkipped > 0) && (
+        <>
+          <div style={{
+            marginTop: '10px',
+            paddingTop: '8px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.15)',
+            fontSize: '11px',
+            opacity: 0.7
+          }}>
+            Network Optimizations
+          </div>
+          
+          <div style={styles.row}>
+            <span style={styles.label}>Drag Saved (30s):</span>
+            <span style={{ ...styles.value, color: '#22c55e' }}>
+              {metrics.optimizations.dragUpdatesSkipped}
+            </span>
+          </div>
+
+          <div style={styles.row}>
+            <span style={styles.label}>Cursor Saved (30s):</span>
+            <span style={{ ...styles.value, color: '#22c55e' }}>
+              {metrics.optimizations.cursorUpdatesSkipped}
+            </span>
+          </div>
+        </>
+      )}
+
       <div style={styles.hint}>
-        Cmd+Shift+P, Cmd+K, or ` to toggle
+        Press ` to toggle (last 30s)
       </div>
     </div>
   );
