@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { COLOR_PALETTE } from './constants';
 import { useColorHistory } from '../../hooks/useColorHistory';
 import ColorPicker from '../UI/ColorPicker';
@@ -17,45 +17,71 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showGradientPicker, setShowGradientPicker] = useState(false);
   const { history, addColor } = useColorHistory();
+  const paletteRef = useRef(null);
   
   const VISIBLE_COLORS = 10; // Show 10 colors at a time
   const visibleColors = COLOR_PALETTE.slice(scrollIndex, scrollIndex + VISIBLE_COLORS);
   const canScrollLeft = scrollIndex > 0;
   const canScrollRight = scrollIndex < COLOR_PALETTE.length - VISIBLE_COLORS;
 
-  // Handle Shift+Scroll for palette navigation
-  const handleWheel = (e) => {
-    // Only intercept if Shift is held
-    if (!e.shiftKey) return;
-    
-    e.preventDefault();
-    e.stopPropagation();
-    
-    const maxScroll = Math.max(0, COLOR_PALETTE.length - VISIBLE_COLORS);
-    
-    // deltaY > 0 = scroll DOWN (wheel away from you) = show NEXT colors (scroll RIGHT)
-    // deltaY < 0 = scroll UP (wheel toward you) = show PREVIOUS colors (scroll LEFT)
-    // Use Math.sign() to normalize scroll delta to -1, 0, or 1 (prevents over-scrolling on trackpads)
-    const scrollAmount = Math.sign(e.deltaY);
-    
-    setScrollIndex(prev => {
-      const next = prev + scrollAmount;
-      const clamped = Math.max(0, Math.min(next, maxScroll));
+  // Native wheel event listener for scrolling through colors
+  // No Shift needed - just hover over the palette area and scroll!
+  useEffect(() => {
+    const paletteEl = paletteRef.current;
+    if (!paletteEl) return;
+
+    const handleWheel = (e) => {
+      // Prevent default to avoid page scroll
+      e.preventDefault();
+      e.stopPropagation();
       
-      // Debug logging (helps verify behavior)
-      console.log('[ColorPalette] Shift+Scroll:', {
-        deltaY: e.deltaY,
-        scrollAmount,
-        direction: scrollAmount > 0 ? 'RIGHT (next)' : scrollAmount < 0 ? 'LEFT (prev)' : 'NONE',
-        prev,
-        next,
-        clamped,
-        maxScroll,
-        showing: `colors ${clamped} to ${clamped + VISIBLE_COLORS - 1} of ${COLOR_PALETTE.length}`
+      const maxScroll = Math.max(0, COLOR_PALETTE.length - VISIBLE_COLORS);
+      
+      // Use deltaX for horizontal scroll OR deltaY for vertical scroll
+      // This makes it work with trackpads (horizontal swipe) and mice (wheel)
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      
+      // Filter out tiny values (noise)
+      if (Math.abs(delta) < 3) {
+        return;
+      }
+      
+      // Normalize scroll direction: positive = scroll right (next), negative = scroll left (prev)
+      const scrollAmount = delta > 0 ? 1 : -1;
+      
+      setScrollIndex(prev => {
+        const next = prev + scrollAmount;
+        const clamped = Math.max(0, Math.min(next, maxScroll));
+        
+        if (clamped !== prev) {
+          console.log('[ColorPalette] Scroll:', {
+            delta,
+            scrollAmount,
+            direction: scrollAmount > 0 ? 'RIGHT (next)' : 'LEFT (prev)',
+            showing: `colors ${clamped}-${clamped + VISIBLE_COLORS - 1} of ${COLOR_PALETTE.length}`
+          });
+        }
+        
+        return clamped;
       });
-      
-      return clamped;
-    });
+    };
+
+    // { passive: false } allows preventDefault()
+    paletteEl.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      paletteEl.removeEventListener('wheel', handleWheel);
+    };
+  }, []); // Empty deps - only set up once
+  
+  // Scroll left/right with arrow buttons
+  const scrollLeft = () => {
+    setScrollIndex(prev => Math.max(0, prev - 1));
+  };
+  
+  const scrollRight = () => {
+    const maxScroll = Math.max(0, COLOR_PALETTE.length - VISIBLE_COLORS);
+    setScrollIndex(prev => Math.min(maxScroll, prev + 1));
   };
 
   // Handle color selection (add to history)
@@ -82,7 +108,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
   return (
     <>
       <div
-        onWheel={handleWheel}
+        ref={paletteRef}
         style={{
           position: 'fixed',
           bottom: '0',
@@ -158,19 +184,40 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           </>
         )}
 
-        {/* Scroll indicator (left) */}
-        {canScrollLeft && (
-          <div
-            style={{
-              fontSize: '10px',
-              opacity: 0.5,
-              cursor: 'pointer'
-            }}
-            onClick={() => setScrollIndex(Math.max(0, scrollIndex - 1))}
-          >
-            ◀
-          </div>
-        )}
+        {/* Scroll Left Button */}
+        <button
+          onClick={scrollLeft}
+          disabled={!canScrollLeft}
+          style={{
+            width: '32px',
+            height: '40px',
+            backgroundColor: canScrollLeft ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)',
+            border: '1px solid rgba(0, 0, 0, 0.15)',
+            borderRadius: '6px',
+            cursor: canScrollLeft ? 'pointer' : 'default',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '14px',
+            opacity: canScrollLeft ? 1 : 0.3,
+            transition: 'all 0.15s ease',
+            padding: 0,
+            outline: 'none'
+          }}
+          onMouseEnter={(e) => {
+            if (canScrollLeft) {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = canScrollLeft ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Previous colors"
+        >
+          ◀
+        </button>
 
         {/* Color swatches (scrollable) */}
         <div
@@ -214,19 +261,40 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           ))}
         </div>
 
-        {/* Scroll indicator (right) */}
-        {canScrollRight && (
-          <div
-            style={{
-              fontSize: '10px',
-              opacity: 0.5,
-              cursor: 'pointer'
-            }}
-            onClick={() => setScrollIndex(Math.min(COLOR_PALETTE.length - VISIBLE_COLORS, scrollIndex + 1))}
-          >
-            ▶
-          </div>
-        )}
+        {/* Scroll Right Button */}
+        <button
+          onClick={scrollRight}
+          disabled={!canScrollRight}
+          style={{
+            width: '32px',
+            height: '40px',
+            backgroundColor: canScrollRight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)',
+            border: '1px solid rgba(0, 0, 0, 0.15)',
+            borderRadius: '6px',
+            cursor: canScrollRight ? 'pointer' : 'default',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '14px',
+            opacity: canScrollRight ? 1 : 0.3,
+            transition: 'all 0.15s ease',
+            padding: 0,
+            outline: 'none'
+          }}
+          onMouseEnter={(e) => {
+            if (canScrollRight) {
+              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.transform = 'scale(1.05)';
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = canScrollRight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)';
+            e.currentTarget.style.transform = 'scale(1)';
+          }}
+          title="Next colors"
+        >
+          ▶
+        </button>
 
         {/* Divider */}
         <div
@@ -312,17 +380,18 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           </span>
         </button>
 
-        {/* Shift+Scroll hint */}
+        {/* Scroll hint */}
         {(canScrollLeft || canScrollRight) && (
           <div
             style={{
               fontSize: '10px',
-              opacity: 0.4,
+              opacity: 0.5,
               whiteSpace: 'nowrap',
-              marginLeft: '4px'
+              marginLeft: '4px',
+              fontStyle: 'italic'
             }}
           >
-            Shift+Scroll
+            Scroll here →
           </div>
         )}
 

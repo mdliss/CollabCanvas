@@ -3,6 +3,23 @@ import { doc, onSnapshot, serverTimestamp, setDoc, runTransaction, getDoc } from
 
 const getCanvasDoc = (canvasId) => doc(db, "canvas", canvasId);
 
+// Retry helper for handling Firestore transaction failures
+const retryTransaction = async (fn, maxRetries = 3) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (error.code === 'failed-precondition' && attempt < maxRetries) {
+        const delay = Math.pow(2, attempt - 1) * 100; // 100ms, 200ms, 400ms
+        console.log(`[Transaction] Retry ${attempt}/${maxRetries} after ${delay}ms due to failed-precondition`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        continue;
+      }
+      throw error; // Re-throw if not retryable or max retries reached
+    }
+  }
+};
+
 const ensureCanvasDoc = async (canvasId) => {
   const canvasRef = getCanvasDoc(canvasId);
   const docSnap = await getDoc(canvasRef);
@@ -82,58 +99,61 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
   try {
     const canvasRef = getCanvasDoc(canvasId);
     
-    await runTransaction(db, async (transaction) => {
-      const docSnap = await transaction.get(canvasRef);
-      
-      // Check if document exists
-      if (!docSnap.exists()) {
-        console.warn('[updateShape] Document does not exist, creating it first');
-        transaction.set(canvasRef, {
-          canvasId,
-          shapes: [],
+    // Wrap in retry logic to handle concurrent update conflicts
+    await retryTransaction(async () => {
+      return runTransaction(db, async (transaction) => {
+        const docSnap = await transaction.get(canvasRef);
+        
+        // Check if document exists
+        if (!docSnap.exists()) {
+          console.warn('[updateShape] Document does not exist, creating it first');
+          transaction.set(canvasRef, {
+            canvasId,
+            shapes: [],
+            lastUpdated: serverTimestamp()
+          });
+          return; // Exit early - can't update shapes that don't exist
+        }
+        
+        const shapes = docSnap.data().shapes || [];
+        const updatedShapes = shapes.map(shape => {
+          if (shape.id === shapeId) {
+            if (shape.isLocked && shape.lockedBy !== user?.uid) {
+              console.warn("[updateShape] Shape locked by another user", shapeId);
+              return shape;
+            }
+            
+            // Start with existing shape
+            const updatedShape = {
+              ...shape,
+              lastModifiedBy: user?.uid || 'anonymous',
+              lastModifiedAt: Date.now()
+            };
+            
+            // Apply updates, explicitly delete properties set to undefined
+            Object.keys(updates).forEach(key => {
+              if (updates[key] === undefined) {
+                // Delete the property
+                delete updatedShape[key];
+              } else {
+                // Update the property
+                updatedShape[key] = updates[key];
+              }
+            });
+            
+            return updatedShape;
+          }
+          return shape;
+        });
+        
+        transaction.update(canvasRef, {
+          shapes: updatedShapes,
           lastUpdated: serverTimestamp()
         });
-        return; // Exit early - can't update shapes that don't exist
-      }
-      
-      const shapes = docSnap.data().shapes || [];
-      const updatedShapes = shapes.map(shape => {
-        if (shape.id === shapeId) {
-          if (shape.isLocked && shape.lockedBy !== user?.uid) {
-            console.warn("[updateShape] Shape locked by another user", shapeId);
-            return shape;
-          }
-          
-          // Start with existing shape
-          const updatedShape = {
-            ...shape,
-            lastModifiedBy: user?.uid || 'anonymous',
-            lastModifiedAt: Date.now()
-          };
-          
-          // Apply updates, explicitly delete properties set to undefined
-          Object.keys(updates).forEach(key => {
-            if (updates[key] === undefined) {
-              // Delete the property
-              delete updatedShape[key];
-            } else {
-              // Update the property
-              updatedShape[key] = updates[key];
-            }
-          });
-          
-          return updatedShape;
-        }
-        return shape;
-      });
-      
-      transaction.update(canvasRef, {
-        shapes: updatedShapes,
-        lastUpdated: serverTimestamp()
       });
     });
   } catch (error) {
-    console.error("[updateShape] Failed:", error);
+    console.error("[updateShape] Failed after retries:", error);
     console.error("[updateShape] Error details:", {
       code: error.code,
       message: error.message,
@@ -272,9 +292,21 @@ export const staleLockSweeper = async (canvasId, ttlMs = 5000) => {
       
       const updatedShapes = shapes.map(shape => {
         if (shape.isLocked && shape.lockedAt) {
-          // FIX: lockedAt is already a number (from Date.now()), not a Firestore Timestamp
-          // Don't call .toMillis() - just subtract directly
-          const lockAge = now - shape.lockedAt;
+          // Handle BOTH types: Firestore Timestamp (old data) AND number (new data)
+          let lockTimestamp;
+          if (typeof shape.lockedAt === 'number') {
+            // New format: plain number from Date.now()
+            lockTimestamp = shape.lockedAt;
+          } else if (shape.lockedAt.toMillis) {
+            // Old format: Firestore Timestamp object
+            lockTimestamp = shape.lockedAt.toMillis();
+          } else {
+            // Unknown format - skip
+            console.warn(`[staleLockSweeper] Unknown lockedAt format for ${shape.id}:`, typeof shape.lockedAt);
+            return shape;
+          }
+          
+          const lockAge = now - lockTimestamp;
           
           if (lockAge > ttlMs) {
             cleaned++;
