@@ -1,6 +1,9 @@
 import { Rect, Circle, Line, Text, Group, Transformer, Star } from "react-konva";
 import { useEffect, useRef } from "react";
 import { streamDragPosition, stopDragStream } from "../../services/dragStream";
+import { updateShape } from "../../services/canvasRTDB";
+
+const CANVAS_ID = "global-canvas-v1";
 
 /**
  * ShapeRenderer - renders different shape types with transform support
@@ -25,6 +28,8 @@ export default function ShapeRenderer({
   const dragStreamInterval = useRef(null);
   const transformStreamInterval = useRef(null);
   const isDraggingRef = useRef(false); // Track if THIS user is currently dragging this shape
+  const dragEndTimeoutRef = useRef(null); // FEATURE 2: Track timeout for delayed isDraggingRef reset
+  const checkpointIntervalRef = useRef(null); // FEATURE 1: Track checkpoint interval for drag persistence
 
   // Don't render hidden shapes
   if (shape.hidden) {
@@ -87,6 +92,18 @@ export default function ShapeRenderer({
         transformStreamInterval.current = null;
         stopDragStream(shape.id);
       }
+      
+      // FEATURE 1: Clean up checkpoint interval
+      if (checkpointIntervalRef.current) {
+        clearInterval(checkpointIntervalRef.current);
+        checkpointIntervalRef.current = null;
+      }
+      
+      // FEATURE 2: Clean up drag end timeout
+      if (dragEndTimeoutRef.current) {
+        clearTimeout(dragEndTimeoutRef.current);
+        dragEndTimeoutRef.current = null;
+      }
     };
   }, [isSelected, shape.id]);
 
@@ -123,6 +140,24 @@ export default function ShapeRenderer({
         );
       }
     }, 10);
+    
+    // FEATURE 1: Start checkpoint system for drag persistence on disconnect
+    // Write position to RTDB every 500ms during drag
+    // If connection drops or page reloads, last checkpoint is preserved
+    checkpointIntervalRef.current = setInterval(() => {
+      const node = shapeRef.current;
+      if (node && currentUser) {
+        const checkpointData = {
+          x: node.x(),
+          y: node.y(),
+          rotation: node.rotation()
+        };
+        updateShape(CANVAS_ID, shape.id, checkpointData, currentUser).catch(err => {
+          // Silent fail for checkpoints - not critical
+          console.warn('[Checkpoint] Failed to save position:', err.message);
+        });
+      }
+    }, 500);
   };
 
   const handleDragEnd = (e) => {
@@ -133,6 +168,12 @@ export default function ShapeRenderer({
     }
     stopDragStream(shape.id);
     
+    // FEATURE 1: Stop checkpoint interval
+    if (checkpointIntervalRef.current) {
+      clearInterval(checkpointIntervalRef.current);
+      checkpointIntervalRef.current = null;
+    }
+    
     const node = e.target;
     const finalPos = {
       x: node.x(),
@@ -142,8 +183,12 @@ export default function ShapeRenderer({
     // Call parent first (this writes to RTDB)
     onDragEnd(shape.id, finalPos);
     
-    // Clear isDragging flag immediately
-    isDraggingRef.current = false;
+    // FEATURE 2: Delay isDragging flag reset by 100ms to prevent position flash
+    // This keeps position sync blocked until RTDB update arrives
+    dragEndTimeoutRef.current = setTimeout(() => {
+      isDraggingRef.current = false;
+      dragEndTimeoutRef.current = null;
+    }, 100);
   };
 
   const handleTransformEnd = async () => {
@@ -226,8 +271,12 @@ export default function ShapeRenderer({
 
     onTransformEnd(shape.id, newAttrs);
     
-    // Clear isDragging flag immediately after transform completes
-    isDraggingRef.current = false;
+    // FEATURE 2: Delay isDragging flag reset by 100ms to prevent position flash
+    // This keeps position sync blocked until RTDB update arrives
+    dragEndTimeoutRef.current = setTimeout(() => {
+      isDraggingRef.current = false;
+      dragEndTimeoutRef.current = null;
+    }, 100);
   };
 
   const handleTransformStart = async () => {
@@ -262,6 +311,27 @@ export default function ShapeRenderer({
         );
       }
     }, 10);
+    
+    // FEATURE 1: Start checkpoint system for transform persistence on disconnect
+    // Write position/size/rotation to RTDB every 500ms during transform
+    checkpointIntervalRef.current = setInterval(() => {
+      const node = shapeRef.current;
+      if (node && currentUser) {
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        const checkpointData = {
+          x: node.x(),
+          y: node.y(),
+          width: Math.max(10, node.width() * scaleX),
+          height: Math.max(10, node.height() * scaleY),
+          rotation: node.rotation()
+        };
+        updateShape(CANVAS_ID, shape.id, checkpointData, currentUser).catch(err => {
+          // Silent fail for checkpoints - not critical
+          console.warn('[Checkpoint] Failed to save transform:', err.message);
+        });
+      }
+    }, 500);
     
     return true;
   };
