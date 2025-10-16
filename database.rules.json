@@ -1,12 +1,39 @@
 {
   "rules": {
+    "canvas": {
+      "$canvasId": {
+        ".read": "auth != null",
+        "shapes": {
+          "$shapeId": {
+            ".write": "auth != null && (
+              !data.exists() ||
+              !data.child('isLocked').val() ||
+              data.child('lockedBy').val() == auth.uid ||
+              (now - data.child('lockedAt').val()) > 8000
+            )",
+            ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'createdBy']) && 
+              newData.child('x').isNumber() && 
+              newData.child('y').isNumber() && 
+              newData.child('x').val() >= -50000 && newData.child('x').val() <= 50000 &&
+              newData.child('y').val() >= -50000 && newData.child('y').val() <= 50000"
+          }
+        },
+        "metadata": {
+          ".write": "auth != null"
+        }
+      }
+    },
     "sessions": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && $userId == auth.uid"
+      }
     },
     "selections": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && $userId == auth.uid"
+      }
     },
     "drags": {
       ".read": "auth != null",
@@ -18,4 +45,3 @@
     }
   }
 }
-

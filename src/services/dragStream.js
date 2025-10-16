@@ -34,12 +34,16 @@ export const streamDragPosition = async (shapeId, uid, displayName, x, y, rotati
 
   // Only broadcast if something actually changed
   if (hasChanges) {
+    // LATENCY MEASUREMENT: Record send timestamp for measuring round-trip time
+    const sendTimestamp = performance.now();
+    
     // CRITICAL FIX: Always send ALL coordinates, never partial deltas
     // This prevents missing x/y/rotation causing shapes to jump
     const dragData = {
       uid,
       displayName,
       timestamp: Date.now(),
+      sendTimestamp, // For latency measurement
       x: currentState.x,
       y: currentState.y,
       rotation: currentState.rotation

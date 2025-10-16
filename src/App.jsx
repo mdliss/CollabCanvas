@@ -4,6 +4,7 @@ import { UndoProvider } from "./contexts/UndoContext";
 import AuthBar from "./components/Auth/AuthBar";
 import EmailLoginModal from "./components/Auth/EmailLoginModal";
 import Canvas from "./components/Canvas/Canvas";
+import ErrorBoundary from "./components/UI/ErrorBoundary";
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -44,8 +45,12 @@ function AppContent() {
         <EmailLoginModal onClose={() => setShowEmailLogin(false)} />
       )}
 
-      {/* Canvas (always rendered, but presence/cursor only when authed) */}
-      {user && <Canvas />}
+      {/* Canvas (wrapped in ErrorBoundary for graceful error handling) */}
+      {user && (
+        <ErrorBoundary>
+          <Canvas />
+        </ErrorBoundary>
+      )}
 
       {/* Unauthed state - show welcome message */}
       {!user && (

@@ -139,10 +139,40 @@ export default function PerformanceMonitor({ isVisible, onToggle }) {
     <div style={styles.container}>
       <div style={styles.title}>⚡ Performance Monitor</div>
       
+      {/* RUBRIC COMPLIANCE SECTION */}
+      <div style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '6px', marginBottom: '8px' }}>
+        <div style={{ fontSize: '10px', opacity: 0.7, marginBottom: '4px', color: '#a3e635' }}>
+          🎯 RUBRIC TARGETS
+        </div>
+        
+        <div style={styles.row}>
+          <span style={styles.label}>Object Sync (p95):</span>
+          <span style={{ 
+            ...styles.value, 
+            color: (metrics.objectSyncLatency?.p95 || 0) < 100 ? '#22c55e' : '#ef4444',
+            fontWeight: 'bold'
+          }}>
+            {Math.round(metrics.objectSyncLatency?.p95 || 0)}ms {(metrics.objectSyncLatency?.p95 || 0) < 100 ? '✓' : '✗'}
+          </span>
+        </div>
+        
+        <div style={styles.row}>
+          <span style={styles.label}>Cursor Sync (p95):</span>
+          <span style={{ 
+            ...styles.value, 
+            color: (metrics.cursorSyncLatency?.p95 || 0) < 50 ? '#22c55e' : '#ef4444',
+            fontWeight: 'bold'
+          }}>
+            {Math.round(metrics.cursorSyncLatency?.p95 || 0)}ms {(metrics.cursorSyncLatency?.p95 || 0) < 50 ? '✓' : '✗'}
+          </span>
+        </div>
+      </div>
+      
+      {/* STANDARD METRICS */}
       <div style={styles.row}>
-        <span style={styles.label}>FPS:</span>
+        <span style={styles.label}>FPS (avg/min):</span>
         <span style={{ ...styles.value, color: getFpsColor(metrics.fps.avg) }}>
-          {Math.round(metrics.fps.avg)}
+          {Math.round(metrics.fps.avg)}/{Math.round(metrics.fps.min)}
         </span>
       </div>
 

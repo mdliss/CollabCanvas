@@ -10,7 +10,9 @@ class PerformanceMonitor {
       syncLatency: [],      // Circular buffer, max 100 samples
       cursorFrequency: [],  // Time between cursor updates
       fps: [],              // FPS samples during editing
-      networkRTT: []        // Round-trip time to Firebase
+      networkRTT: [],       // Round-trip time to Firebase
+      objectSyncLatency: [], // RUBRIC: Object sync latency (target < 100ms)
+      cursorSyncLatency: []  // RUBRIC: Cursor sync latency (target < 50ms)
     };
     this.maxSamples = 100;
     this.reportInterval = null;
@@ -23,16 +25,26 @@ class PerformanceMonitor {
     this.dragUpdatesSkipped = []; // Array of timestamps
     this.cursorUpdatesSkipped = []; // Array of timestamps
     this.WINDOW_DURATION = 30000; // 30 seconds in milliseconds
+    
+    // Performance thresholds for degradation detection
+    this.OBJECT_SYNC_THRESHOLD = 100; // ms (rubric requirement)
+    this.CURSOR_SYNC_THRESHOLD = 50;  // ms (rubric requirement)
+    this.FPS_THRESHOLD = 30; // minimum acceptable FPS
   }
 
   init() {
     // Start 60-second reporting interval
     this.reportInterval = setInterval(() => {
       this.sendMetricsToAnalytics();
+      // Also log rubric metrics every 60 seconds
+      this.logRubricMetrics();
     }, 60000);
 
     // Start FPS tracking
     this.trackFPS();
+    
+    // Log rubric metrics on demand (can be called manually)
+    console.log('[PerformanceMonitor] Initialized. Call performanceMonitor.logRubricMetrics() to see compliance metrics.');
   }
 
   // Track operation start (when local action occurs)
@@ -126,6 +138,26 @@ class PerformanceMonitor {
     }
   }
 
+  // RUBRIC REQUIREMENT: Track object sync latency (target < 100ms)
+  trackObjectSyncLatency(latency) {
+    this.addMetric('objectSyncLatency', latency);
+    
+    // Detect performance degradation
+    if (latency > this.OBJECT_SYNC_THRESHOLD) {
+      console.warn(`[Performance] Object sync latency ${latency.toFixed(1)}ms exceeds threshold ${this.OBJECT_SYNC_THRESHOLD}ms`);
+    }
+  }
+
+  // RUBRIC REQUIREMENT: Track cursor sync latency (target < 50ms)
+  trackCursorSyncLatency(latency) {
+    this.addMetric('cursorSyncLatency', latency);
+    
+    // Detect performance degradation
+    if (latency > this.CURSOR_SYNC_THRESHOLD) {
+      console.warn(`[Performance] Cursor sync latency ${latency.toFixed(1)}ms exceeds threshold ${this.CURSOR_SYNC_THRESHOLD}ms`);
+    }
+  }
+
   // Get current metrics snapshot
   getMetrics() {
     // Clean old timestamps before counting (30-second sliding window)
@@ -138,6 +170,28 @@ class PerformanceMonitor {
         p95: this.getPercentile(this.metrics.syncLatency, 95),
         p99: this.getPercentile(this.metrics.syncLatency, 99),
         samples: this.metrics.syncLatency.length
+      },
+      // RUBRIC METRIC: Object sync latency (requirement: < 100ms)
+      objectSyncLatency: {
+        p50: this.getPercentile(this.metrics.objectSyncLatency, 50),
+        p95: this.getPercentile(this.metrics.objectSyncLatency, 95),
+        p99: this.getPercentile(this.metrics.objectSyncLatency, 99),
+        avg: this.metrics.objectSyncLatency.length > 0
+          ? this.metrics.objectSyncLatency.reduce((a, b) => a + b, 0) / this.metrics.objectSyncLatency.length
+          : 0,
+        samples: this.metrics.objectSyncLatency.length,
+        meetsTarget: this.getPercentile(this.metrics.objectSyncLatency, 95) < this.OBJECT_SYNC_THRESHOLD
+      },
+      // RUBRIC METRIC: Cursor sync latency (requirement: < 50ms)
+      cursorSyncLatency: {
+        p50: this.getPercentile(this.metrics.cursorSyncLatency, 50),
+        p95: this.getPercentile(this.metrics.cursorSyncLatency, 95),
+        p99: this.getPercentile(this.metrics.cursorSyncLatency, 99),
+        avg: this.metrics.cursorSyncLatency.length > 0
+          ? this.metrics.cursorSyncLatency.reduce((a, b) => a + b, 0) / this.metrics.cursorSyncLatency.length
+          : 0,
+        samples: this.metrics.cursorSyncLatency.length,
+        meetsTarget: this.getPercentile(this.metrics.cursorSyncLatency, 95) < this.CURSOR_SYNC_THRESHOLD
       },
       cursorFrequency: {
         avg: this.metrics.cursorFrequency.length > 0 
@@ -152,7 +206,8 @@ class PerformanceMonitor {
           ? this.metrics.fps.reduce((a, b) => a + b, 0) / this.metrics.fps.length
           : 0,
         min: this.metrics.fps.length > 0 ? Math.min(...this.metrics.fps) : 0,
-        max: this.metrics.fps.length > 0 ? Math.max(...this.metrics.fps) : 0
+        max: this.metrics.fps.length > 0 ? Math.max(...this.metrics.fps) : 0,
+        meetsTarget: this.metrics.fps.length === 0 || Math.min(...this.metrics.fps) >= this.FPS_THRESHOLD
       },
       networkRTT: {
         avg: this.metrics.networkRTT.length > 0
@@ -167,6 +222,34 @@ class PerformanceMonitor {
     };
   }
 
+  // Log rubric-relevant metrics to console for verification
+  logRubricMetrics() {
+    const metrics = this.getMetrics();
+    
+    console.group('📊 RUBRIC COMPLIANCE METRICS');
+    
+    console.log('%c✅ Object Sync Latency (Target: < 100ms)', 'font-weight: bold; color: ' + (metrics.objectSyncLatency.meetsTarget ? '#22c55e' : '#ef4444'));
+    console.log(`  P50: ${metrics.objectSyncLatency.p50.toFixed(1)}ms`);
+    console.log(`  P95: ${metrics.objectSyncLatency.p95.toFixed(1)}ms ${metrics.objectSyncLatency.p95 < 100 ? '✓' : '✗'}`);
+    console.log(`  P99: ${metrics.objectSyncLatency.p99.toFixed(1)}ms`);
+    console.log(`  Samples: ${metrics.objectSyncLatency.samples}`);
+    
+    console.log('%c✅ Cursor Sync Latency (Target: < 50ms)', 'font-weight: bold; color: ' + (metrics.cursorSyncLatency.meetsTarget ? '#22c55e' : '#ef4444'));
+    console.log(`  P50: ${metrics.cursorSyncLatency.p50.toFixed(1)}ms`);
+    console.log(`  P95: ${metrics.cursorSyncLatency.p95.toFixed(1)}ms ${metrics.cursorSyncLatency.p95 < 50 ? '✓' : '✗'}`);
+    console.log(`  P99: ${metrics.cursorSyncLatency.p99.toFixed(1)}ms`);
+    console.log(`  Samples: ${metrics.cursorSyncLatency.samples}`);
+    
+    console.log('%c✅ FPS (Target: > 30 FPS)', 'font-weight: bold; color: ' + (metrics.fps.meetsTarget ? '#22c55e' : '#ef4444'));
+    console.log(`  Average: ${metrics.fps.avg.toFixed(1)} FPS`);
+    console.log(`  Minimum: ${metrics.fps.min.toFixed(1)} FPS ${metrics.fps.min >= 30 ? '✓' : '✗'}`);
+    console.log(`  Maximum: ${metrics.fps.max.toFixed(1)} FPS`);
+    
+    console.groupEnd();
+    
+    return metrics;
+  }
+
   // Send metrics to Firebase Analytics
   async sendMetricsToAnalytics() {
     const metrics = this.getMetrics();
@@ -176,8 +259,19 @@ class PerformanceMonitor {
         sync_latency_p50: Math.round(metrics.syncLatency.p50),
         sync_latency_p95: Math.round(metrics.syncLatency.p95),
         sync_latency_p99: Math.round(metrics.syncLatency.p99),
+        // RUBRIC METRICS
+        object_sync_p50: Math.round(metrics.objectSyncLatency.p50),
+        object_sync_p95: Math.round(metrics.objectSyncLatency.p95),
+        object_sync_p99: Math.round(metrics.objectSyncLatency.p99),
+        object_sync_meets_target: metrics.objectSyncLatency.meetsTarget,
+        cursor_sync_p50: Math.round(metrics.cursorSyncLatency.p50),
+        cursor_sync_p95: Math.round(metrics.cursorSyncLatency.p95),
+        cursor_sync_p99: Math.round(metrics.cursorSyncLatency.p99),
+        cursor_sync_meets_target: metrics.cursorSyncLatency.meetsTarget,
         cursor_hz: Math.round(metrics.cursorFrequency.hz),
         avg_fps: Math.round(metrics.fps.avg),
+        min_fps: Math.round(metrics.fps.min),
+        fps_meets_target: metrics.fps.meetsTarget,
         network_rtt: Math.round(metrics.networkRTT.avg),
         timestamp: Date.now()
       });

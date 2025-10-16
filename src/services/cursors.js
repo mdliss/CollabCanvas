@@ -49,13 +49,17 @@ const flushCursorUpdate = () => {
   const { uid, x, y, name, color, photoURL } = pendingUpdate;
   const userRef = ref(rtdb, `${BASE}/${uid}`);
   
+  // LATENCY MEASUREMENT: Record send timestamp
+  const sendTimestamp = performance.now();
+  
   const updateData = {
     cursorX: Math.round(x),
     cursorY: Math.round(y),
     displayName: name,
     cursorColor: color,
     online: true,
-    lastSeen: serverTimestamp()
+    lastSeen: serverTimestamp(),
+    sendTimestamp // For latency measurement
   };
 
   // Add photoURL if available
@@ -98,7 +102,8 @@ export const watchCursors = (callback) => {
           y: x.cursorY,
           name: x.displayName || 'User',
           color: x.cursorColor || '#666',
-          photoURL: x.photoURL || null
+          photoURL: x.photoURL || null,
+          sendTimestamp: x.sendTimestamp || null // Pass through for latency measurement
         };
       }
     }

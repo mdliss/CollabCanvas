@@ -1,6 +1,93 @@
 import { rtdb } from "./firebase";
-import { ref, set, update, remove, onValue, get, serverTimestamp } from "firebase/database";
+import { ref, set, update, remove, onValue, get } from "firebase/database";
 import { LOCK_TTL_MS } from "../components/Canvas/constants";
+
+/**
+ * Input validation utilities for security and data integrity
+ */
+const validateShapeData = (shapeData) => {
+  // Required fields
+  if (!shapeData.type || !shapeData.id) {
+    throw new Error('Shape must have type and id');
+  }
+
+  // Valid shape types
+  const validTypes = ['rectangle', 'circle', 'line', 'text', 'triangle', 'star', 'diamond', 'hexagon', 'pentagon'];
+  if (!validTypes.includes(shapeData.type)) {
+    throw new Error(`Invalid shape type: ${shapeData.type}`);
+  }
+
+  // Validate coordinates (allow reasonable bounds)
+  if (shapeData.x !== undefined) {
+    const x = Number(shapeData.x);
+    if (!Number.isFinite(x) || x < -50000 || x > 50000) {
+      throw new Error(`Invalid x coordinate: ${shapeData.x}`);
+    }
+  }
+
+  if (shapeData.y !== undefined) {
+    const y = Number(shapeData.y);
+    if (!Number.isFinite(y) || y < -50000 || y > 50000) {
+      throw new Error(`Invalid y coordinate: ${shapeData.y}`);
+    }
+  }
+
+  // Validate dimensions
+  if (shapeData.width !== undefined) {
+    const width = Number(shapeData.width);
+    if (!Number.isFinite(width) || width < 1 || width > 100000) {
+      throw new Error(`Invalid width: ${shapeData.width}`);
+    }
+  }
+
+  if (shapeData.height !== undefined) {
+    const height = Number(shapeData.height);
+    if (!Number.isFinite(height) || height < 1 || height > 100000) {
+      throw new Error(`Invalid height: ${shapeData.height}`);
+    }
+  }
+
+  // Validate color (hex format)
+  if (shapeData.fill && typeof shapeData.fill === 'string' && shapeData.fill.startsWith('#')) {
+    const hexRegex = /^#([0-9A-F]{3}){1,2}$/i;
+    if (!hexRegex.test(shapeData.fill)) {
+      throw new Error(`Invalid color format: ${shapeData.fill}`);
+    }
+  }
+
+  // Validate rotation
+  if (shapeData.rotation !== undefined) {
+    const rotation = Number(shapeData.rotation);
+    if (!Number.isFinite(rotation)) {
+      throw new Error(`Invalid rotation: ${shapeData.rotation}`);
+    }
+  }
+
+  // Validate opacity
+  if (shapeData.opacity !== undefined) {
+    const opacity = Number(shapeData.opacity);
+    if (!Number.isFinite(opacity) || opacity < 0 || opacity > 1) {
+      throw new Error(`Invalid opacity: ${shapeData.opacity}`);
+    }
+  }
+
+  return true;
+};
+
+/**
+ * Sanitize text content to prevent XSS
+ */
+const sanitizeText = (text) => {
+  if (typeof text !== 'string') return text;
+  
+  // Remove potentially dangerous HTML/script tags
+  return text
+    .replace(/<script[^>]*>.*?<\/script>/gi, '')
+    .replace(/<iframe[^>]*>.*?<\/iframe>/gi, '')
+    .replace(/javascript:/gi, '')
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, '')
+    .trim();
+};
 
 /**
  * RTDB Canvas Service
@@ -17,7 +104,7 @@ import { LOCK_TTL_MS } from "../components/Canvas/constants";
  *       lastUpdated: timestamp
  */
 
-const getCanvasRef = (canvasId) => ref(rtdb, `canvas/${canvasId}`);
+// const getCanvasRef = (canvasId) => ref(rtdb, `canvas/${canvasId}`); // Future use
 const getShapesRef = (canvasId) => ref(rtdb, `canvas/${canvasId}/shapes`);
 const getShapeRef = (canvasId, shapeId) => ref(rtdb, `canvas/${canvasId}/shapes/${shapeId}`);
 
@@ -67,6 +154,14 @@ export const createShape = async (canvasId, shapeData, user) => {
   
   console.log('[RTDB createShape] Creating shape with ID:', shapeId);
   
+  // Validate shape data
+  try {
+    validateShapeData(shapeData);
+  } catch (error) {
+    console.error('[RTDB createShape] Validation error:', error.message);
+    throw new Error(`Invalid shape data: ${error.message}`);
+  }
+  
   // Get current shapes to calculate z-index
   const shapesRef = getShapesRef(canvasId);
   const snapshot = await get(shapesRef);
@@ -94,6 +189,11 @@ export const createShape = async (canvasId, shapeData, user) => {
     lockedBy: null,
     lockedAt: null
   };
+  
+  // Sanitize text content if it's a text shape
+  if (newShape.type === 'text' && newShape.text) {
+    newShape.text = sanitizeText(newShape.text);
+  }
   
   // Handle fill/gradient
   const hasFillProperty = 'fill' in shapeData;
@@ -134,6 +234,14 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
     timestamp: new Date().toISOString()
   });
   
+  // Validate update data
+  try {
+    validateShapeData({ ...updates, type: updates.type || 'rectangle', id: shapeId });
+  } catch (error) {
+    console.warn('[RTDB updateShape] Validation warning:', error.message);
+    // Allow update but log warning
+  }
+  
   const shapeRef = getShapeRef(canvasId, shapeId);
   
   // Add metadata
@@ -142,6 +250,11 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
     lastModifiedBy: user?.uid || 'anonymous',
     lastModifiedAt: Date.now()
   };
+  
+  // Sanitize text content if present
+  if (updateData.text) {
+    updateData.text = sanitizeText(updateData.text);
+  }
   
   console.log('📤 [canvasRTDB.js] Data to write to RTDB:', updateData);
   

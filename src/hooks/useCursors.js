@@ -51,6 +51,16 @@ export default function useCursors(stageRef) {
 
     // Watch all cursors
     const unsubscribe = watchCursors((all) => {
+      const receiveTime = performance.now();
+      
+      // LATENCY MEASUREMENT: Calculate cursor sync latency
+      Object.values(all).forEach(cursor => {
+        if (cursor.sendTimestamp && typeof window !== 'undefined' && window.performanceMonitor) {
+          const latency = receiveTime - cursor.sendTimestamp;
+          window.performanceMonitor.trackCursorSyncLatency(latency);
+        }
+      });
+      
       // Filter out current user's cursor for rendering
       const remoteCursors = { ...all };
       delete remoteCursors[uid];
