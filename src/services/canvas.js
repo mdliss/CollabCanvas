@@ -4,17 +4,18 @@ import { doc, onSnapshot, serverTimestamp, setDoc, runTransaction, getDoc, updat
 const getCanvasDoc = (canvasId) => doc(db, "canvas", canvasId);
 
 // Retry helper for handling Firestore transaction failures
-const retryTransaction = async (fn, maxRetries = 5) => {
+// Increased retries and more aggressive backoff to handle collaborative editing conflicts
+const retryTransaction = async (fn, maxRetries = 10) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
       const isRetryable = error.code === 'failed-precondition' || error.code === 'aborted';
       if (isRetryable && attempt < maxRetries) {
-        // Exponential backoff with jitter: 100ms, 200ms, 400ms, 800ms, 1600ms
-        const baseDelay = Math.pow(2, attempt - 1) * 100;
-        const jitter = Math.random() * 100; // Add 0-100ms random jitter
-        const delay = baseDelay + jitter;
+        // More aggressive exponential backoff: 50ms, 100ms, 200ms, 400ms, 800ms...
+        const baseDelay = Math.pow(2, attempt - 1) * 50;
+        const jitter = Math.random() * 50; // Add 0-50ms random jitter
+        const delay = Math.min(baseDelay + jitter, 2000); // Cap at 2 seconds
         console.log(`[Transaction] Retry ${attempt}/${maxRetries} after ${delay.toFixed(0)}ms due to ${error.code}`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
@@ -73,6 +74,7 @@ export const createShape = async (canvasId, shapeData, user) => {
       const maxZIndex = currentShapes.reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
       const zIndex = shapeData.zIndex !== undefined ? shapeData.zIndex : maxZIndex + 1;
       
+      // Build the new shape, preserving gradient properties if present
       const newShape = {
         ...shapeData, // Spread all provided shape data first
         id: shapeId,  // Then ensure ID is set correctly
@@ -81,7 +83,6 @@ export const createShape = async (canvasId, shapeData, user) => {
         y: shapeData.y !== undefined ? shapeData.y : 200,
         width: shapeData.width || 100,
         height: shapeData.height || 100,
-        fill: shapeData.fill || '#cccccc',
         zIndex: zIndex,
         createdBy: user?.uid || 'anonymous',
         createdAt: Date.now(),
@@ -91,6 +92,17 @@ export const createShape = async (canvasId, shapeData, user) => {
         lockedBy: null,
         lockedAt: null
       };
+      
+      // Only set default fill if:
+      // 1. No fill property exists in shapeData (not even undefined)
+      // 2. AND no gradient exists
+      const hasFillProperty = 'fill' in shapeData;
+      const hasGradient = shapeData.fillLinearGradientColorStops && 
+                          shapeData.fillLinearGradientColorStops.length > 0;
+      
+      if (!hasFillProperty && !hasGradient) {
+        newShape.fill = '#cccccc';
+      }
       
       if (!docSnap.exists()) {
         transaction.set(canvasRef, {

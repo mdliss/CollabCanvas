@@ -1,0 +1,290 @@
+import { rtdb } from "./firebase";
+import { ref, set, update, remove, onValue, get, serverTimestamp } from "firebase/database";
+
+/**
+ * RTDB Canvas Service
+ * 
+ * All shape data stored in RTDB for zero-conflict collaborative editing.
+ * No more transaction conflicts, no more snapping.
+ * 
+ * Structure:
+ * canvas/
+ *   {canvasId}/
+ *     shapes/
+ *       {shapeId}: { ...shape data }
+ *     metadata/
+ *       lastUpdated: timestamp
+ */
+
+const getCanvasRef = (canvasId) => ref(rtdb, `canvas/${canvasId}`);
+const getShapesRef = (canvasId) => ref(rtdb, `canvas/${canvasId}/shapes`);
+const getShapeRef = (canvasId, shapeId) => ref(rtdb, `canvas/${canvasId}/shapes/${shapeId}`);
+
+/**
+ * Subscribe to shapes changes in real-time
+ * @param {string} canvasId 
+ * @param {function} callback - Called with array of shapes
+ * @returns {function} Unsubscribe function
+ */
+export const subscribeToShapes = (canvasId, callback) => {
+  const shapesRef = getShapesRef(canvasId);
+  
+  const unsubscribe = onValue(shapesRef, (snapshot) => {
+    const shapesMap = snapshot.val() || {};
+    // Convert map to array and sort by zIndex
+    const shapes = Object.values(shapesMap).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+    callback(shapes);
+  });
+  
+  return unsubscribe;
+};
+
+/**
+ * Create a new shape
+ * @param {string} canvasId 
+ * @param {object} shapeData 
+ * @param {object} user 
+ */
+export const createShape = async (canvasId, shapeData, user) => {
+  const shapeId = shapeData.id || `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  
+  console.log('[RTDB createShape] Creating shape with ID:', shapeId);
+  
+  // Get current shapes to calculate z-index
+  const shapesRef = getShapesRef(canvasId);
+  const snapshot = await get(shapesRef);
+  const currentShapes = snapshot.val() || {};
+  
+  // Calculate z-index
+  const maxZIndex = Object.values(currentShapes).reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+  const zIndex = shapeData.zIndex !== undefined ? shapeData.zIndex : maxZIndex + 1;
+  
+  // Build the new shape
+  const newShape = {
+    ...shapeData,
+    id: shapeId,
+    type: shapeData.type || 'rectangle',
+    x: shapeData.x !== undefined ? shapeData.x : 200,
+    y: shapeData.y !== undefined ? shapeData.y : 200,
+    width: shapeData.width || 100,
+    height: shapeData.height || 100,
+    zIndex: zIndex,
+    createdBy: user?.uid || 'anonymous',
+    createdAt: Date.now(),
+    lastModifiedBy: user?.uid || 'anonymous',
+    lastModifiedAt: Date.now(),
+    isLocked: false,
+    lockedBy: null,
+    lockedAt: null
+  };
+  
+  // Handle fill/gradient
+  const hasFillProperty = 'fill' in shapeData;
+  const hasGradient = shapeData.fillLinearGradientColorStops && 
+                      shapeData.fillLinearGradientColorStops.length > 0;
+  
+  if (!hasFillProperty && !hasGradient) {
+    newShape.fill = '#cccccc';
+  }
+  
+  // Write to RTDB - atomic operation, no conflicts!
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  await set(shapeRef, newShape);
+  
+  // Update metadata
+  const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
+  await set(metadataRef, Date.now());
+  
+  console.log('[RTDB createShape] Shape created successfully:', shapeId);
+};
+
+/**
+ * Update a shape
+ * @param {string} canvasId 
+ * @param {string} shapeId 
+ * @param {object} updates 
+ * @param {object} user 
+ */
+export const updateShape = async (canvasId, shapeId, updates, user) => {
+  console.log('[RTDB updateShape] Updating shape:', shapeId, updates);
+  
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  
+  // Add metadata
+  const updateData = {
+    ...updates,
+    lastModifiedBy: user?.uid || 'anonymous',
+    lastModifiedAt: Date.now()
+  };
+  
+  // Handle undefined values (delete them)
+  Object.keys(updateData).forEach(key => {
+    if (updateData[key] === undefined) {
+      updateData[key] = null; // RTDB uses null to delete
+    }
+  });
+  
+  // Atomic update - no conflicts!
+  await update(shapeRef, updateData);
+  
+  // Update metadata
+  const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
+  await set(metadataRef, Date.now());
+  
+  console.log('[RTDB updateShape] Shape updated successfully:', shapeId);
+};
+
+/**
+ * Delete a shape
+ * @param {string} canvasId 
+ * @param {string} shapeId 
+ * @param {object} user 
+ */
+export const deleteShape = async (canvasId, shapeId, user) => {
+  console.log('[RTDB deleteShape] Deleting shape:', shapeId);
+  
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  await remove(shapeRef);
+  
+  // Update metadata
+  const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
+  await set(metadataRef, Date.now());
+  
+  console.log('[RTDB deleteShape] Shape deleted successfully:', shapeId);
+};
+
+/**
+ * Try to lock a shape
+ * @param {string} canvasId 
+ * @param {string} shapeId 
+ * @param {object} user 
+ * @returns {Promise<boolean>} True if lock acquired
+ */
+export const tryLockShape = async (canvasId, shapeId, user) => {
+  if (!user?.uid) return false;
+  
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  const snapshot = await get(shapeRef);
+  
+  if (!snapshot.exists()) {
+    console.warn('[RTDB tryLockShape] Shape not found:', shapeId);
+    return false;
+  }
+  
+  const shape = snapshot.val();
+  
+  // Check if already locked by someone else
+  if (shape.isLocked && shape.lockedBy && shape.lockedBy !== user.uid) {
+    // Check if lock is stale (> 30 seconds)
+    const lockAge = Date.now() - (shape.lockedAt || 0);
+    if (lockAge < 30000) {
+      console.log('[RTDB tryLockShape] Shape locked by another user:', shape.lockedBy);
+      return false;
+    }
+    console.log('[RTDB tryLockShape] Stealing stale lock from:', shape.lockedBy);
+  }
+  
+  // Acquire lock
+  await update(shapeRef, {
+    isLocked: true,
+    lockedBy: user.uid,
+    lockedAt: Date.now()
+  });
+  
+  console.log('[RTDB tryLockShape] Lock acquired:', shapeId);
+  return true;
+};
+
+/**
+ * Unlock a shape
+ * @param {string} canvasId 
+ * @param {string} shapeId 
+ * @param {string} uid 
+ */
+export const unlockShape = async (canvasId, shapeId, uid) => {
+  if (!uid) return;
+  
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  const snapshot = await get(shapeRef);
+  
+  if (!snapshot.exists()) return;
+  
+  const shape = snapshot.val();
+  
+  // Only unlock if we own the lock
+  if (shape.lockedBy === uid) {
+    await update(shapeRef, {
+      isLocked: false,
+      lockedBy: null,
+      lockedAt: null
+    });
+    console.log('[RTDB unlockShape] Lock released:', shapeId);
+  }
+};
+
+/**
+ * Bring shape to front (max z-index)
+ */
+export const bringToFront = async (canvasId, shapeId, user) => {
+  const shapesRef = getShapesRef(canvasId);
+  const snapshot = await get(shapesRef);
+  const shapes = snapshot.val() || {};
+  
+  const maxZIndex = Object.values(shapes).reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+  
+  await updateShape(canvasId, shapeId, { zIndex: maxZIndex + 1 }, user);
+};
+
+/**
+ * Send shape to back (min z-index)
+ */
+export const sendToBack = async (canvasId, shapeId, user) => {
+  const shapesRef = getShapesRef(canvasId);
+  const snapshot = await get(shapesRef);
+  const shapes = snapshot.val() || {};
+  
+  const minZIndex = Object.values(shapes).reduce((min, s) => Math.min(min, s.zIndex || 0), 0);
+  
+  await updateShape(canvasId, shapeId, { zIndex: minZIndex - 1 }, user);
+};
+
+/**
+ * Bring shape forward (z-index + 1)
+ */
+export const bringForward = async (canvasId, shapeId, user) => {
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  const snapshot = await get(shapeRef);
+  
+  if (snapshot.exists()) {
+    const shape = snapshot.val();
+    await updateShape(canvasId, shapeId, { zIndex: (shape.zIndex || 0) + 1 }, user);
+  }
+};
+
+/**
+ * Send shape backward (z-index - 1)
+ */
+export const sendBackward = async (canvasId, shapeId, user) => {
+  const shapeRef = getShapeRef(canvasId, shapeId);
+  const snapshot = await get(shapeRef);
+  
+  if (snapshot.exists()) {
+    const shape = snapshot.val();
+    await updateShape(canvasId, shapeId, { zIndex: (shape.zIndex || 0) - 1 }, user);
+  }
+};
+
+/**
+ * Delete all shapes (DANGEROUS - use carefully)
+ */
+export const deleteAllShapes = async (canvasId, user) => {
+  console.warn('[RTDB deleteAllShapes] Deleting ALL shapes from canvas:', canvasId);
+  
+  const shapesRef = getShapesRef(canvasId);
+  await remove(shapesRef);
+  
+  // Update metadata
+  const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
+  await set(metadataRef, Date.now());
+};
+

@@ -350,13 +350,13 @@ export default function HelpMenu({ isVisible, onClose }) {
           
           <div style={styles.item}>
             <span style={styles.desc}>
-              <strong>Pan:</strong> Hold Space and drag to move around the 10,000×10,000 canvas
+              <strong>Pan:</strong> Hold Space and drag to move around the 30,000×30,000 canvas
             </span>
           </div>
           
           <div style={styles.item}>
             <span style={styles.desc}>
-              <strong>Zoom:</strong> Scroll to zoom in/out (0.05× to 3× range)
+              <strong>Zoom:</strong> Scroll to zoom in/out (0.01× to 5× range)
             </span>
           </div>
           

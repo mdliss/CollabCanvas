@@ -486,6 +486,11 @@ export default function ShapeRenderer({
         );
       
       case 'text':
+        // Check if text has a gradient - don't apply default fill if it does
+        const hasGradient = shape.fillLinearGradientColorStops && 
+                           shape.fillLinearGradientColorStops.length > 0;
+        const textFill = hasGradient ? shape.fill : (shape.fill || '#000000');
+        
         return (
           <Text
             {...commonProps}
@@ -499,7 +504,7 @@ export default function ShapeRenderer({
             textDecoration={shape.textDecoration || ''}
             align={shape.align || 'left'}
             lineHeight={shape.lineHeight || 1.2}
-            fill={shape.fill || '#000000'}
+            fill={textFill}
             fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
             fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
             fillLinearGradientColorStops={shape.fillLinearGradientColorStops}

@@ -1,7 +1,7 @@
 import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvas";
+import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvasRTDB";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
 import ShapeToolbar from "./ShapeToolbar";
@@ -121,56 +121,19 @@ export default function Canvas() {
   }, [stageScale, stagePos]);
 
   useEffect(() => {
-    let unsub = () => {};
-    (async () => {
-      unsub = await subscribeToShapes(CANVAS_ID, async (newShapes) => {
-        console.log('[Canvas] Shapes updated from Firestore. Count:', newShapes.length);
-        console.log('[Canvas] Current undo stack size:', window.undoManager?.undoStack?.length || 0);
-        
-        // Only fix circles with exponentially grown sizes (width > 10000 is definitely a bug)
-        const fixPromises = [];
-        const sanitizedShapes = newShapes.map(shape => {
-          if (shape.type === 'circle' && shape.width > 10000) {
-            console.warn('[Canvas] Fixing corrupted circle size:', {
-              id: shape.id,
-              oldWidth: shape.width,
-              newWidth: 100
-            });
-            
-            // Fix in Firestore
-            if (user) {
-              fixPromises.push(
-                updateShape(CANVAS_ID, shape.id, { width: 100, height: 100 }, user)
-                  .catch(err => console.error('[Canvas] Failed to fix corrupted circle:', err))
-              );
-            }
-            
-            // Fix in local state
-            return {
-              ...shape,
-              width: 100,
-              height: 100
-            };
-          }
-          return shape;
-        });
-        
-        // Save fixes to Firestore (don't wait, do it in background)
-        if (fixPromises.length > 0) {
-          Promise.all(fixPromises).then(() => {
-            console.log('[Canvas] Successfully fixed', fixPromises.length, 'corrupted circles in Firestore');
-          });
-        }
-        
-        setShapes(sanitizedShapes);
-      });
-    })();
+    if (!user) return;
+    
+    console.log('[Canvas] Subscribing to RTDB shapes...');
+    
+    // Subscribe to RTDB - no conflicts, no snapping!
+    const unsub = subscribeToShapes(CANVAS_ID, (newShapes) => {
+      console.log('[Canvas] RTDB shapes updated. Count:', newShapes.length);
+      setShapes(newShapes);
+    });
+    
     return () => { 
-      try { 
-        unsub && unsub(); 
-      } catch (error) {
-        console.error("[Canvas] Unsubscribe error:", error);
-      } 
+      console.log('[Canvas] Unsubscribing from RTDB shapes');
+      unsub();
     };
   }, [user]);
 
@@ -637,16 +600,16 @@ export default function Canvas() {
         // Set diameter as width/height (radius = 50)
         shapeData.width = 100;
         shapeData.height = 100;
-        // Position circle center within canvas bounds (accounting for radius)
-        const circleRadius = shapeData.width / 2;
-        shapeData.x = Math.max(circleRadius, Math.min(centerX, CANVAS_WIDTH - circleRadius));
-        shapeData.y = Math.max(circleRadius, Math.min(centerY, CANVAS_HEIGHT - circleRadius));
+        // NO CLAMPING - place at cursor position
+        shapeData.x = centerX;
+        shapeData.y = centerY;
         break;
       case 'line':
         shapeData.width = 200;
         shapeData.height = 0;
-        shapeData.x = Math.max(0, Math.min(centerX - 100, CANVAS_WIDTH - 200));
-        shapeData.y = Math.max(0, Math.min(centerY, CANVAS_HEIGHT));
+        // NO CLAMPING - place at cursor position
+        shapeData.x = centerX - 100;
+        shapeData.y = centerY;
         break;
       case 'text':
         shapeData.text = 'Text';
@@ -654,27 +617,31 @@ export default function Canvas() {
         shapeData.fill = '#000000';
         shapeData.width = 200;
         shapeData.height = 30;
-        shapeData.x = Math.max(0, Math.min(centerX - 100, CANVAS_WIDTH - 200));
-        shapeData.y = Math.max(0, Math.min(centerY - 15, CANVAS_HEIGHT - 30));
+        // NO CLAMPING - place at cursor position
+        shapeData.x = centerX - 100;
+        shapeData.y = centerY - 15;
         break;
       case 'triangle':
         shapeData.width = 100;
         shapeData.height = 100;
-        shapeData.x = Math.max(50, Math.min(centerX, CANVAS_WIDTH - 50));
-        shapeData.y = Math.max(50, Math.min(centerY, CANVAS_HEIGHT - 50));
+        // NO CLAMPING - place at cursor position
+        shapeData.x = centerX;
+        shapeData.y = centerY;
         break;
       case 'star':
         shapeData.width = 80;
         shapeData.height = 80;
-        shapeData.x = Math.max(40, Math.min(centerX, CANVAS_WIDTH - 40));
-        shapeData.y = Math.max(40, Math.min(centerY, CANVAS_HEIGHT - 40));
+        // NO CLAMPING - place at cursor position
+        shapeData.x = centerX;
+        shapeData.y = centerY;
         break;
       case 'rectangle':
       default:
         shapeData.width = 100;
         shapeData.height = 100;
-        shapeData.x = Math.max(0, Math.min(centerX - 50, CANVAS_WIDTH - 100));
-        shapeData.y = Math.max(0, Math.min(centerY - 50, CANVAS_HEIGHT - 100));
+        // NO CLAMPING - place at cursor position
+        shapeData.x = centerX - 50;
+        shapeData.y = centerY - 50;
         break;
     }
     
@@ -704,7 +671,7 @@ export default function Canvas() {
     const newScale = e.evt.deltaY > 0 
       ? stageScale / scaleBy 
       : stageScale * scaleBy;
-    const clampedScale = Math.max(0.05, Math.min(3, newScale));
+    const clampedScale = Math.max(0.01, Math.min(5, newScale)); // Allow 0.01x to 5x zoom
     
     const mousePointTo = {
       x: (pointer.x - stagePos.x) / stageScale,
@@ -721,27 +688,9 @@ export default function Canvas() {
   };
 
   const clampStagePos = (pos) => {
-    const scaledCanvasWidth = CANVAS_WIDTH * stageScale;
-    const scaledCanvasHeight = CANVAS_HEIGHT * stageScale;
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight - 50;
-    
-    let clampedX = pos.x;
-    let clampedY = pos.y;
-    
-    if (scaledCanvasWidth > viewportWidth) {
-      const minX = -(scaledCanvasWidth - viewportWidth);
-      const maxX = 0;
-      clampedX = Math.max(minX, Math.min(maxX, pos.x));
-    }
-    
-    if (scaledCanvasHeight > viewportHeight) {
-      const minY = -(scaledCanvasHeight - viewportHeight);
-      const maxY = 0;
-      clampedY = Math.max(minY, Math.min(maxY, pos.y));
-    }
-    
-    return { x: clampedX, y: clampedY };
+    // NO CLAMPING - infinite panning!
+    // Users can pan anywhere without restrictions
+    return pos;
   };
 
   const handleShapeDragStart = (shapeId) => {
@@ -872,11 +821,9 @@ export default function Canvas() {
 
   const handleRequestLock = async (shapeId) => {
     if (!user?.uid) return false;
-    const acquired = await tryLockShape(CANVAS_ID, shapeId, user.uid, LOCK_TTL_MS);
+    const acquired = await tryLockShape(CANVAS_ID, shapeId, user);
     
-    if (import.meta.env.VITE_DEBUG) {
-      console.debug('[Canvas] lock', shapeId, acquired ? 'acquired' : 'blocked');
-    }
+    console.log('[Canvas] Lock request for', shapeId, '→', acquired ? '✅ ACQUIRED' : '❌ BLOCKED');
     
     return acquired;
   };
@@ -1044,26 +991,67 @@ export default function Canvas() {
         
         try {
           // Calculate gradient direction based on angle (in degrees)
-          // Konva expects actual pixel coordinates relative to shape
+          // Konva expects actual pixel coordinates relative to shape's bounding box
           // 0° = up, 90° = right, 180° = down, 270° = left
           const angleRad = ((gradient.angle - 90) * Math.PI) / 180; // Adjust so 0° is up
           const width = shape.width || 100;
           const height = shape.height || 100;
           
-          // Calculate start and end points for the gradient
-          const centerX = width / 2;
-          const centerY = height / 2;
-          const radius = Math.sqrt(centerX * centerX + centerY * centerY);
+          // Calculate gradient start and end points based on shape type
+          // Different shapes have different coordinate systems in Konva
+          let startPoint, endPoint, centerX, centerY, radius;
           
-          const startPoint = {
-            x: centerX - radius * Math.cos(angleRad),
-            y: centerY - radius * Math.sin(angleRad)
-          };
-          
-          const endPoint = {
-            x: centerX + radius * Math.cos(angleRad),
-            y: centerY + radius * Math.sin(angleRad)
-          };
+          if (shape.type === 'circle') {
+            // For circles: gradient coordinates are relative to bounding box
+            // Bounding box is 2r × 2r with top-left at (x-r, y-r)
+            // Circle center is at (r, r) in bounding box coordinates
+            const circleRadius = width / 2; // width is diameter for circles
+            centerX = circleRadius;
+            centerY = circleRadius;
+            radius = circleRadius; // Use circle radius for gradient span
+            
+            startPoint = {
+              x: centerX - radius * Math.cos(angleRad),
+              y: centerY - radius * Math.sin(angleRad)
+            };
+            
+            endPoint = {
+              x: centerX + radius * Math.cos(angleRad),
+              y: centerY + radius * Math.sin(angleRad)
+            };
+          } else if (shape.type === 'star' || shape.type === 'triangle') {
+            // For stars and triangles: also center-based
+            // Use half the diagonal distance for gradient span
+            centerX = width / 2;
+            centerY = height / 2;
+            radius = Math.sqrt(centerX * centerX + centerY * centerY);
+            
+            startPoint = {
+              x: centerX - radius * Math.cos(angleRad),
+              y: centerY - radius * Math.sin(angleRad)
+            };
+            
+            endPoint = {
+              x: centerX + radius * Math.cos(angleRad),
+              y: centerY + radius * Math.sin(angleRad)
+            };
+          } else {
+            // For rectangles, diamonds, text: top-left based
+            // Gradient spans from one corner to opposite corner based on angle
+            centerX = width / 2;
+            centerY = height / 2;
+            radius = Math.sqrt(centerX * centerX + centerY * centerY);
+            
+            startPoint = {
+              x: centerX - radius * Math.cos(angleRad),
+              y: centerY - radius * Math.sin(angleRad)
+            };
+            
+            endPoint = {
+              x: centerX + radius * Math.cos(angleRad),
+              y: centerY + radius * Math.sin(angleRad)
+            };
+          }
           
           // Build update object
           const updates = {
@@ -1281,7 +1269,7 @@ export default function Canvas() {
       if (shape.isLocked) {
         await unlockShape(CANVAS_ID, shapeId, user.uid);
       } else {
-        await tryLockShape(CANVAS_ID, shapeId, user.uid, LOCK_TTL_MS);
+        await tryLockShape(CANVAS_ID, shapeId, user);
       }
     } catch (error) {
       console.error('[ToggleLock] Failed:', error);
@@ -1896,9 +1884,13 @@ export default function Canvas() {
   }, [selectedIds]);
 
   useEffect(() => {
-    // Only run staleLockSweeper if we have a user
-    // Run infrequently to avoid transaction conflicts with multiple users
-    if (!user?.uid) return;
+    // DISABLED: staleLockSweeper to eliminate transaction conflicts
+    // The sweeper was causing frequent Firestore conflicts during collaborative editing
+    // Locks will naturally expire after LOCK_TTL_MS (30 seconds)
+    // This eliminates the "snapping" behavior users experience
+    
+    // Keep the code here for reference but don't run it
+    if (!user?.uid || true) return; // Force disabled with || true
     
     // Stagger the sweeper based on user ID to reduce conflicts
     // Each user gets a different offset (0-20 seconds) based on their UID hash
@@ -2355,7 +2347,7 @@ export default function Canvas() {
                 onTransformEnd={handleShapeTransformEnd}
                 onTextUpdate={handleTextUpdate}
                 onContextMenu={handleContextMenu}
-                onDragBoundUpdate={setDragDebugInfo}
+                onDragBoundUpdate={isDraggedByOther ? null : setDragDebugInfo}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />
