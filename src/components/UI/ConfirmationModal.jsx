@@ -30,8 +30,8 @@ export default function ConfirmationModal({
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.7)',
-      backdropFilter: 'blur(4px)',
+      backgroundColor: 'rgba(0, 0, 0, 0.4)',
+      backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -39,37 +39,38 @@ export default function ConfirmationModal({
       animation: 'fadeIn 0.2s ease'
     },
     modal: {
-      background: 'linear-gradient(135deg, rgba(30, 30, 40, 0.98) 0%, rgba(20, 20, 30, 0.98) 100%)',
-      borderRadius: '16px',
-      padding: '32px',
-      maxWidth: '400px',
+      backgroundColor: '#ffffff',
+      borderRadius: '12px',
+      padding: '28px 32px',
+      maxWidth: '420px',
       width: '90%',
-      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1)',
-      animation: 'slideUp 0.3s ease',
+      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.08)',
+      border: '1px solid #e5e7eb',
+      animation: 'slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     },
     title: {
-      fontSize: '20px',
+      fontSize: '18px',
       fontWeight: '600',
-      color: '#ffffff',
+      color: '#111827',
       marginBottom: '12px',
       textAlign: 'center'
     },
     message: {
       fontSize: '14px',
-      color: '#cbd5e1',
-      marginBottom: '28px',
+      color: '#6b7280',
+      marginBottom: '24px',
       textAlign: 'center',
-      lineHeight: '1.5'
+      lineHeight: '1.6'
     },
     buttonContainer: {
       display: 'flex',
-      gap: '12px',
+      gap: '10px',
       justifyContent: 'center'
     },
     button: {
-      padding: '12px 24px',
-      borderRadius: '10px',
+      padding: '11px 24px',
+      borderRadius: '8px',
       border: 'none',
       fontSize: '14px',
       fontWeight: '600',
@@ -78,21 +79,20 @@ export default function ConfirmationModal({
       alignItems: 'center',
       gap: '8px',
       transition: 'all 0.2s ease',
-      minWidth: '120px',
-      justifyContent: 'center'
+      minWidth: '130px',
+      justifyContent: 'center',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
     },
     confirmButton: {
-      background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-      color: '#ffffff',
-      boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+      backgroundColor: '#10b981',
+      color: '#ffffff'
     },
     cancelButton: {
-      background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
-      color: '#ffffff',
-      boxShadow: '0 4px 12px rgba(239, 68, 68, 0.3)'
+      backgroundColor: '#ef4444',
+      color: '#ffffff'
     },
     icon: {
-      fontSize: '18px',
+      fontSize: '16px',
       lineHeight: 1
     }
   };
@@ -141,12 +141,12 @@ export default function ConfirmationModal({
             }}
             onClick={onCancel}
             onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'scale(1.05)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(239, 68, 68, 0.4)';
+              e.currentTarget.style.backgroundColor = '#dc2626';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.25)';
             }}
             onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(239, 68, 68, 0.3)';
+              e.currentTarget.style.backgroundColor = '#ef4444';
+              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
             }}
           >
             <span style={styles.icon}>✕</span>
@@ -159,12 +159,12 @@ export default function ConfirmationModal({
             }}
             onClick={onConfirm}
             onMouseOver={(e) => {
-              e.currentTarget.style.transform = 'scale(1.05)';
-              e.currentTarget.style.boxShadow = '0 6px 16px rgba(16, 185, 129, 0.4)';
+              e.currentTarget.style.backgroundColor = '#059669';
+              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.25)';
             }}
             onMouseOut={(e) => {
-              e.currentTarget.style.transform = 'scale(1)';
-              e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.3)';
+              e.currentTarget.style.backgroundColor = '#10b981';
+              e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)';
             }}
           >
             <span style={styles.icon}>✓</span>
