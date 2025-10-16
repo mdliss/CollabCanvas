@@ -1,0 +1,125 @@
+.
+├── _ai
+│   ├── CODEPACK.txt
+│   ├── files.list
+│   └── TREE.txt
+├── .env
+├── .firebase
+│   └── hosting.ZGlzdA.cache
+├── .firebaserc
+├── .gitignore
+├── architecture.md
+├── CHECKPOINT_ISSUE_RESOLUTION.md
+├── CONFLICT_RESOLUTION_STRATEGY.md
+├── COPY_PASTE_FEATURE.md
+├── COPY_PASTE_UNDO_FIX.md
+├── database.rules.json
+├── DEPLOYMENT_CHECKLIST.md
+├── docs
+│   ├── ARCHITECTURE_REFACTOR_PLAN.md
+│   ├── BATCHING_GUIDE.md
+│   ├── HISTORY_FEATURES.md
+│   └── OFFLINE_MODE.md
+├── DRAG_REFACTOR_COMPLETE.md
+├── DRAG_SYNC_FIX.md
+├── ERROR_BOUNDARY.md
+├── eslint.config.js
+├── FEATURES_COMPLETE_drag_persistence_ux.md
+├── FEATURES_IMPLEMENTED.md
+├── firebase.json
+├── firestore.rules
+├── HISTORY_FEATURES_SUMMARY.md
+├── HISTORY_FIXES.md
+├── IMPLEMENTATION_COMPLETE_SUMMARY.md
+├── IMPLEMENTATION_drag_persistence_and_ux.md
+├── IMPLEMENTATION_DRAG_REFACTOR.md
+├── IMPLEMENTATION_SUMMARY_RUBRIC.md
+├── index.html
+├── KEYBOARD_SHORTCUTS.md
+├── LAYER_ORDERING_ENHANCEMENTS.md
+├── LAYERS_TOOLBAR_REVAMP.md
+├── MASTER_IMPLEMENTATION_COMPLETE.md
+├── OFFLINE_IMPLEMENTATION_SUMMARY.md
+├── package-lock.json
+├── package.json
+├── PERFORMANCE_BENCHMARK.md
+├── PRD.md
+├── prd2.md
+├── public
+│   └── vite.svg
+├── QUICK_START_RUBRIC_VERIFICATION.md
+├── README.md
+├── ROOT_CAUSE_drag_persistence_and_flutter.md
+├── RUBRIC_COMPLIANCE_COMPLETE.md
+├── RUBRIC_COMPLIANCE_IMPLEMENTATION_PLAN.md
+├── src
+│   ├── App.css
+│   ├── App.jsx
+│   ├── assets
+│   │   └── react.svg
+│   ├── components
+│   │   ├── Auth
+│   │   │   ├── AuthBar.jsx
+│   │   │   ├── EmailLoginModal.jsx
+│   │   │   └── Login.jsx
+│   │   ├── Canvas
+│   │   │   ├── Canvas.jsx
+│   │   │   ├── CanvasControls.jsx
+│   │   │   ├── ColorPalette.jsx
+│   │   │   ├── constants.js
+│   │   │   ├── DebugNote.jsx
+│   │   │   ├── Shape.jsx
+│   │   │   ├── ShapeRenderer.jsx
+│   │   │   └── ShapeToolbar.jsx
+│   │   ├── Collaboration
+│   │   │   ├── Avatar.jsx
+│   │   │   ├── Cursor.jsx
+│   │   │   ├── PresenceList.jsx
+│   │   │   └── SelectionBadge.jsx
+│   │   └── UI
+│   │       ├── ColorPicker.jsx
+│   │       ├── ConfirmationModal.jsx
+│   │       ├── ConnectionStatus.jsx
+│   │       ├── ErrorBoundary.jsx
+│   │       ├── GradientPicker.jsx
+│   │       ├── HelpMenu.jsx
+│   │       ├── HistoryTimeline.jsx
+│   │       ├── LayersPanel.jsx
+│   │       ├── PerformanceMonitor.jsx
+│   │       └── TextFormattingToolbar.jsx
+│   ├── contexts
+│   │   ├── AuthContext.jsx
+│   │   └── UndoContext.jsx
+│   ├── hooks
+│   │   ├── useColorHistory.js
+│   │   ├── useCursors.js
+│   │   ├── useDragStreams.js
+│   │   ├── usePerformance.js
+│   │   ├── usePresence.js
+│   │   └── useUserProfile.js
+│   ├── index.css
+│   ├── main.jsx
+│   ├── services
+│   │   ├── canvasRTDB.js
+│   │   ├── cursors.js
+│   │   ├── dragStream.js
+│   │   ├── firebase.js
+│   │   ├── offline.js
+│   │   ├── performance.js
+│   │   ├── presence.js
+│   │   ├── profilePicture.js
+│   │   ├── selection.js
+│   │   ├── undo.js
+│   │   └── userProfile.js
+│   └── utils
+│       ├── commands.js
+│       └── geometry.js
+├── storage.rules
+├── tasks.md
+├── tasks2.md
+├── TESTING_GUIDE_drag_persistence_flutter.md
+├── VERIFICATION_COMPLETE.md
+├── vite.config.js
+└── ZINDEX_LAYER_ORDERING.md
+
+16 directories, 107 files

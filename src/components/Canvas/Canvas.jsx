@@ -30,6 +30,7 @@ import { shapeIntersectsBox } from "../../utils/geometry";
 import { ref, remove, onValue } from "firebase/database";
 import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
+import AICanvas from "../AI/AICanvas";
 
 const CANVAS_ID = "global-canvas-v1";
 const GRID_SIZE = 50;
@@ -2317,6 +2318,9 @@ export default function Canvas() {
           <circle cx="12" cy="12" r="2" fill="#374151" />
         </svg>
       </button>
+
+      {/* AI Canvas Assistant */}
+      <AICanvas />
     </div>
   );
 }
