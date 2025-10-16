@@ -330,11 +330,33 @@ export default function Canvas() {
       if (e.shiftKey && selectedIds.length > 0) {
         if (e.key === '[') {
           e.preventDefault();
-          await handleSendBackward();
+          // Send backward - use selected shapes
+          try {
+            for (const id of selectedIds) {
+              await sendBackward(CANVAS_ID, id, user);
+            }
+            const message = selectedIds.length > 1 
+              ? `Sent ${selectedIds.length} shapes backward` 
+              : 'Sent backward';
+            showFeedback(message);
+          } catch (error) {
+            console.error('[SendBackward] Failed:', error);
+          }
           return;
         } else if (e.key === ']') {
           e.preventDefault();
-          await handleBringForward();
+          // Bring forward - use selected shapes
+          try {
+            for (const id of selectedIds) {
+              await bringForward(CANVAS_ID, id, user);
+            }
+            const message = selectedIds.length > 1 
+              ? `Brought ${selectedIds.length} shapes forward` 
+              : 'Brought forward';
+            showFeedback(message);
+          } catch (error) {
+            console.error('[BringForward] Failed:', error);
+          }
           return;
         }
       }
@@ -394,7 +416,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo]);
+  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes]);
 
   const handleAddShape = async (type) => {
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
@@ -1049,6 +1071,69 @@ export default function Canvas() {
     }
   };
 
+  const handleDuplicate = async () => {
+    if (!user || selectedIds.length === 0) return;
+    
+    const shapesToDuplicate = selectedIds
+      .map(id => shapes.find(s => s.id === id))
+      .filter(Boolean);
+    
+    if (shapesToDuplicate.length === 0) return;
+    
+    const shouldBatch = shapesToDuplicate.length > 1;
+    if (shouldBatch) {
+      startBatch(`Duplicated ${shapesToDuplicate.length} shapes`);
+    }
+    
+    try {
+      const duplicatedIds = [];
+      const DUPLICATE_OFFSET = 20;
+      
+      for (const shapeToDuplicate of shapesToDuplicate) {
+        // Create a new shape with a new ID and offset position
+        const newShape = {
+          ...shapeToDuplicate,
+          id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          x: shapeToDuplicate.x + DUPLICATE_OFFSET,
+          y: shapeToDuplicate.y + DUPLICATE_OFFSET,
+          createdAt: Date.now(),
+          createdBy: user?.uid || 'anonymous',
+          isLocked: false,
+          lockedBy: null,
+          lockedAt: null
+        };
+        
+        const command = new CreateShapeCommand(
+          CANVAS_ID,
+          newShape,
+          user,
+          createShape,
+          deleteShape
+        );
+        
+        await execute(command, user);
+        duplicatedIds.push(newShape.id);
+      }
+      
+      // Select the duplicated shapes
+      selectedIds.forEach(id => clearSelection(id));
+      setSelectedIds(duplicatedIds);
+      duplicatedIds.forEach(id => {
+        if (user?.uid) {
+          const name = user.displayName || user.email?.split('@')[0] || 'User';
+          const color = generateUserColor(user.uid);
+          setSelection(id, user.uid, name, color);
+        }
+      });
+      
+      showFeedback(`Duplicated ${duplicatedIds.length} shape${duplicatedIds.length > 1 ? 's' : ''}`);
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
+    }
+  };
+
   const handleStageMouseDown = (e) => {
     if (e.target !== e.target.getStage()) {
       return;
@@ -1339,8 +1424,6 @@ export default function Canvas() {
           selectedIds={selectedIds}
           onSelect={handleShapeSelect}
           onRename={handleLayerRename}
-          onToggleVisibility={handleToggleVisibility}
-          onToggleLock={handleToggleLock}
           onBringToFront={handleBringToFront}
           onSendToBack={handleSendToBack}
           onBringForward={handleBringForward}
@@ -1397,6 +1480,7 @@ export default function Canvas() {
         onSendToBack={handleSendToBack}
         onBringForward={handleBringForward}
         onSendBackward={handleSendBackward}
+        onDuplicate={handleDuplicate}
         hasSelection={selectedIds.length > 0}
       />
       

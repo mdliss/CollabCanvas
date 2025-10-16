@@ -5,8 +5,6 @@ export default function LayersPanel({
   selectedIds,
   onSelect,
   onRename,
-  onToggleVisibility,
-  onToggleLock,
   onBringToFront,
   onSendToBack,
   onBringForward,
@@ -17,29 +15,17 @@ export default function LayersPanel({
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
-  const [expandedMenuId, setExpandedMenuId] = useState(null);
+  const [checkedIds, setCheckedIds] = useState([]);
   const panelRef = useRef(null);
-
-  // Close menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (expandedMenuId && panelRef.current && !panelRef.current.contains(e.target)) {
-        setExpandedMenuId(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [expandedMenuId]);
 
   const filteredShapes = shapes.filter(shape => {
     const name = shape.name || shape.type;
     return name.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
-  // Sort by z-index or creation time
+  // Sort by z-index descending (top to bottom in visual stacking order)
   const sortedShapes = [...filteredShapes].sort((a, b) => {
-    return (b.zIndex || 0) - (a.zIndex || 0) || b.createdAt - a.createdAt;
+    return (b.zIndex || 0) - (a.zIndex || 0);
   });
 
   const handleStartRename = (shape) => {
@@ -58,6 +44,30 @@ export default function LayersPanel({
   const handleCancelRename = () => {
     setEditingId(null);
     setEditingName('');
+  };
+
+  const handleCheckboxChange = (shapeId, isChecked) => {
+    if (isChecked) {
+      setCheckedIds(prev => [...prev, shapeId]);
+    } else {
+      setCheckedIds(prev => prev.filter(id => id !== shapeId));
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (checkedIds.length === sortedShapes.length) {
+      setCheckedIds([]);
+    } else {
+      setCheckedIds(sortedShapes.map(s => s.id));
+    }
+  };
+
+  const handleBatchOperation = async (operation) => {
+    if (checkedIds.length === 0) return;
+    
+    for (const id of checkedIds) {
+      await operation(id);
+    }
   };
 
   const getShapeIcon = (type) => {
@@ -140,6 +150,48 @@ export default function LayersPanel({
       fontSize: '13px',
       outline: 'none'
     },
+    batchControls: {
+      padding: '12px 16px',
+      borderBottom: '1px solid #374151',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px'
+    },
+    selectAllRow: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      marginBottom: '4px'
+    },
+    checkbox: {
+      width: '18px',
+      height: '18px',
+      cursor: 'pointer',
+      accentColor: '#60a5fa'
+    },
+    batchButtonsRow: {
+      display: 'flex',
+      gap: '6px',
+      flexWrap: 'wrap'
+    },
+    batchButton: {
+      flex: 1,
+      minWidth: '70px',
+      padding: '6px 10px',
+      fontSize: '11px',
+      fontWeight: '500',
+      border: 'none',
+      borderRadius: '6px',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      color: '#fff',
+      backgroundColor: '#3b82f6',
+      opacity: 1
+    },
+    batchButtonDisabled: {
+      opacity: 0.5,
+      cursor: 'not-allowed'
+    },
     list: {
       flex: 1,
       overflowY: 'auto',
@@ -160,9 +212,8 @@ export default function LayersPanel({
       backgroundColor: '#3b82f6',
       boxShadow: '0 0 0 2px #60a5fa'
     },
-    layerItemLocked: {
-      opacity: 0.6,
-      cursor: 'not-allowed'
+    layerItemChecked: {
+      backgroundColor: '#1e40af'
     },
     icon: {
       fontSize: '18px',
@@ -190,22 +241,13 @@ export default function LayersPanel({
       fontSize: '13px',
       outline: 'none'
     },
-    iconButton: {
-      background: 'none',
-      border: 'none',
+    zIndexBadge: {
+      fontSize: '10px',
       color: '#9ca3af',
-      fontSize: '16px',
-      cursor: 'pointer',
-      width: '24px',
-      height: '24px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      backgroundColor: '#4b5563',
+      padding: '2px 6px',
       borderRadius: '4px',
-      transition: 'all 0.2s'
-    },
-    iconButtonActive: {
-      color: '#60a5fa'
+      fontFamily: 'monospace'
     },
     footer: {
       padding: '12px 16px',
@@ -213,36 +255,10 @@ export default function LayersPanel({
       fontSize: '12px',
       color: '#9ca3af',
       textAlign: 'center'
-    },
-    zIndexMenu: {
-      position: 'absolute',
-      right: '60px',
-      backgroundColor: '#1f2937',
-      border: '1px solid #4b5563',
-      borderRadius: '6px',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
-      zIndex: 10001,
-      padding: '4px',
-      minWidth: '120px'
-    },
-    zIndexMenuItem: {
-      padding: '6px 12px',
-      fontSize: '12px',
-      color: '#fff',
-      cursor: 'pointer',
-      borderRadius: '4px',
-      transition: 'all 0.2s',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
-      backgroundColor: 'transparent'
-    },
-    zIndexInfo: {
-      fontSize: '10px',
-      color: '#6b7280',
-      marginLeft: '4px'
     }
   };
+
+  const hasChecked = checkedIds.length > 0;
 
   return (
     <div style={styles.panel} ref={panelRef}>
@@ -270,6 +286,72 @@ export default function LayersPanel({
         />
       </div>
 
+      {/* Batch Controls */}
+      <div style={styles.batchControls}>
+        <div style={styles.selectAllRow}>
+          <input
+            type="checkbox"
+            style={styles.checkbox}
+            checked={checkedIds.length === sortedShapes.length && sortedShapes.length > 0}
+            onChange={handleSelectAll}
+          />
+          <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+            {checkedIds.length > 0 ? `${checkedIds.length} selected` : 'Select All'}
+          </span>
+        </div>
+
+        <div style={styles.batchButtonsRow}>
+          <button
+            style={{
+              ...styles.batchButton,
+              ...(hasChecked ? {} : styles.batchButtonDisabled)
+            }}
+            onClick={() => hasChecked && handleBatchOperation(onBringToFront)}
+            disabled={!hasChecked}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+          >
+            ↑ To Front
+          </button>
+          <button
+            style={{
+              ...styles.batchButton,
+              ...(hasChecked ? {} : styles.batchButtonDisabled)
+            }}
+            onClick={() => hasChecked && handleBatchOperation(onBringForward)}
+            disabled={!hasChecked}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+          >
+            ↑ Forward
+          </button>
+          <button
+            style={{
+              ...styles.batchButton,
+              ...(hasChecked ? {} : styles.batchButtonDisabled)
+            }}
+            onClick={() => hasChecked && handleBatchOperation(onSendBackward)}
+            disabled={!hasChecked}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+          >
+            ↓ Backward
+          </button>
+          <button
+            style={{
+              ...styles.batchButton,
+              ...(hasChecked ? {} : styles.batchButtonDisabled)
+            }}
+            onClick={() => hasChecked && handleBatchOperation(onSendToBack)}
+            disabled={!hasChecked}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+          >
+            ↓ To Back
+          </button>
+        </div>
+      </div>
+
       {/* Layers List */}
       <div style={styles.list}>
         {sortedShapes.length === 0 && (
@@ -285,8 +367,7 @@ export default function LayersPanel({
         
         {sortedShapes.map(shape => {
           const isSelected = selectedIds.includes(shape.id);
-          const isLocked = shape.isLocked && shape.lockedBy !== user?.uid;
-          const isHidden = shape.hidden;
+          const isChecked = checkedIds.includes(shape.id);
           
           return (
             <div
@@ -294,26 +375,37 @@ export default function LayersPanel({
               style={{
                 ...styles.layerItem,
                 ...(isSelected ? styles.layerItemSelected : {}),
-                ...(isLocked ? styles.layerItemLocked : {})
+                ...(isChecked && !isSelected ? styles.layerItemChecked : {})
               }}
-              onClick={() => !isLocked && onSelect(shape.id)}
+              onClick={() => onSelect(shape.id)}
               onMouseOver={(e) => {
-                if (!isSelected && !isLocked) {
+                if (!isSelected && !isChecked) {
                   e.currentTarget.style.backgroundColor = '#4b5563';
                 }
               }}
               onMouseOut={(e) => {
-                if (!isSelected) {
+                if (!isSelected && !isChecked) {
                   e.currentTarget.style.backgroundColor = '#374151';
                 }
               }}
             >
+              {/* Checkbox */}
+              <input
+                type="checkbox"
+                style={styles.checkbox}
+                checked={isChecked}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  handleCheckboxChange(shape.id, e.target.checked);
+                }}
+                onClick={(e) => e.stopPropagation()}
+              />
+
               {/* Icon */}
               <div 
                 style={{
                   ...styles.icon,
-                  backgroundColor: getShapeColor(shape.type),
-                  opacity: isHidden ? 0.3 : 1
+                  backgroundColor: getShapeColor(shape.type)
                 }}
               >
                 {getShapeIcon(shape.type)}
@@ -339,139 +431,19 @@ export default function LayersPanel({
                 />
               ) : (
                 <div 
-                  style={{
-                    ...styles.name,
-                    opacity: isHidden ? 0.5 : 1
-                  }}
+                  style={styles.name}
                   onDoubleClick={(e) => {
                     e.stopPropagation();
-                    if (!isLocked) {
-                      handleStartRename(shape);
-                    }
+                    handleStartRename(shape);
                   }}
                 >
                   {shape.name || shape.type}
                 </div>
               )}
 
-              {/* Visibility Toggle */}
-              <button
-                style={{
-                  ...styles.iconButton,
-                  ...(isHidden ? {} : styles.iconButtonActive)
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleVisibility(shape.id);
-                }}
-                title={isHidden ? 'Show' : 'Hide'}
-                onMouseOver={(e) => e.target.style.backgroundColor = '#4b5563'}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                {isHidden ? '👁️‍🗨️' : '👁️'}
-              </button>
-
-              {/* Lock Toggle */}
-              <button
-                style={{
-                  ...styles.iconButton,
-                  ...(shape.isLocked ? styles.iconButtonActive : {})
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isLocked) {
-                    onToggleLock(shape.id);
-                  }
-                }}
-                title={shape.isLocked ? 'Unlock' : 'Lock'}
-                disabled={isLocked}
-                onMouseOver={(e) => !isLocked && (e.target.style.backgroundColor = '#4b5563')}
-                onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-              >
-                {shape.isLocked ? '🔒' : '🔓'}
-              </button>
-
-              {/* Z-Index Menu Button */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  style={styles.iconButton}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setExpandedMenuId(expandedMenuId === shape.id ? null : shape.id);
-                  }}
-                  title="Layer order"
-                  onMouseOver={(e) => e.target.style.backgroundColor = '#4b5563'}
-                  onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
-                >
-                  ⬍
-                </button>
-
-                {/* Z-Index Dropdown Menu */}
-                {expandedMenuId === shape.id && (
-                  <div style={styles.zIndexMenu}>
-                    <div
-                      style={styles.zIndexMenuItem}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onBringToFront(shape.id);
-                        setExpandedMenuId(null);
-                      }}
-                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
-                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <span>⬆️</span>
-                      <span>Bring to Front</span>
-                    </div>
-                    <div
-                      style={styles.zIndexMenuItem}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onBringForward(shape.id);
-                        setExpandedMenuId(null);
-                      }}
-                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
-                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <span>🔼</span>
-                      <span>Bring Forward</span>
-                    </div>
-                    <div
-                      style={styles.zIndexMenuItem}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSendBackward(shape.id);
-                        setExpandedMenuId(null);
-                      }}
-                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
-                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <span>🔽</span>
-                      <span>Send Backward</span>
-                    </div>
-                    <div
-                      style={styles.zIndexMenuItem}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onSendToBack(shape.id);
-                        setExpandedMenuId(null);
-                      }}
-                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
-                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <span>⬇️</span>
-                      <span>Send to Back</span>
-                    </div>
-                    <div style={{ 
-                      borderTop: '1px solid #4b5563', 
-                      margin: '4px 0',
-                      padding: '6px 12px',
-                      fontSize: '10px',
-                      color: '#6b7280'
-                    }}>
-                      Z-Index: {shape.zIndex || 0}
-                    </div>
-                  </div>
-                )}
+              {/* Z-Index Badge */}
+              <div style={styles.zIndexBadge}>
+                z:{shape.zIndex || 0}
               </div>
             </div>
           );
@@ -481,8 +453,8 @@ export default function LayersPanel({
       {/* Footer */}
       <div style={styles.footer}>
         {sortedShapes.length} layer{sortedShapes.length !== 1 ? 's' : ''} total
+        {checkedIds.length > 0 && ` • ${checkedIds.length} checked`}
       </div>
     </div>
   );
 }
-
