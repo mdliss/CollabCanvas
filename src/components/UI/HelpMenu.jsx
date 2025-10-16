@@ -165,6 +165,11 @@ export default function HelpMenu({ isVisible, onClose }) {
           </div>
           
           <div style={styles.item}>
+            <span style={styles.key}>0</span> <span style={styles.key}>Home</span>
+            <span style={styles.desc}>Recenter view on canvas</span>
+          </div>
+          
+          <div style={styles.item}>
             <span style={styles.key}>Scroll</span>
             <span style={styles.desc}>Zoom in/out</span>
           </div>
@@ -345,7 +350,7 @@ export default function HelpMenu({ isVisible, onClose }) {
           
           <div style={styles.item}>
             <span style={styles.desc}>
-              <strong>Pan:</strong> Hold Space and drag to move around the 20,000×20,000 canvas
+              <strong>Pan:</strong> Hold Space and drag to move around the 10,000×10,000 canvas
             </span>
           </div>
           

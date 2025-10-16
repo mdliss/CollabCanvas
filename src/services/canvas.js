@@ -1,17 +1,21 @@
 import { db } from "./firebase";
-import { doc, onSnapshot, serverTimestamp, setDoc, runTransaction, getDoc } from "firebase/firestore";
+import { doc, onSnapshot, serverTimestamp, setDoc, runTransaction, getDoc, updateDoc } from "firebase/firestore";
 
 const getCanvasDoc = (canvasId) => doc(db, "canvas", canvasId);
 
 // Retry helper for handling Firestore transaction failures
-const retryTransaction = async (fn, maxRetries = 3) => {
+const retryTransaction = async (fn, maxRetries = 5) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       return await fn();
     } catch (error) {
-      if (error.code === 'failed-precondition' && attempt < maxRetries) {
-        const delay = Math.pow(2, attempt - 1) * 100; // 100ms, 200ms, 400ms
-        console.log(`[Transaction] Retry ${attempt}/${maxRetries} after ${delay}ms due to failed-precondition`);
+      const isRetryable = error.code === 'failed-precondition' || error.code === 'aborted';
+      if (isRetryable && attempt < maxRetries) {
+        // Exponential backoff with jitter: 100ms, 200ms, 400ms, 800ms, 1600ms
+        const baseDelay = Math.pow(2, attempt - 1) * 100;
+        const jitter = Math.random() * 100; // Add 0-100ms random jitter
+        const delay = baseDelay + jitter;
+        console.log(`[Transaction] Retry ${attempt}/${maxRetries} after ${delay.toFixed(0)}ms due to ${error.code}`);
         await new Promise(resolve => setTimeout(resolve, delay));
         continue;
       }
@@ -309,59 +313,60 @@ export const unlockShape = async (canvasId, shapeId, userId) => {
 export const staleLockSweeper = async (canvasId, ttlMs = 5000) => {
   try {
     const docRef = doc(db, 'canvas', canvasId);
+    const docSnap = await getDoc(docRef);
     
-    await runTransaction(db, async (transaction) => {
-      const docSnap = await transaction.get(docRef);
-      if (!docSnap.exists()) return;
-      
-      const data = docSnap.data();
-      const shapes = data.shapes || [];
-      const now = Date.now();
-      let cleaned = 0;
-      
-      const updatedShapes = shapes.map(shape => {
-        if (shape.isLocked && shape.lockedAt) {
-          // Handle BOTH types: Firestore Timestamp (old data) AND number (new data)
-          let lockTimestamp;
-          if (typeof shape.lockedAt === 'number') {
-            // New format: plain number from Date.now()
-            lockTimestamp = shape.lockedAt;
-          } else if (shape.lockedAt.toMillis) {
-            // Old format: Firestore Timestamp object
-            lockTimestamp = shape.lockedAt.toMillis();
-          } else {
-            // Unknown format - skip
-            console.warn(`[staleLockSweeper] Unknown lockedAt format for ${shape.id}:`, typeof shape.lockedAt);
-            return shape;
-          }
-          
-          const lockAge = now - lockTimestamp;
-          
-          if (lockAge > ttlMs) {
-            cleaned++;
-            console.log(`[staleLockSweeper] Cleaning stale lock on ${shape.id}, age: ${lockAge}ms`);
-            return {
-              ...shape,
-              isLocked: false,
-              lockedBy: null,
-              lockedAt: null
-            };
-          }
+    if (!docSnap.exists()) return;
+    
+    const data = docSnap.data();
+    const shapes = data.shapes || [];
+    const now = Date.now();
+    let hasStale = false;
+    
+    const updatedShapes = shapes.map(shape => {
+      if (shape.isLocked && shape.lockedAt) {
+        // Handle BOTH types: Firestore Timestamp (old data) AND number (new data)
+        let lockTimestamp;
+        if (typeof shape.lockedAt === 'number') {
+          // New format: plain number from Date.now()
+          lockTimestamp = shape.lockedAt;
+        } else if (shape.lockedAt && shape.lockedAt.toMillis) {
+          // Old format: Firestore Timestamp object
+          lockTimestamp = shape.lockedAt.toMillis();
+        } else {
+          // Unknown format - skip
+          return shape;
         }
-        return shape;
-      });
-      
-      if (cleaned > 0) {
-        console.log(`[staleLockSweeper] Cleaned ${cleaned} stale lock(s)`);
-        transaction.update(docRef, { shapes: updatedShapes });
+        
+        const lockAge = now - lockTimestamp;
+        
+        if (lockAge > ttlMs) {
+          hasStale = true;
+          console.log(`[staleLockSweeper] Clearing stale lock on ${shape.id} (age: ${lockAge}ms)`);
+          return {
+            ...shape,
+            isLocked: false,
+            lockedBy: null,
+            lockedAt: null
+          };
+        }
       }
+      return shape;
     });
+    
+    // Only write if there are stale locks to clear
+    if (hasStale) {
+      await updateDoc(docRef, {
+        shapes: updatedShapes,
+        lastUpdated: serverTimestamp()
+      });
+    }
   } catch (error) {
-    console.error("[staleLockSweeper] Failed:", error);
-    console.error("[staleLockSweeper] Error details:", {
-      code: error.code,
-      message: error.message
-    });
+    // Non-critical operation - just log at debug level
+    if (error.code === 'failed-precondition' || error.code === 'aborted') {
+      console.debug('[staleLockSweeper] Transaction conflict (non-critical):', error.code);
+    } else {
+      console.debug('[staleLockSweeper] Failed (non-critical):', error.message);
+    }
   }
 };
 

@@ -183,6 +183,7 @@ export default function LayersPanel({
   selectedIds,
   onSelect,
   onRename,
+  onDeleteAll,
   onBringToFront,
   onSendToBack,
   onBringForward,
@@ -423,13 +424,44 @@ export default function LayersPanel({
       borderTop: '1px solid #e5e7eb',
       fontSize: '13px',
       color: '#6b7280',
-      textAlign: 'center',
       backgroundColor: '#f9fafb',
-      fontWeight: '500'
+      fontWeight: '500',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '12px'
+    },
+    deleteAllButton: {
+      padding: '8px 16px',
+      fontSize: '12px',
+      fontWeight: '600',
+      border: '1.5px solid #fca5a5',
+      borderRadius: '8px',
+      cursor: 'pointer',
+      transition: 'all 0.2s',
+      color: '#dc2626',
+      backgroundColor: '#ffffff',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '6px',
+      flexShrink: 0
     }
   };
 
   const hasChecked = checkedIds.length > 0;
+
+  const handleDeleteAll = () => {
+    if (sortedShapes.length === 0) return;
+    
+    const confirmed = window.confirm(
+      `Are you sure you want to delete ALL ${sortedShapes.length} shapes? This action cannot be undone.`
+    );
+    
+    if (confirmed && onDeleteAll) {
+      onDeleteAll();
+    }
+  };
 
   return (
     <>
@@ -653,8 +685,28 @@ export default function LayersPanel({
 
       {/* Footer */}
       <div style={styles.footer}>
-        {sortedShapes.length} layer{sortedShapes.length !== 1 ? 's' : ''}
-        {checkedIds.length > 0 && ` · ${checkedIds.length} checked`}
+        <div>
+          {sortedShapes.length} layer{sortedShapes.length !== 1 ? 's' : ''}
+          {checkedIds.length > 0 && ` · ${checkedIds.length} checked`}
+        </div>
+        {sortedShapes.length > 0 && (
+          <button
+            style={styles.deleteAllButton}
+            onClick={handleDeleteAll}
+            onMouseOver={(e) => {
+              e.target.style.backgroundColor = '#fef2f2';
+              e.target.style.borderColor = '#f87171';
+              e.target.style.boxShadow = '0 2px 6px rgba(220, 38, 38, 0.15)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.backgroundColor = '#ffffff';
+              e.target.style.borderColor = '#fca5a5';
+              e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.08)';
+            }}
+          >
+            <span>🗑</span> Delete All
+          </button>
+        )}
       </div>
     </div>
     </>

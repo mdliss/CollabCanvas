@@ -50,17 +50,38 @@ export default function Canvas() {
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
   const [copiedShapes, setCopiedShapes] = useState([]);
   const [contextMenu, setContextMenu] = useState(null); // { x, y, shapeId }
+  const [dragDebugInfo, setDragDebugInfo] = useState(null); // Debug info for drag bounds
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
     return saved ? JSON.parse(saved).scale : 0.5;
   });
+  
+  // Helper function to calculate centered viewport position
+  const getCenteredPosition = useCallback((scale = 0.5) => {
+    // Center the canvas in the viewport at the given scale
+    const scaledCanvasWidth = CANVAS_WIDTH * scale;
+    const scaledCanvasHeight = CANVAS_HEIGHT * scale;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight - 50; // Account for toolbar
+    
+    return {
+      x: (viewportWidth - scaledCanvasWidth) / 2,
+      y: (viewportHeight - scaledCanvasHeight) / 2
+    };
+  }, []);
+  
   const [stagePos, setStagePos] = useState(() => {
-    const saved = localStorage.getItem('collabcanvas-viewport');
-    if (saved) return JSON.parse(saved).pos;
-    const centerX = -(CANVAS_WIDTH * 0.5 - window.innerWidth) / 2;
-    const centerY = -(CANVAS_HEIGHT * 0.5 - (window.innerHeight - 50)) / 2;
-    return { x: centerX, y: centerY };
+    // ALWAYS start centered on page load - ignore saved position
+    const scaledCanvasWidth = CANVAS_WIDTH * 0.5;
+    const scaledCanvasHeight = CANVAS_HEIGHT * 0.5;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight - 50;
+    
+    return {
+      x: (viewportWidth - scaledCanvasWidth) / 2,
+      y: (viewportHeight - scaledCanvasHeight) / 2
+    };
   });
   const stageRef = useRef(null);
   const [mousePos, setMousePos] = useState(null);
@@ -102,10 +123,46 @@ export default function Canvas() {
   useEffect(() => {
     let unsub = () => {};
     (async () => {
-      unsub = await subscribeToShapes(CANVAS_ID, (newShapes) => {
+      unsub = await subscribeToShapes(CANVAS_ID, async (newShapes) => {
         console.log('[Canvas] Shapes updated from Firestore. Count:', newShapes.length);
         console.log('[Canvas] Current undo stack size:', window.undoManager?.undoStack?.length || 0);
-        setShapes(newShapes);
+        
+        // Only fix circles with exponentially grown sizes (width > 10000 is definitely a bug)
+        const fixPromises = [];
+        const sanitizedShapes = newShapes.map(shape => {
+          if (shape.type === 'circle' && shape.width > 10000) {
+            console.warn('[Canvas] Fixing corrupted circle size:', {
+              id: shape.id,
+              oldWidth: shape.width,
+              newWidth: 100
+            });
+            
+            // Fix in Firestore
+            if (user) {
+              fixPromises.push(
+                updateShape(CANVAS_ID, shape.id, { width: 100, height: 100 }, user)
+                  .catch(err => console.error('[Canvas] Failed to fix corrupted circle:', err))
+              );
+            }
+            
+            // Fix in local state
+            return {
+              ...shape,
+              width: 100,
+              height: 100
+            };
+          }
+          return shape;
+        });
+        
+        // Save fixes to Firestore (don't wait, do it in background)
+        if (fixPromises.length > 0) {
+          Promise.all(fixPromises).then(() => {
+            console.log('[Canvas] Successfully fixed', fixPromises.length, 'corrupted circles in Firestore');
+          });
+        }
+        
+        setShapes(sanitizedShapes);
       });
     })();
     return () => { 
@@ -115,7 +172,7 @@ export default function Canvas() {
         console.error("[Canvas] Unsubscribe error:", error);
       } 
     };
-  }, []);
+  }, [user]);
 
   // Show text formatting toolbar when a single text shape is selected
   useEffect(() => {
@@ -162,6 +219,15 @@ export default function Canvas() {
   useEffect(() => {
     const handleKeyDown = async (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      
+      // Recenter View - Press '0' (zero) or Home key
+      if ((e.key === '0' || e.key === 'Home') && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        const centeredPos = getCenteredPosition(stageScale);
+        setStagePos(centeredPos);
+        showFeedback('View centered');
+        return;
+      }
       
       // Undo/Redo shortcuts (Cmd/Ctrl + Z, Cmd/Ctrl + Shift + Z)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -234,7 +300,7 @@ export default function Canvas() {
             const shape = shapes.find(s => s.id === id);
             if (!shape) continue;
             
-            const command = new DeleteShapeCommand(CANVAS_ID, shape, user, deleteShape, createShape);
+            const command = new DeleteShapeCommand(CANVAS_ID, shape, user, createShape, deleteShape);
             await execute(command, user);
           }
           
@@ -552,7 +618,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes]);
+  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes, getCenteredPosition, stageScale]);
 
   const handleAddShape = async (type) => {
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
@@ -568,10 +634,13 @@ export default function Canvas() {
 
     switch (type) {
       case 'circle':
-        shapeData.width = 100; // diameter
+        // Set diameter as width/height (radius = 50)
+        shapeData.width = 100;
         shapeData.height = 100;
-        shapeData.x = Math.max(50, Math.min(centerX, CANVAS_WIDTH - 50));
-        shapeData.y = Math.max(50, Math.min(centerY, CANVAS_HEIGHT - 50));
+        // Position circle center within canvas bounds (accounting for radius)
+        const circleRadius = shapeData.width / 2;
+        shapeData.x = Math.max(circleRadius, Math.min(centerX, CANVAS_WIDTH - circleRadius));
+        shapeData.y = Math.max(circleRadius, Math.min(centerY, CANVAS_HEIGHT - circleRadius));
         break;
       case 'line':
         shapeData.width = 200;
@@ -689,8 +758,13 @@ export default function Canvas() {
   };
 
   const handleShapeDragEnd = async (shapeId, pos) => {
+    const shape = shapes.find(s => s.id === shapeId);
+    
+    // Clear drag debug info
+    setDragDebugInfo(null);
+    
     if (import.meta.env.VITE_DEBUG) {
-      console.debug('[Canvas] dragEnd persist', shapeId, pos);
+      console.debug('[Canvas] dragEnd persist', shapeId, 'type:', shape?.type, 'pos:', pos);
     }
     setEditing(false);
     
@@ -717,6 +791,7 @@ export default function Canvas() {
       delete dragStartStateRef.current[shapeId];
     } else {
       // Fallback if no initial state (shouldn't happen)
+      console.warn('[Canvas] No dragStart state found for', shapeId, '- using fallback');
       await updateShape(CANVAS_ID, shapeId, pos, user);
     }
     
@@ -1143,6 +1218,39 @@ export default function Canvas() {
     }
   };
 
+  const handleDeleteAllShapes = async () => {
+    if (!user || shapes.length === 0) return;
+    
+    const shapeCount = shapes.length;
+    
+    // Always batch for multiple shapes
+    startBatch(`Deleted all ${shapeCount} shapes`);
+    
+    try {
+      for (const shape of shapes) {
+        const command = new DeleteShapeCommand(
+          CANVAS_ID,
+          shape,
+          user,
+          createShape,
+          deleteShape
+        );
+        await execute(command, user);
+      }
+      
+      // Clear all selections
+      selectedIds.forEach(id => clearSelection(id));
+      setSelectedIds([]);
+      
+      showFeedback(`Deleted all ${shapeCount} shapes`);
+    } catch (error) {
+      console.error('[DeleteAllShapes] Failed:', error);
+      showFeedback('Failed to delete all shapes');
+    } finally {
+      await endBatch();
+    }
+  };
+
   const handleToggleVisibility = async (shapeId) => {
     if (!user) return;
     
@@ -1430,7 +1538,7 @@ export default function Canvas() {
         const shape = shapes.find(s => s.id === id);
         if (!shape) continue;
         
-        const command = new DeleteShapeCommand(CANVAS_ID, shape, user, deleteShape, createShape);
+        const command = new DeleteShapeCommand(CANVAS_ID, shape, user, createShape, deleteShape);
         await execute(command, user);
       }
       
@@ -1788,23 +1896,41 @@ export default function Canvas() {
   }, [selectedIds]);
 
   useEffect(() => {
-    const interval = setInterval(() => {
+    // Only run staleLockSweeper if we have a user
+    // Run infrequently to avoid transaction conflicts with multiple users
+    if (!user?.uid) return;
+    
+    // Stagger the sweeper based on user ID to reduce conflicts
+    // Each user gets a different offset (0-20 seconds) based on their UID hash
+    const uidHash = user.uid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const initialDelay = (uidHash % 20) * 1000; // 0-20 second spread
+    
+    let interval;
+    const startSweeper = setTimeout(() => {
+      // Run immediately on start
       staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
-    }, 2000);
+      
+      // Then run every 30 seconds (increased from 5 seconds to reduce conflicts)
+      interval = setInterval(() => {
+        staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
+      }, 30000);
+    }, initialDelay);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
+        // When tab becomes visible, wait a bit to avoid stampede
+        setTimeout(() => staleLockSweeper(CANVAS_ID, LOCK_TTL_MS), Math.random() * 2000);
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
-      clearInterval(interval);
+      clearTimeout(startSweeper);
+      if (interval) clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, []);
+  }, [user]);
 
   // Extra cleanup: handle tab close/refresh for presence
   useEffect(() => {
@@ -1917,6 +2043,7 @@ export default function Canvas() {
           selectedIds={selectedIds}
           onSelect={handleShapeSelect}
           onRename={handleLayerRename}
+          onDeleteAll={handleDeleteAllShapes}
           onBringToFront={handleBringToFront}
           onSendToBack={handleSendToBack}
           onBringForward={handleBringForward}
@@ -2013,7 +2140,7 @@ export default function Canvas() {
                 const shape = shapes.find(s => s.id === id);
                 if (!shape) continue;
                 
-                const command = new DeleteShapeCommand(CANVAS_ID, shape, user, deleteShape, createShape);
+                const command = new DeleteShapeCommand(CANVAS_ID, shape, user, createShape, deleteShape);
                 await execute(command, user);
               }
               
@@ -2052,6 +2179,54 @@ export default function Canvas() {
           }}
         >
           {feedbackMessage}
+        </div>
+      )}
+      
+      {/* Drag Bounds Debug HUD */}
+      {dragDebugInfo && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '10px',
+            left: '10px',
+            background: 'rgba(255, 87, 34, 0.95)',
+            color: '#fff',
+            padding: '12px 16px',
+            borderRadius: '8px',
+            fontSize: '13px',
+            fontFamily: 'monospace',
+            fontWeight: '600',
+            zIndex: 10000,
+            pointerEvents: 'none',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            minWidth: '320px'
+          }}
+        >
+          <div style={{ marginBottom: '8px', fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.3)', paddingBottom: '6px' }}>
+            🔍 DRAG BOUNDS DEBUG - {dragDebugInfo.type.toUpperCase()}
+          </div>
+          <div>Shape ID: {dragDebugInfo.shapeId.substring(0, 20)}...</div>
+          {dragDebugInfo.radius ? (
+            <div>Radius: {dragDebugInfo.radius.toFixed(2)} px (diameter: {(dragDebugInfo.radius * 2).toFixed(2)})</div>
+          ) : (
+            <div>Size: {dragDebugInfo.width?.toFixed(0)} × {dragDebugInfo.height?.toFixed(0)} px</div>
+          )}
+          <div style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '6px' }}>
+            <strong>Allowed Bounds:</strong>
+          </div>
+          <div>  X: [{dragDebugInfo.minX?.toFixed(0)}, {dragDebugInfo.maxX?.toFixed(0)}]</div>
+          <div>  Y: [{dragDebugInfo.minY?.toFixed(0)}, {dragDebugInfo.maxY?.toFixed(0)}]</div>
+          <div style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '6px' }}>
+            <strong>Current Position:</strong>
+          </div>
+          <div>  Requested: ({dragDebugInfo.requestedX?.toFixed(0)}, {dragDebugInfo.requestedY?.toFixed(0)})</div>
+          <div>  Clamped:   ({dragDebugInfo.boundedX?.toFixed(0)}, {dragDebugInfo.boundedY?.toFixed(0)})</div>
+          {(dragDebugInfo.requestedX !== dragDebugInfo.boundedX || dragDebugInfo.requestedY !== dragDebugInfo.boundedY) && (
+            <div style={{ marginTop: '6px', color: '#ffeb3b', fontWeight: 'bold' }}>
+              ⚠️ CLAMPING ACTIVE!
+            </div>
+          )}
         </div>
       )}
       
@@ -2180,6 +2355,7 @@ export default function Canvas() {
                 onTransformEnd={handleShapeTransformEnd}
                 onTextUpdate={handleTextUpdate}
                 onContextMenu={handleContextMenu}
+                onDragBoundUpdate={setDragDebugInfo}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />
@@ -2236,6 +2412,47 @@ export default function Canvas() {
           )}
         </Layer>
       </Stage>
+      
+      {/* Recenter Button - Bottom Right */}
+      <button
+        onClick={() => {
+          const centeredPos = getCenteredPosition(stageScale);
+          setStagePos(centeredPos);
+          showFeedback('View centered');
+        }}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          padding: '12px 20px',
+          backgroundColor: '#007AFF',
+          color: 'white',
+          border: 'none',
+          borderRadius: '8px',
+          fontSize: '14px',
+          fontWeight: '600',
+          cursor: 'pointer',
+          boxShadow: '0 2px 8px rgba(0, 122, 255, 0.3)',
+          zIndex: 1000,
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = '#0051D5';
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 122, 255, 0.4)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = '#007AFF';
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 122, 255, 0.3)';
+        }}
+      >
+        <span style={{ fontSize: '16px' }}>🎯</span>
+        Center View
+      </button>
     </div>
   );
 }
