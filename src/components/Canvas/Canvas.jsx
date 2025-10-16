@@ -326,7 +326,102 @@ export default function Canvas() {
         return;
       }
       
-      // Z-Index shortcuts ([ and ] without modifiers)
+      // Z-Index shortcuts - Shift + { and Shift + } for to front/back
+      if ((e.metaKey || e.ctrlKey) === false && !e.altKey && e.shiftKey && selectedIds.length > 0) {
+        if (e.key === '{') {
+          e.preventDefault();
+          // Send to back (Shift + {)
+          const shapeIds = selectedIds;
+          const shouldBatch = shapeIds.length > 1;
+          if (shouldBatch) {
+            startBatch(`Sent ${shapeIds.length} shapes to back`);
+          }
+          
+          try {
+            const minZIndex = shapes.reduce((min, s) => Math.min(min, s.zIndex || 0), 0);
+            
+            for (let i = 0; i < shapeIds.length; i++) {
+              const id = shapeIds[i];
+              const shape = shapes.find(s => s.id === id);
+              if (!shape) continue;
+              
+              const oldZIndex = shape.zIndex || 0;
+              const newZIndex = minZIndex - shapeIds.length + i;
+              
+              const command = new UpdateShapeCommand(
+                CANVAS_ID,
+                id,
+                { zIndex: newZIndex },
+                { zIndex: oldZIndex },
+                user,
+                updateShape
+              );
+              
+              await execute(command, user);
+            }
+            
+            const message = shapeIds.length > 1 
+              ? `Sent ${shapeIds.length} shapes to back` 
+              : 'Sent to back';
+            showFeedback(message);
+          } catch (error) {
+            console.error('[SendToBack] Failed:', error);
+            showFeedback('Failed to send to back');
+          } finally {
+            if (shouldBatch) {
+              await endBatch();
+            }
+          }
+          return;
+        } else if (e.key === '}') {
+          e.preventDefault();
+          // Bring to front (Shift + })
+          const shapeIds = selectedIds;
+          const shouldBatch = shapeIds.length > 1;
+          if (shouldBatch) {
+            startBatch(`Brought ${shapeIds.length} shapes to front`);
+          }
+          
+          try {
+            const maxZIndex = shapes.reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+            
+            for (let i = 0; i < shapeIds.length; i++) {
+              const id = shapeIds[i];
+              const shape = shapes.find(s => s.id === id);
+              if (!shape) continue;
+              
+              const oldZIndex = shape.zIndex || 0;
+              const newZIndex = maxZIndex + i + 1;
+              
+              const command = new UpdateShapeCommand(
+                CANVAS_ID,
+                id,
+                { zIndex: newZIndex },
+                { zIndex: oldZIndex },
+                user,
+                updateShape
+              );
+              
+              await execute(command, user);
+            }
+            
+            const message = shapeIds.length > 1 
+              ? `Brought ${shapeIds.length} shapes to front` 
+              : 'Brought to front';
+            showFeedback(message);
+          } catch (error) {
+            console.error('[BringToFront] Failed:', error);
+            showFeedback('Failed to bring to front');
+          } finally {
+            if (shouldBatch) {
+              await endBatch();
+            }
+          }
+          return;
+        }
+      }
+      
+      // Z-Index shortcuts ([ and ] without modifiers for forward/backward)
       if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && selectedIds.length > 0) {
         if (e.key === '[') {
           e.preventDefault();

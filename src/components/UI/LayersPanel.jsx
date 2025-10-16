@@ -1,5 +1,183 @@
 import { useState, useEffect, useRef } from 'react';
 
+// Component to render shape preview
+function ShapePreview({ shape }) {
+  const size = 32;
+  const padding = 4;
+  
+  // Get shape color - check for gradient or solid fill
+  const hasGradient = shape.fillLinearGradientColorStops && shape.fillLinearGradientColorStops.length >= 4;
+  const color = shape.fill || '#3b82f6';
+  
+  const renderShape = () => {
+    switch (shape.type) {
+      case 'circle':
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {hasGradient && (
+              <defs>
+                <linearGradient id={`grad-${shape.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={shape.fillLinearGradientColorStops[1]} />
+                  <stop offset="100%" stopColor={shape.fillLinearGradientColorStops[3]} />
+                </linearGradient>
+              </defs>
+            )}
+            <circle
+              cx={size / 2}
+              cy={size / 2}
+              r={(size - padding * 2) / 2}
+              fill={hasGradient ? `url(#grad-${shape.id})` : color}
+              opacity={shape.opacity || 1}
+            />
+          </svg>
+        );
+      
+      case 'rectangle':
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {hasGradient && (
+              <defs>
+                <linearGradient id={`grad-${shape.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={shape.fillLinearGradientColorStops[1]} />
+                  <stop offset="100%" stopColor={shape.fillLinearGradientColorStops[3]} />
+                </linearGradient>
+              </defs>
+            )}
+            <rect
+              x={padding}
+              y={padding}
+              width={size - padding * 2}
+              height={size - padding * 2}
+              fill={hasGradient ? `url(#grad-${shape.id})` : color}
+              opacity={shape.opacity || 1}
+              rx="2"
+            />
+          </svg>
+        );
+      
+      case 'triangle':
+        const points = `${size / 2},${padding} ${size - padding},${size - padding} ${padding},${size - padding}`;
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {hasGradient && (
+              <defs>
+                <linearGradient id={`grad-${shape.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={shape.fillLinearGradientColorStops[1]} />
+                  <stop offset="100%" stopColor={shape.fillLinearGradientColorStops[3]} />
+                </linearGradient>
+              </defs>
+            )}
+            <polygon
+              points={points}
+              fill={hasGradient ? `url(#grad-${shape.id})` : color}
+              opacity={shape.opacity || 1}
+            />
+          </svg>
+        );
+      
+      case 'star':
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {hasGradient && (
+              <defs>
+                <linearGradient id={`grad-${shape.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={shape.fillLinearGradientColorStops[1]} />
+                  <stop offset="100%" stopColor={shape.fillLinearGradientColorStops[3]} />
+                </linearGradient>
+              </defs>
+            )}
+            <path
+              d={`M${size/2},${padding} L${size*0.6},${size*0.4} L${size-padding},${size*0.4} L${size*0.65},${size*0.6} L${size*0.75},${size-padding} L${size/2},${size*0.7} L${size*0.25},${size-padding} L${size*0.35},${size*0.6} L${padding},${size*0.4} L${size*0.4},${size*0.4} Z`}
+              fill={hasGradient ? `url(#grad-${shape.id})` : color}
+              opacity={shape.opacity || 1}
+            />
+          </svg>
+        );
+      
+      case 'diamond':
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            {hasGradient && (
+              <defs>
+                <linearGradient id={`grad-${shape.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={shape.fillLinearGradientColorStops[1]} />
+                  <stop offset="100%" stopColor={shape.fillLinearGradientColorStops[3]} />
+                </linearGradient>
+              </defs>
+            )}
+            <polygon
+              points={`${size/2},${padding} ${size-padding},${size/2} ${size/2},${size-padding} ${padding},${size/2}`}
+              fill={hasGradient ? `url(#grad-${shape.id})` : color}
+              opacity={shape.opacity || 1}
+            />
+          </svg>
+        );
+      
+      case 'line':
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <line
+              x1={padding}
+              y1={size - padding}
+              x2={size - padding}
+              y2={padding}
+              stroke={color}
+              strokeWidth="3"
+              strokeLinecap="round"
+              opacity={shape.opacity || 1}
+            />
+          </svg>
+        );
+      
+      case 'text':
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <text
+              x={size / 2}
+              y={size / 2 + 4}
+              fontSize="16"
+              fontWeight={shape.fontWeight || 'normal'}
+              fontStyle={shape.fontStyle || 'normal'}
+              fill={color}
+              textAnchor="middle"
+              opacity={shape.opacity || 1}
+            >
+              T
+            </text>
+          </svg>
+        );
+      
+      default:
+        return (
+          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+            <rect
+              x={padding}
+              y={padding}
+              width={size - padding * 2}
+              height={size - padding * 2}
+              fill={color}
+              opacity={shape.opacity || 1}
+              rx="2"
+            />
+          </svg>
+        );
+    }
+  };
+  
+  return (
+    <div style={{
+      width: size,
+      height: size,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexShrink: 0
+    }}>
+      {renderShape()}
+    </div>
+  );
+}
+
 export default function LayersPanel({ 
   shapes, 
   selectedIds,
@@ -70,191 +248,183 @@ export default function LayersPanel({
     }
   };
 
-  const getShapeIcon = (type) => {
-    const icons = {
-      rectangle: '▭',
-      circle: '○',
-      line: '/',
-      text: 'T',
-      triangle: '△',
-      star: '★',
-      diamond: '◆'
-    };
-    return icons[type] || '?';
-  };
-
-  const getShapeColor = (type) => {
-    const colors = {
-      rectangle: '#3b82f6',
-      circle: '#ef4444',
-      line: '#8b5cf6',
-      text: '#10b981',
-      triangle: '#f59e0b',
-      star: '#ec4899',
-      diamond: '#06b6d4'
-    };
-    return colors[type] || '#6b7280';
-  };
-
   const styles = {
     panel: {
       position: 'fixed',
       top: 0,
       right: 0,
-      width: '320px',
+      width: '340px',
       height: '100vh',
-      backgroundColor: '#1f2937',
-      color: '#fff',
+      backgroundColor: '#ffffff',
+      color: '#1f2937',
       display: 'flex',
       flexDirection: 'column',
-      boxShadow: '-4px 0 16px rgba(0, 0, 0, 0.3)',
+      boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12), -2px 0 8px rgba(0, 0, 0, 0.08)',
       zIndex: 10000,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     },
     header: {
-      padding: '16px',
-      borderBottom: '1px solid #374151',
+      padding: '20px',
+      borderBottom: '1px solid #e5e7eb',
       display: 'flex',
       alignItems: 'center',
-      justifyContent: 'space-between'
+      justifyContent: 'space-between',
+      background: 'linear-gradient(180deg, #ffffff 0%, #f9fafb 100%)'
     },
     title: {
-      fontSize: '16px',
-      fontWeight: '600'
+      fontSize: '18px',
+      fontWeight: '600',
+      color: '#111827',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px'
     },
     closeButton: {
       background: 'none',
       border: 'none',
-      color: '#9ca3af',
-      fontSize: '24px',
+      color: '#6b7280',
+      fontSize: '28px',
       cursor: 'pointer',
-      width: '32px',
-      height: '32px',
+      width: '36px',
+      height: '36px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: '4px',
-      transition: 'all 0.2s'
+      borderRadius: '8px',
+      transition: 'all 0.2s',
+      lineHeight: '1'
     },
     searchBox: {
-      padding: '12px 16px',
-      borderBottom: '1px solid #374151'
+      padding: '16px 20px',
+      borderBottom: '1px solid #e5e7eb',
+      backgroundColor: '#f9fafb'
     },
     searchInput: {
       width: '100%',
-      padding: '8px 12px',
-      backgroundColor: '#374151',
-      border: '1px solid #4b5563',
-      borderRadius: '6px',
-      color: '#fff',
-      fontSize: '13px',
-      outline: 'none'
+      padding: '10px 14px',
+      backgroundColor: '#ffffff',
+      border: '1.5px solid #d1d5db',
+      borderRadius: '8px',
+      color: '#111827',
+      fontSize: '14px',
+      outline: 'none',
+      transition: 'all 0.2s'
     },
     batchControls: {
-      padding: '12px 16px',
-      borderBottom: '1px solid #374151',
+      padding: '16px 20px',
+      borderBottom: '1px solid #e5e7eb',
       display: 'flex',
       flexDirection: 'column',
-      gap: '8px'
+      gap: '12px',
+      backgroundColor: '#ffffff'
     },
     selectAllRow: {
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
-      marginBottom: '4px'
+      gap: '10px'
     },
     checkbox: {
       width: '18px',
       height: '18px',
       cursor: 'pointer',
-      accentColor: '#60a5fa'
+      accentColor: '#4f46e5'
+    },
+    selectAllLabel: {
+      fontSize: '13px',
+      color: '#6b7280',
+      fontWeight: '500'
     },
     batchButtonsRow: {
-      display: 'flex',
-      gap: '6px',
-      flexWrap: 'wrap'
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '8px'
     },
     batchButton: {
-      flex: 1,
-      minWidth: '70px',
-      padding: '6px 10px',
-      fontSize: '11px',
-      fontWeight: '500',
+      padding: '8px 12px',
+      fontSize: '12px',
+      fontWeight: '600',
       border: 'none',
-      borderRadius: '6px',
+      borderRadius: '8px',
       cursor: 'pointer',
       transition: 'all 0.2s',
-      color: '#fff',
-      backgroundColor: '#3b82f6',
-      opacity: 1
+      color: '#ffffff',
+      backgroundColor: '#4f46e5',
+      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '4px'
     },
     batchButtonDisabled: {
-      opacity: 0.5,
-      cursor: 'not-allowed'
+      opacity: 0.4,
+      cursor: 'not-allowed',
+      boxShadow: 'none'
     },
     list: {
       flex: 1,
       overflowY: 'auto',
-      padding: '8px'
+      padding: '12px 16px',
+      backgroundColor: '#fafafa'
     },
     layerItem: {
       display: 'flex',
       alignItems: 'center',
-      gap: '8px',
-      padding: '8px 12px',
-      marginBottom: '4px',
-      borderRadius: '6px',
+      gap: '12px',
+      padding: '12px 14px',
+      marginBottom: '6px',
+      borderRadius: '10px',
       cursor: 'pointer',
-      transition: 'all 0.2s',
-      backgroundColor: '#374151'
+      transition: 'all 0.15s ease',
+      backgroundColor: '#ffffff',
+      border: '1.5px solid transparent',
+      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
     },
     layerItemSelected: {
-      backgroundColor: '#3b82f6',
-      boxShadow: '0 0 0 2px #60a5fa'
+      backgroundColor: '#eef2ff',
+      border: '1.5px solid #818cf8',
+      boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)'
     },
     layerItemChecked: {
-      backgroundColor: '#1e40af'
-    },
-    icon: {
-      fontSize: '18px',
-      width: '24px',
-      height: '24px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderRadius: '4px'
+      backgroundColor: '#ddd6fe',
+      border: '1.5px solid #a78bfa'
     },
     name: {
       flex: 1,
-      fontSize: '13px',
+      fontSize: '14px',
+      fontWeight: '500',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap'
+      whiteSpace: 'nowrap',
+      color: '#374151'
     },
     nameInput: {
       flex: 1,
-      padding: '4px 8px',
-      backgroundColor: '#1f2937',
-      border: '1px solid #60a5fa',
-      borderRadius: '4px',
-      color: '#fff',
-      fontSize: '13px',
-      outline: 'none'
+      padding: '6px 10px',
+      backgroundColor: '#ffffff',
+      border: '2px solid #4f46e5',
+      borderRadius: '6px',
+      color: '#111827',
+      fontSize: '14px',
+      outline: 'none',
+      fontWeight: '500'
     },
     zIndexBadge: {
-      fontSize: '10px',
-      color: '#9ca3af',
-      backgroundColor: '#4b5563',
-      padding: '2px 6px',
-      borderRadius: '4px',
-      fontFamily: 'monospace'
+      fontSize: '11px',
+      color: '#6b7280',
+      backgroundColor: '#f3f4f6',
+      padding: '4px 8px',
+      borderRadius: '6px',
+      fontFamily: 'monospace',
+      fontWeight: '600'
     },
     footer: {
-      padding: '12px 16px',
-      borderTop: '1px solid #374151',
-      fontSize: '12px',
-      color: '#9ca3af',
-      textAlign: 'center'
+      padding: '16px 20px',
+      borderTop: '1px solid #e5e7eb',
+      fontSize: '13px',
+      color: '#6b7280',
+      textAlign: 'center',
+      backgroundColor: '#f9fafb',
+      fontWeight: '500'
     }
   };
 
@@ -264,12 +434,26 @@ export default function LayersPanel({
     <div style={styles.panel} ref={panelRef}>
       {/* Header */}
       <div style={styles.header}>
-        <div style={styles.title}>📋 Layers</div>
+        <div style={styles.title}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+          </svg>
+          Layers
+        </div>
         <button 
           style={styles.closeButton}
           onClick={onClose}
-          onMouseOver={(e) => e.target.style.backgroundColor = '#374151'}
-          onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          onMouseOver={(e) => {
+            e.target.style.backgroundColor = '#f3f4f6';
+            e.target.style.color = '#111827';
+          }}
+          onMouseOut={(e) => {
+            e.target.style.backgroundColor = 'transparent';
+            e.target.style.color = '#6b7280';
+          }}
         >
           ×
         </button>
@@ -283,6 +467,14 @@ export default function LayersPanel({
           placeholder="Search layers..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#4f46e5';
+            e.target.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.1)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#d1d5db';
+            e.target.style.boxShadow = 'none';
+          }}
         />
       </div>
 
@@ -295,7 +487,7 @@ export default function LayersPanel({
             checked={checkedIds.length === sortedShapes.length && sortedShapes.length > 0}
             onChange={handleSelectAll}
           />
-          <span style={{ fontSize: '12px', color: '#9ca3af' }}>
+          <span style={styles.selectAllLabel}>
             {checkedIds.length > 0 ? `${checkedIds.length} selected` : 'Select All'}
           </span>
         </div>
@@ -308,10 +500,10 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onBringToFront)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
           >
-            ↑ To Front
+            <span>⇈</span> To Front
           </button>
           <button
             style={{
@@ -320,10 +512,10 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onBringForward)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
           >
-            ↑ Forward
+            <span>⇑</span> Forward
           </button>
           <button
             style={{
@@ -332,10 +524,10 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onSendBackward)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
           >
-            ↓ Backward
+            <span>⇓</span> Backward
           </button>
           <button
             style={{
@@ -344,10 +536,10 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onSendToBack)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#2563eb')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#3b82f6')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
           >
-            ↓ To Back
+            <span>⇊</span> To Back
           </button>
         </div>
       </div>
@@ -356,10 +548,10 @@ export default function LayersPanel({
       <div style={styles.list}>
         {sortedShapes.length === 0 && (
           <div style={{ 
-            padding: '32px', 
+            padding: '48px 24px', 
             textAlign: 'center', 
-            color: '#6b7280',
-            fontSize: '13px'
+            color: '#9ca3af',
+            fontSize: '14px'
           }}>
             {searchTerm ? 'No matching layers' : 'No layers yet'}
           </div>
@@ -380,12 +572,14 @@ export default function LayersPanel({
               onClick={() => onSelect(shape.id)}
               onMouseOver={(e) => {
                 if (!isSelected && !isChecked) {
-                  e.currentTarget.style.backgroundColor = '#4b5563';
+                  e.currentTarget.style.backgroundColor = '#f9fafb';
+                  e.currentTarget.style.borderColor = '#e5e7eb';
                 }
               }}
               onMouseOut={(e) => {
                 if (!isSelected && !isChecked) {
-                  e.currentTarget.style.backgroundColor = '#374151';
+                  e.currentTarget.style.backgroundColor = '#ffffff';
+                  e.currentTarget.style.borderColor = 'transparent';
                 }
               }}
             >
@@ -401,15 +595,8 @@ export default function LayersPanel({
                 onClick={(e) => e.stopPropagation()}
               />
 
-              {/* Icon */}
-              <div 
-                style={{
-                  ...styles.icon,
-                  backgroundColor: getShapeColor(shape.type)
-                }}
-              >
-                {getShapeIcon(shape.type)}
-              </div>
+              {/* Shape Preview */}
+              <ShapePreview shape={shape} />
 
               {/* Name or Input */}
               {editingId === shape.id ? (
@@ -452,8 +639,8 @@ export default function LayersPanel({
 
       {/* Footer */}
       <div style={styles.footer}>
-        {sortedShapes.length} layer{sortedShapes.length !== 1 ? 's' : ''} total
-        {checkedIds.length > 0 && ` • ${checkedIds.length} checked`}
+        {sortedShapes.length} layer{sortedShapes.length !== 1 ? 's' : ''}
+        {checkedIds.length > 0 && ` · ${checkedIds.length} checked`}
       </div>
     </div>
   );
