@@ -2,6 +2,9 @@
 export const CANVAS_WIDTH = 30000;
 export const CANVAS_HEIGHT = 30000;
 
+// Lock timeout for collaborative editing (8 seconds)
+export const LOCK_TTL_MS = 8000;
+
 // Default rectangle properties for new shapes
 export const DEFAULT_RECT = {
   type: "rectangle",

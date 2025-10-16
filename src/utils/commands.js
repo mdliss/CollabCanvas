@@ -218,14 +218,33 @@ export class MoveShapeCommand extends Command {
     this.oldPosition = oldPosition;
     this.user = user;
     this.updateShapeFn = updateShapeFn;
+    
+    console.log('🏗️  [MoveShapeCommand] Constructor called', {
+      canvasId,
+      shapeId,
+      from: oldPosition,
+      to: newPosition,
+      user: user?.displayName || user?.email
+    });
   }
 
   async execute() {
+    console.log('▶️  [MoveShapeCommand] execute() called');
+    console.log('   Calling updateShapeFn (canvasRTDB.updateShape)');
+    console.log('   New position:', this.newPosition);
+    
     await this.updateShapeFn(this.canvasId, this.shapeId, this.newPosition, this.user);
+    
+    console.log('✅ [MoveShapeCommand] execute() completed');
   }
 
   async undo() {
+    console.log('◀️  [MoveShapeCommand] undo() called');
+    console.log('   Calling updateShapeFn to restore old position:', this.oldPosition);
+    
     await this.updateShapeFn(this.canvasId, this.shapeId, this.oldPosition, this.user);
+    
+    console.log('✅ [MoveShapeCommand] undo() completed');
   }
 
   getDescription() {

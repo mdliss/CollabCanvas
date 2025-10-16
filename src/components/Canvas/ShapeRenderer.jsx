@@ -1,8 +1,6 @@
 import { Rect, Circle, Line, Text, Group, Transformer, Star } from "react-konva";
 import { useEffect, useRef } from "react";
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import { streamDragPosition, stopDragStream } from "../../services/dragStream";
-import { updateShape } from "../../services/canvas";
 
 /**
  * ShapeRenderer - renders different shape types with transform support
@@ -20,15 +18,13 @@ export default function ShapeRenderer({
   onTransformStart,
   onTransformEnd,
   onTextUpdate,
-  onContextMenu,
-  onDragBoundUpdate,
   isBeingDraggedByOther = false
 }) {
   const shapeRef = useRef(null);
   const transformerRef = useRef(null);
   const dragStreamInterval = useRef(null);
   const transformStreamInterval = useRef(null);
-  const firestoreCheckpointInterval = useRef(null);
+  const isDraggingRef = useRef(false); // Track if THIS user is currently dragging this shape
 
   // Don't render hidden shapes
   if (shape.hidden) {
@@ -42,6 +38,40 @@ export default function ShapeRenderer({
       transformerRef.current.getLayer().batchDraw();
     }
   }, [isSelected]);
+
+  // Synchronize position from props ONLY when not dragging
+  // This prevents RTDB updates from interfering with active drags
+  // CRITICAL FIX: Also block when being dragged by another user to prevent flickering
+  useEffect(() => {
+    const node = shapeRef.current;
+    if (!node) return;
+    
+    const currentPos = { x: node.x(), y: node.y() };
+    const newPos = { x: shape.x, y: shape.y };
+    const deltaX = Math.abs(currentPos.x - newPos.x);
+    const deltaY = Math.abs(currentPos.y - newPos.y);
+    const posChanged = deltaX > 0.01 || deltaY > 0.01; // Account for floating point precision
+    
+    // Block updates when THIS user is dragging
+    if (isDraggingRef.current) {
+      return;
+    }
+    
+    // CRITICAL FIX: Block updates when ANOTHER user is dragging
+    // This prevents flickering because position flows naturally through props
+    // React-konva automatically syncs x/y props to the Konva node
+    // Manual position updates here would conflict with that, causing stuttering
+    if (isBeingDraggedByOther) {
+      return;
+    }
+    
+    // Sync position from props to Konva node for all other cases
+    // (e.g., undo/redo, programmatic moves, drag end sync)
+    if (posChanged) {
+      node.position(newPos);
+      node.getLayer()?.batchDraw();
+    }
+  }, [shape.x, shape.y, shape.id, isBeingDraggedByOther]);
 
   // Clean up drag/transform streams when shape is deselected or unmounted
   useEffect(() => {
@@ -57,148 +87,26 @@ export default function ShapeRenderer({
         transformStreamInterval.current = null;
         stopDragStream(shape.id);
       }
-      
-      if (firestoreCheckpointInterval.current) {
-        clearInterval(firestoreCheckpointInterval.current);
-        firestoreCheckpointInterval.current = null;
-      }
     };
   }, [isSelected, shape.id]);
 
-  // DISABLED: Drag bounds - removed to allow dragging shapes anywhere without restrictions
-  // eslint-disable-next-line no-unused-vars
+  // No drag bounds - infinite canvas allows shapes to be placed anywhere
   const dragBoundFunc = (pos) => {
-    // Circles, stars, and triangles use center-based positioning
-    if (shape.type === 'circle') {
-      // Get the CURRENT radius from the actual Konva node, not from stale props
-      // This ensures bounds are correct even after resizing
-      const node = shapeRef.current;
-      const nodeRadius = node?.radius?.();
-      // Validate that we have a valid number for radius (must be positive and not NaN)
-      const radius = (typeof nodeRadius === 'number' && !isNaN(nodeRadius) && nodeRadius > 0) 
-        ? nodeRadius 
-        : (shape.width || 100) / 2;
-      
-      const minX = radius;
-      const maxX = CANVAS_WIDTH - radius;
-      const minY = radius;
-      const maxY = CANVAS_HEIGHT - radius;
-      
-      const boundedPos = {
-        x: Math.max(minX, Math.min(pos.x, maxX)),
-        y: Math.max(minY, Math.min(pos.y, maxY))
-      };
-      
-      // Update debug HUD if callback provided
-      if (onDragBoundUpdate) {
-        onDragBoundUpdate({
-          type: 'circle',
-          shapeId: shape.id,
-          radius: radius,
-          minX: minX,
-          maxX: maxX,
-          minY: minY,
-          maxY: maxY,
-          requestedX: pos.x,
-          requestedY: pos.y,
-          boundedX: boundedPos.x,
-          boundedY: boundedPos.y
-        });
-      }
-      
-      if (import.meta.env.VITE_DEBUG) {
-        console.debug('[Circle dragBoundFunc]', {
-          shapeId: shape.id,
-          radius: radius,
-          bounds: { minX, maxX, minY, maxY },
-          requestedPos: pos,
-          boundedPos: boundedPos
-        });
-      }
-      
-      return boundedPos;
-    }
-    
-    if (shape.type === 'star' || shape.type === 'triangle') {
-      // Stars and triangles also use center positioning
-      const node = shapeRef.current;
-      const nodeWidth = node?.width?.();
-      const nodeHeight = node?.height?.();
-      // Validate width and height are valid numbers
-      const width = (typeof nodeWidth === 'number' && !isNaN(nodeWidth) && nodeWidth > 0) 
-        ? nodeWidth 
-        : shape.width || 50;
-      const height = (typeof nodeHeight === 'number' && !isNaN(nodeHeight) && nodeHeight > 0) 
-        ? nodeHeight 
-        : shape.height || 50;
-      const halfWidth = width / 2;
-      const halfHeight = height / 2;
-      return {
-        x: Math.max(halfWidth, Math.min(pos.x, CANVAS_WIDTH - halfWidth)),
-        y: Math.max(halfHeight, Math.min(pos.y, CANVAS_HEIGHT - halfHeight))
-      };
-    }
-    
-    // Rectangles, diamonds, text, and lines use top-left positioning
-    const node = shapeRef.current;
-    const nodeWidth = node?.width?.();
-    const nodeHeight = node?.height?.();
-    // Validate width and height are valid numbers
-    const width = (typeof nodeWidth === 'number' && !isNaN(nodeWidth) && nodeWidth > 0) 
-      ? nodeWidth 
-      : shape.width || 50;
-    const height = (typeof nodeHeight === 'number' && !isNaN(nodeHeight) && nodeHeight > 0) 
-      ? nodeHeight 
-      : shape.height || 50;
-    
-    const minX = 0;
-    const maxX = CANVAS_WIDTH - width;
-    const minY = 0;
-    const maxY = CANVAS_HEIGHT - height;
-    
-    const boundedPos = {
-      x: Math.max(minX, Math.min(pos.x, maxX)),
-      y: Math.max(minY, Math.min(pos.y, maxY))
-    };
-    
-    // Update debug HUD if callback provided
-    if (onDragBoundUpdate) {
-      onDragBoundUpdate({
-        type: shape.type,
-        shapeId: shape.id,
-        radius: null,
-        width: width,
-        height: height,
-        minX: minX,
-        maxX: maxX,
-        minY: minY,
-        maxY: maxY,
-        requestedX: pos.x,
-        requestedY: pos.y,
-        boundedX: boundedPos.x,
-        boundedY: boundedPos.y
-      });
-    }
-    
-    return boundedPos;
+    return pos; // No clamping
   };
 
   const handleDragStart = async (e) => {
     e.cancelBubble = true;
     
-    const node = e.target;
-    
-    if (import.meta.env.VITE_DEBUG) {
-      console.debug('[Shape] dragStart', shape.id, 'type:', shape.type, 'at', node.x(), node.y());
-    }
-    
     const lockAcquired = await onRequestLock(shape.id);
     if (!lockAcquired) {
       e.target.stopDrag();
-      console.warn("[Shape] Drag cancelled - shape locked by another user");
+      console.warn("[ShapeRenderer] Drag cancelled - shape locked by another user");
       return;
     }
     
+    // Mark as dragging to prevent position updates from props
+    isDraggingRef.current = true;
     onDragStart(shape.id);
     
     // Start streaming drag position at ~100Hz (10ms) for smoother updates
@@ -215,24 +123,6 @@ export default function ShapeRenderer({
         );
       }
     }, 10);
-    
-    // Periodic Firestore checkpoint - DISABLED due to concurrency issues
-    // TODO: Re-enable when shapes are stored as individual documents (not array)
-    // firestoreCheckpointInterval.current = setInterval(() => {
-    //   const node = shapeRef.current;
-    //   if (node && currentUser) {
-    //     const checkpointData = {
-    //       x: node.x(),
-    //       y: node.y(),
-    //       rotation: node.rotation()
-    //     };
-    //     
-    //     updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
-    //       .catch(err => {
-    //         console.debug('[Shape] Checkpoint save failed (non-critical):', err.message);
-    //       });
-    //   }
-    // }, 500);
   };
 
   const handleDragEnd = (e) => {
@@ -243,23 +133,17 @@ export default function ShapeRenderer({
     }
     stopDragStream(shape.id);
     
-    // Stop Firestore checkpoints
-    if (firestoreCheckpointInterval.current) {
-      clearInterval(firestoreCheckpointInterval.current);
-      firestoreCheckpointInterval.current = null;
-    }
-    
     const node = e.target;
     const finalPos = {
       x: node.x(),
       y: node.y()
     };
     
-    if (import.meta.env.VITE_DEBUG) {
-      console.debug('[Shape] dragEnd', shape.id, 'type:', shape.type, 'at', finalPos.x, finalPos.y);
-    }
-    
+    // Call parent first (this writes to RTDB)
     onDragEnd(shape.id, finalPos);
+    
+    // Clear isDragging flag immediately
+    isDraggingRef.current = false;
   };
 
   const handleTransformEnd = async () => {
@@ -268,12 +152,6 @@ export default function ShapeRenderer({
       transformStreamInterval.current = null;
     }
     await stopDragStream(shape.id);
-    
-    // Stop Firestore checkpoints
-    if (firestoreCheckpointInterval.current) {
-      clearInterval(firestoreCheckpointInterval.current);
-      firestoreCheckpointInterval.current = null;
-    }
     
     const node = shapeRef.current;
     if (!node) return;
@@ -347,6 +225,9 @@ export default function ShapeRenderer({
     }
 
     onTransformEnd(shape.id, newAttrs);
+    
+    // Clear isDragging flag immediately after transform completes
+    isDraggingRef.current = false;
   };
 
   const handleTransformStart = async () => {
@@ -358,6 +239,9 @@ export default function ShapeRenderer({
       }
       return false;
     }
+    
+    // Mark as dragging to prevent position updates during transform
+    isDraggingRef.current = true;
     
     // Notify parent (for performance tracking and undo state capture)
     if (onTransformStart) {
@@ -378,28 +262,6 @@ export default function ShapeRenderer({
         );
       }
     }, 10);
-    
-    // Periodic Firestore checkpoint - DISABLED due to concurrency issues
-    // TODO: Re-enable when shapes are stored as individual documents (not array)
-    // firestoreCheckpointInterval.current = setInterval(() => {
-    //   const node = shapeRef.current;
-    //   if (node && currentUser) {
-    //     const scaleX = node.scaleX();
-    //     const scaleY = node.scaleY();
-    //     const checkpointData = {
-    //       x: node.x(),
-    //       y: node.y(),
-    //       width: Math.max(10, node.width() * scaleX),
-    //       height: Math.max(10, node.height() * scaleY),
-    //       rotation: node.rotation()
-    //     };
-    //     
-    //     updateShape('global-canvas-v1', shape.id, checkpointData, currentUser)
-    //       .catch(err => {
-    //         console.debug('[Shape] Transform checkpoint save failed (non-critical):', err.message);
-    //       });
-    //   }
-    // }, 500);
     
     return true;
   };
@@ -436,11 +298,6 @@ export default function ShapeRenderer({
     onDragEnd: handleDragEnd,
     onTransformEnd: handleTransformEnd,
     onTransformStart: handleTransformStart,
-    onContextMenu: (e) => {
-      if (onContextMenu) {
-        onContextMenu(e, shape.id);
-      }
-    },
     perfectDrawEnabled: false,
     hitStrokeWidth: 8,
     stroke: strokeColor,

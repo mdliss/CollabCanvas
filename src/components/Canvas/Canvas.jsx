@@ -1,8 +1,9 @@
 import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
+// ACTIVE: RTDB-based shape storage (current implementation)
 import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvasRTDB";
-import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
+import { CANVAS_WIDTH, CANVAS_HEIGHT, LOCK_TTL_MS } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
 import ShapeToolbar from "./ShapeToolbar";
 import DebugNote from "./DebugNote";
@@ -16,7 +17,6 @@ import ConnectionStatus from "../UI/ConnectionStatus";
 import TextFormattingToolbar from "../UI/TextFormattingToolbar";
 import LayersPanel from "../UI/LayersPanel";
 import HistoryTimeline from "../UI/HistoryTimeline";
-import ContextMenu from "../UI/ContextMenu";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -34,7 +34,6 @@ import { performanceMonitor } from "../../services/performance";
 const CANVAS_ID = "global-canvas-v1";
 const GRID_SIZE = 50;
 const GRID_COLOR = "#e0e0e0";
-const LOCK_TTL_MS = 8000;
 
 export default function Canvas() {
   const { user } = useAuth();
@@ -49,8 +48,6 @@ export default function Canvas() {
   const [textToolbarPosition, setTextToolbarPosition] = useState({ x: 0, y: 0 });
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
   const [copiedShapes, setCopiedShapes] = useState([]);
-  const [contextMenu, setContextMenu] = useState(null); // { x, y, shapeId }
-  const [dragDebugInfo, setDragDebugInfo] = useState(null); // Debug info for drag bounds
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
@@ -687,14 +684,8 @@ export default function Canvas() {
     setStagePos(newPos);
   };
 
-  const clampStagePos = (pos) => {
-    // NO CLAMPING - infinite panning!
-    // Users can pan anywhere without restrictions
-    return pos;
-  };
-
   const handleShapeDragStart = (shapeId) => {
-    // Shape drag started - store initial position for undo
+    // Store initial position for undo
     const shape = shapes.find(s => s.id === shapeId);
     if (shape) {
       dragStartStateRef.current[shapeId] = {
@@ -707,18 +698,11 @@ export default function Canvas() {
   };
 
   const handleShapeDragEnd = async (shapeId, pos) => {
-    const shape = shapes.find(s => s.id === shapeId);
-    
-    // Clear drag debug info
-    setDragDebugInfo(null);
-    
-    if (import.meta.env.VITE_DEBUG) {
-      console.debug('[Canvas] dragEnd persist', shapeId, 'type:', shape?.type, 'pos:', pos);
-    }
     setEditing(false);
     
     // Get the old position from dragStart
     const oldPosition = dragStartStateRef.current[shapeId];
+    
     if (oldPosition) {
       // Wrap in command for undo/redo
       const command = new MoveShapeCommand(
@@ -740,7 +724,6 @@ export default function Canvas() {
       delete dragStartStateRef.current[shapeId];
     } else {
       // Fallback if no initial state (shouldn't happen)
-      console.warn('[Canvas] No dragStart state found for', shapeId, '- using fallback');
       await updateShape(CANVAS_ID, shapeId, pos, user);
     }
     
@@ -1485,26 +1468,6 @@ export default function Canvas() {
     }
   };
 
-  const handleContextMenu = (e, shapeId) => {
-    e.evt.preventDefault(); // Prevent default browser context menu
-    e.cancelBubble = true; // Stop event from bubbling to Stage
-    
-    // If right-clicking on an unselected shape, select it first
-    if (shapeId && !selectedIds.includes(shapeId)) {
-      setSelectedIds([shapeId]);
-      if (user?.uid) {
-        const name = user.displayName || user.email?.split('@')[0] || 'User';
-        const color = generateUserColor(user.uid);
-        setSelection(shapeId, user.uid, name, color);
-      }
-    }
-    
-    setContextMenu({
-      x: e.evt.clientX,
-      y: e.evt.clientY,
-      shapeId
-    });
-  };
 
   const handleCut = async () => {
     if (!user || selectedIds.length === 0) return;
@@ -1765,7 +1728,7 @@ export default function Canvas() {
         y: panInitialPosRef.current.y + deltaY
       };
       
-      setStagePos(clampStagePos(newPos));
+      setStagePos(newPos);
       return;
     }
     
@@ -1857,11 +1820,6 @@ export default function Canvas() {
     }
     
     if (e.target === e.target.getStage() && !selectionBox && !selectionStartRef.current) {
-      // Close context menu when clicking on canvas
-      if (contextMenu) {
-        setContextMenu(null);
-      }
-      
       if (selectedIds.length > 0) {
         selectedIds.forEach(id => {
           clearSelection(id);
@@ -1882,47 +1840,6 @@ export default function Canvas() {
       }
     };
   }, [selectedIds]);
-
-  useEffect(() => {
-    // DISABLED: staleLockSweeper to eliminate transaction conflicts
-    // The sweeper was causing frequent Firestore conflicts during collaborative editing
-    // Locks will naturally expire after LOCK_TTL_MS (30 seconds)
-    // This eliminates the "snapping" behavior users experience
-    
-    // Keep the code here for reference but don't run it
-    if (!user?.uid || true) return; // Force disabled with || true
-    
-    // Stagger the sweeper based on user ID to reduce conflicts
-    // Each user gets a different offset (0-20 seconds) based on their UID hash
-    const uidHash = user.uid.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const initialDelay = (uidHash % 20) * 1000; // 0-20 second spread
-    
-    let interval;
-    const startSweeper = setTimeout(() => {
-      // Run immediately on start
-      staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
-      
-      // Then run every 30 seconds (increased from 5 seconds to reduce conflicts)
-      interval = setInterval(() => {
-        staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
-      }, 30000);
-    }, initialDelay);
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        // When tab becomes visible, wait a bit to avoid stampede
-        setTimeout(() => staleLockSweeper(CANVAS_ID, LOCK_TTL_MS), Math.random() * 2000);
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      clearTimeout(startSweeper);
-      if (interval) clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [user]);
 
   // Extra cleanup: handle tab close/refresh for presence
   useEffect(() => {
@@ -2106,50 +2023,6 @@ export default function Canvas() {
         />
       )}
       
-      {/* Context Menu */}
-      {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          onClose={() => setContextMenu(null)}
-          onCut={handleCut}
-          onCopy={handleCopy}
-          onPaste={() => handlePaste({ x: contextMenu.x, y: contextMenu.y })}
-          onDuplicate={handleDuplicate}
-          onBringToFront={() => handleBringToFront()}
-          onSendToBack={() => handleSendToBack()}
-          onBringForward={() => handleBringForward()}
-          onSendBackward={() => handleSendBackward()}
-          onLock={() => handleToggleLock(contextMenu.shapeId || selectedIds[0])}
-          onDelete={async () => {
-            const shouldBatch = selectedIds.length > 1;
-            if (shouldBatch) {
-              startBatch(`Deleted ${selectedIds.length} shapes`);
-            }
-            
-            try {
-              for (const id of selectedIds) {
-                const shape = shapes.find(s => s.id === id);
-                if (!shape) continue;
-                
-                const command = new DeleteShapeCommand(CANVAS_ID, shape, user, createShape, deleteShape);
-                await execute(command, user);
-              }
-              
-              selectedIds.forEach(id => clearSelection(id));
-              setSelectedIds([]);
-            } finally {
-              if (shouldBatch) {
-                await endBatch();
-              }
-            }
-          }}
-          isLocked={contextMenu.shapeId ? shapes.find(s => s.id === contextMenu.shapeId)?.isLocked : false}
-          hasSelection={selectedIds.length > 0}
-          hasCopiedShapes={copiedShapes.length > 0}
-        />
-      )}
-      
       {/* Feedback Toast */}
       {feedbackMessage && (
         <div
@@ -2171,54 +2044,6 @@ export default function Canvas() {
           }}
         >
           {feedbackMessage}
-        </div>
-      )}
-      
-      {/* Drag Bounds Debug HUD */}
-      {dragDebugInfo && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '10px',
-            left: '10px',
-            background: 'rgba(255, 87, 34, 0.95)',
-            color: '#fff',
-            padding: '12px 16px',
-            borderRadius: '8px',
-            fontSize: '13px',
-            fontFamily: 'monospace',
-            fontWeight: '600',
-            zIndex: 10000,
-            pointerEvents: 'none',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            border: '2px solid rgba(255, 255, 255, 0.3)',
-            minWidth: '320px'
-          }}
-        >
-          <div style={{ marginBottom: '8px', fontSize: '14px', borderBottom: '1px solid rgba(255,255,255,0.3)', paddingBottom: '6px' }}>
-            🔍 DRAG BOUNDS DEBUG - {dragDebugInfo.type.toUpperCase()}
-          </div>
-          <div>Shape ID: {dragDebugInfo.shapeId.substring(0, 20)}...</div>
-          {dragDebugInfo.radius ? (
-            <div>Radius: {dragDebugInfo.radius.toFixed(2)} px (diameter: {(dragDebugInfo.radius * 2).toFixed(2)})</div>
-          ) : (
-            <div>Size: {dragDebugInfo.width?.toFixed(0)} × {dragDebugInfo.height?.toFixed(0)} px</div>
-          )}
-          <div style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '6px' }}>
-            <strong>Allowed Bounds:</strong>
-          </div>
-          <div>  X: [{dragDebugInfo.minX?.toFixed(0)}, {dragDebugInfo.maxX?.toFixed(0)}]</div>
-          <div>  Y: [{dragDebugInfo.minY?.toFixed(0)}, {dragDebugInfo.maxY?.toFixed(0)}]</div>
-          <div style={{ marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: '6px' }}>
-            <strong>Current Position:</strong>
-          </div>
-          <div>  Requested: ({dragDebugInfo.requestedX?.toFixed(0)}, {dragDebugInfo.requestedY?.toFixed(0)})</div>
-          <div>  Clamped:   ({dragDebugInfo.boundedX?.toFixed(0)}, {dragDebugInfo.boundedY?.toFixed(0)})</div>
-          {(dragDebugInfo.requestedX !== dragDebugInfo.boundedX || dragDebugInfo.requestedY !== dragDebugInfo.boundedY) && (
-            <div style={{ marginTop: '6px', color: '#ffeb3b', fontWeight: 'bold' }}>
-              ⚠️ CLAMPING ACTIVE!
-            </div>
-          )}
         </div>
       )}
       
@@ -2260,15 +2085,6 @@ export default function Canvas() {
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
         onMouseLeave={handleStageMouseLeave}
-        onContextMenu={(e) => {
-          e.evt.preventDefault();
-          // Always show context menu when right-clicking on Stage
-          setContextMenu({
-            x: e.evt.clientX,
-            y: e.evt.clientY,
-            shapeId: null
-          });
-        }}
       >
         <Layer>
           {/* Canvas background - let clicks pass through to Stage handler */}
@@ -2346,8 +2162,6 @@ export default function Canvas() {
                 onTransformStart={handleShapeTransformStart}
                 onTransformEnd={handleShapeTransformEnd}
                 onTextUpdate={handleTextUpdate}
-                onContextMenu={handleContextMenu}
-                onDragBoundUpdate={isDraggedByOther ? null : setDragDebugInfo}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />

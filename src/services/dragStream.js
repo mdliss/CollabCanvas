@@ -26,33 +26,27 @@ export const streamDragPosition = async (shapeId, uid, displayName, x, y, rotati
     rotation: Math.round(rotation * 100) / 100
   };
 
-  // Build delta: only include changed properties
-  const delta = {
-    uid,
-    displayName,
-    timestamp: Date.now()
-  };
-  
-  let hasChanges = false;
-
-  // Check each property for changes
-  if (!lastState || currentState.x !== lastState.x) {
-    delta.x = currentState.x;
-    hasChanges = true;
-  }
-  if (!lastState || currentState.y !== lastState.y) {
-    delta.y = currentState.y;
-    hasChanges = true;
-  }
-  if (!lastState || currentState.rotation !== lastState.rotation) {
-    delta.rotation = currentState.rotation;
-    hasChanges = true;
-  }
+  // Check if any coordinate changed
+  const hasChanges = !lastState || 
+    currentState.x !== lastState.x ||
+    currentState.y !== lastState.y ||
+    currentState.rotation !== lastState.rotation;
 
   // Only broadcast if something actually changed
-  if (hasChanges || !lastState) {
+  if (hasChanges) {
+    // CRITICAL FIX: Always send ALL coordinates, never partial deltas
+    // This prevents missing x/y/rotation causing shapes to jump
+    const dragData = {
+      uid,
+      displayName,
+      timestamp: Date.now(),
+      x: currentState.x,
+      y: currentState.y,
+      rotation: currentState.rotation
+    };
+    
     const dragRef = ref(rtdb, `${BASE}/${shapeId}`);
-    await set(dragRef, delta);
+    await set(dragRef, dragData);
     await onDisconnect(dragRef).remove();
     lastBroadcastState.set(shapeId, currentState);
   } else {
