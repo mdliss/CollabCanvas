@@ -40,31 +40,41 @@ export default function ShapeToolbar({
     const isHovered = hoveredTool === config.id;
     const isDisabled = config.disabled;
 
-    // Use gradient backgrounds for action buttons
+    // Neutral color scheme - softer, more professional
     const getButtonStyle = () => {
       if (isDisabled) {
+        // Disabled: white/light gray (not dark gray)
         return {
-          background: 'linear-gradient(135deg, #4b5563 0%, #374151 100%)',
+          background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+          color: '#d1d5db',
           cursor: 'not-allowed',
-          opacity: 0.4
+          opacity: 0.6,
+          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)'
         };
       }
       if (isActive) {
+        // Active: subtle gray
         return {
-          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-          transform: 'scale(0.95)',
-          boxShadow: '0 2px 8px rgba(37, 99, 235, 0.4)'
+          background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
+          color: '#111827',
+          transform: 'scale(0.96)',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1) inset'
         };
       }
       if (isHovered) {
+        // Hover: very subtle gray
         return {
-          background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)',
+          background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
+          color: '#111827',
           transform: 'translateY(-1px)',
-          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+          boxShadow: '0 3px 8px rgba(0, 0, 0, 0.12)'
         };
       }
+      // Default: clean white
       return {
-        background: 'linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%)',
+        background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+        color: '#374151',
+        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)'
       };
     };
 
@@ -82,12 +92,10 @@ export default function ShapeToolbar({
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: config.fontSize || '20px',
-            border: 'none',
+            border: '1px solid rgba(0, 0, 0, 0.06)',
             borderRadius: '10px',
             cursor: isDisabled ? 'not-allowed' : 'pointer',
-            color: (isActive || isHovered) && !isDisabled ? '#ffffff' : '#1f2937',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-            boxShadow: isDisabled ? 'none' : '0 2px 4px rgba(0, 0, 0, 0.1)',
             fontWeight: '600',
             ...getButtonStyle()
           }}
@@ -145,12 +153,12 @@ export default function ShapeToolbar({
         flexDirection: 'column',
         gap: '10px',
         zIndex: 9999,
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 250, 251, 0.98) 100%)',
+        background: 'rgba(255, 255, 255, 0.98)',
         padding: '14px 10px',
         borderRadius: '16px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08)',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
         backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(0, 0, 0, 0.08)'
+        border: '1px solid rgba(0, 0, 0, 0.06)'
       }}
     >
       {/* Undo/Redo Buttons */}
@@ -215,7 +223,7 @@ export default function ShapeToolbar({
         label: 'Forward',
         icon: '⇑',
         fontSize: '22px',
-        shortcut: 'Shift+]',
+        shortcut: ']',
         onClick: onBringForward,
         disabled: !hasSelection
       })}
@@ -225,7 +233,7 @@ export default function ShapeToolbar({
         label: 'Backward',
         icon: '⇓',
         fontSize: '22px',
-        shortcut: 'Shift+[',
+        shortcut: '[',
         onClick: onSendBackward,
         disabled: !hasSelection
       })}

@@ -127,6 +127,28 @@ export class UpdateShapeCommand extends Command {
       return `Changed opacity to ${opacityPercent}%`;
     }
     
+    // Check for z-index changes (layer ordering)
+    if (props.includes('zIndex')) {
+      const oldZ = this.oldProps.zIndex || 0;
+      const newZ = this.newProps.zIndex;
+      if (newZ > oldZ) {
+        const diff = newZ - oldZ;
+        if (diff > 10) {
+          return 'Brought to front';
+        } else {
+          return 'Brought forward';
+        }
+      } else if (newZ < oldZ) {
+        const diff = oldZ - newZ;
+        if (diff > 10) {
+          return 'Sent to back';
+        } else {
+          return 'Sent backward';
+        }
+      }
+      return `Changed layer order (z: ${oldZ} → ${newZ})`;
+    }
+    
     // Check for position changes (shouldn't happen often, MoveShapeCommand handles this)
     if (props.includes('x') || props.includes('y')) {
       return 'Moved shape';

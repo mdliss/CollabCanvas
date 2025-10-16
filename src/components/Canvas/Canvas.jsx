@@ -1,5 +1,5 @@
 import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvas";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
@@ -326,36 +326,88 @@ export default function Canvas() {
         return;
       }
       
-      // Z-Index shortcuts (Shift + [ and Shift + ])
-      if (e.shiftKey && selectedIds.length > 0) {
+      // Z-Index shortcuts ([ and ] without modifiers)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && selectedIds.length > 0) {
         if (e.key === '[') {
           e.preventDefault();
-          // Send backward - use selected shapes
+          // Send backward
+          const shouldBatch = selectedIds.length > 1;
+          if (shouldBatch) {
+            startBatch(`Sent ${selectedIds.length} shapes backward`);
+          }
+          
           try {
             for (const id of selectedIds) {
-              await sendBackward(CANVAS_ID, id, user);
+              const shape = shapes.find(s => s.id === id);
+              if (!shape) continue;
+              
+              const currentZ = shape.zIndex || 0;
+              const lowerShapes = shapes.filter(s => (s.zIndex || 0) < currentZ).sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+              
+              if (lowerShapes.length > 0) {
+                const prevZ = lowerShapes[0].zIndex;
+                const newZ = prevZ - 1;
+                
+                const command = new UpdateShapeCommand(
+                  CANVAS_ID,
+                  id,
+                  { zIndex: newZ },
+                  { zIndex: currentZ },
+                  user,
+                  updateShape
+                );
+                
+                await execute(command, user);
+              }
             }
-            const message = selectedIds.length > 1 
-              ? `Sent ${selectedIds.length} shapes backward` 
-              : 'Sent backward';
-            showFeedback(message);
+            showFeedback(selectedIds.length > 1 ? `Sent ${selectedIds.length} shapes backward` : 'Sent backward');
           } catch (error) {
             console.error('[SendBackward] Failed:', error);
+          } finally {
+            if (shouldBatch) {
+              await endBatch();
+            }
           }
           return;
         } else if (e.key === ']') {
           e.preventDefault();
-          // Bring forward - use selected shapes
+          // Bring forward
+          const shouldBatch = selectedIds.length > 1;
+          if (shouldBatch) {
+            startBatch(`Brought ${selectedIds.length} shapes forward`);
+          }
+          
           try {
             for (const id of selectedIds) {
-              await bringForward(CANVAS_ID, id, user);
+              const shape = shapes.find(s => s.id === id);
+              if (!shape) continue;
+              
+              const currentZ = shape.zIndex || 0;
+              const higherShapes = shapes.filter(s => (s.zIndex || 0) > currentZ).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+              
+              if (higherShapes.length > 0) {
+                const nextZ = higherShapes[0].zIndex;
+                const newZ = nextZ + 1;
+                
+                const command = new UpdateShapeCommand(
+                  CANVAS_ID,
+                  id,
+                  { zIndex: newZ },
+                  { zIndex: currentZ },
+                  user,
+                  updateShape
+                );
+                
+                await execute(command, user);
+              }
             }
-            const message = selectedIds.length > 1 
-              ? `Brought ${selectedIds.length} shapes forward` 
-              : 'Brought forward';
-            showFeedback(message);
+            showFeedback(selectedIds.length > 1 ? `Brought ${selectedIds.length} shapes forward` : 'Brought forward');
           } catch (error) {
             console.error('[BringForward] Failed:', error);
+          } finally {
+            if (shouldBatch) {
+              await endBatch();
+            }
           }
           return;
         }
@@ -990,11 +1042,36 @@ export default function Canvas() {
     const shapeIds = shapeId ? [shapeId] : selectedIds;
     if (shapeIds.length === 0) return;
     
+    const shouldBatch = shapeIds.length > 1;
+    if (shouldBatch) {
+      startBatch(`Brought ${shapeIds.length} shapes to front`);
+    }
+    
     try {
-      // Process all shapes
-      for (const id of shapeIds) {
-        await bringToFront(CANVAS_ID, id, user);
+      // Get max z-index
+      const maxZIndex = shapes.reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+      
+      // Process all shapes with commands
+      for (let i = 0; i < shapeIds.length; i++) {
+        const id = shapeIds[i];
+        const shape = shapes.find(s => s.id === id);
+        if (!shape) continue;
+        
+        const oldZIndex = shape.zIndex || 0;
+        const newZIndex = maxZIndex + i + 1;
+        
+        const command = new UpdateShapeCommand(
+          CANVAS_ID,
+          id,
+          { zIndex: newZIndex },  // newProps FIRST
+          { zIndex: oldZIndex },  // oldProps SECOND
+          user,
+          updateShape
+        );
+        
+        await execute(command, user);
       }
+      
       const message = shapeIds.length > 1 
         ? `Brought ${shapeIds.length} shapes to front` 
         : 'Brought to front';
@@ -1002,6 +1079,10 @@ export default function Canvas() {
     } catch (error) {
       console.error('[BringToFront] Failed:', error);
       showFeedback('Failed to bring to front');
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
     }
   };
 
@@ -1012,11 +1093,36 @@ export default function Canvas() {
     const shapeIds = shapeId ? [shapeId] : selectedIds;
     if (shapeIds.length === 0) return;
     
+    const shouldBatch = shapeIds.length > 1;
+    if (shouldBatch) {
+      startBatch(`Sent ${shapeIds.length} shapes to back`);
+    }
+    
     try {
-      // Process all shapes
-      for (const id of shapeIds) {
-        await sendToBack(CANVAS_ID, id, user);
+      // Get min z-index
+      const minZIndex = shapes.reduce((min, s) => Math.min(min, s.zIndex || 0), 0);
+      
+      // Process all shapes with commands
+      for (let i = 0; i < shapeIds.length; i++) {
+        const id = shapeIds[i];
+        const shape = shapes.find(s => s.id === id);
+        if (!shape) continue;
+        
+        const oldZIndex = shape.zIndex || 0;
+        const newZIndex = minZIndex - shapeIds.length + i;
+        
+        const command = new UpdateShapeCommand(
+          CANVAS_ID,
+          id,
+          { zIndex: newZIndex },  // newProps FIRST
+          { zIndex: oldZIndex },  // oldProps SECOND
+          user,
+          updateShape
+        );
+        
+        await execute(command, user);
       }
+      
       const message = shapeIds.length > 1 
         ? `Sent ${shapeIds.length} shapes to back` 
         : 'Sent to back';
@@ -1024,6 +1130,10 @@ export default function Canvas() {
     } catch (error) {
       console.error('[SendToBack] Failed:', error);
       showFeedback('Failed to send to back');
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
     }
   };
 
@@ -1034,11 +1144,38 @@ export default function Canvas() {
     const shapeIds = shapeId ? [shapeId] : selectedIds;
     if (shapeIds.length === 0) return;
     
+    const shouldBatch = shapeIds.length > 1;
+    if (shouldBatch) {
+      startBatch(`Brought ${shapeIds.length} shapes forward`);
+    }
+    
     try {
-      // Process all shapes
+      // Process all shapes with commands
       for (const id of shapeIds) {
-        await bringForward(CANVAS_ID, id, user);
+        const shape = shapes.find(s => s.id === id);
+        if (!shape) continue;
+        
+        const currentZ = shape.zIndex || 0;
+        // Find next higher z-index
+        const higherShapes = shapes.filter(s => (s.zIndex || 0) > currentZ).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+        
+        if (higherShapes.length > 0) {
+          const nextZ = higherShapes[0].zIndex;
+          const newZ = nextZ + 1;
+          
+          const command = new UpdateShapeCommand(
+            CANVAS_ID,
+            id,
+            { zIndex: newZ },      // newProps FIRST
+            { zIndex: currentZ },  // oldProps SECOND
+            user,
+            updateShape
+          );
+          
+          await execute(command, user);
+        }
       }
+      
       const message = shapeIds.length > 1 
         ? `Brought ${shapeIds.length} shapes forward` 
         : 'Brought forward';
@@ -1046,6 +1183,10 @@ export default function Canvas() {
     } catch (error) {
       console.error('[BringForward] Failed:', error);
       showFeedback('Failed to bring forward');
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
     }
   };
 
@@ -1056,11 +1197,38 @@ export default function Canvas() {
     const shapeIds = shapeId ? [shapeId] : selectedIds;
     if (shapeIds.length === 0) return;
     
+    const shouldBatch = shapeIds.length > 1;
+    if (shouldBatch) {
+      startBatch(`Sent ${shapeIds.length} shapes backward`);
+    }
+    
     try {
-      // Process all shapes
+      // Process all shapes with commands
       for (const id of shapeIds) {
-        await sendBackward(CANVAS_ID, id, user);
+        const shape = shapes.find(s => s.id === id);
+        if (!shape) continue;
+        
+        const currentZ = shape.zIndex || 0;
+        // Find next lower z-index
+        const lowerShapes = shapes.filter(s => (s.zIndex || 0) < currentZ).sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+        
+        if (lowerShapes.length > 0) {
+          const prevZ = lowerShapes[0].zIndex;
+          const newZ = prevZ - 1;
+          
+          const command = new UpdateShapeCommand(
+            CANVAS_ID,
+            id,
+            { zIndex: newZ },      // newProps FIRST
+            { zIndex: currentZ },  // oldProps SECOND
+            user,
+            updateShape
+          );
+          
+          await execute(command, user);
+        }
       }
+      
       const message = shapeIds.length > 1 
         ? `Sent ${shapeIds.length} shapes backward` 
         : 'Sent backward';
@@ -1068,6 +1236,10 @@ export default function Canvas() {
     } catch (error) {
       console.error('[SendBackward] Failed:', error);
       showFeedback('Failed to send backward');
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
     }
   };
 

@@ -88,11 +88,11 @@ export default function HistoryTimeline() {
     },
     collapsed: {
       width: isExpanded ? '320px' : '140px',
-      background: 'rgba(30, 30, 30, 0.95)',
+      background: 'rgba(255, 255, 255, 0.98)',
       backdropFilter: 'blur(10px)',
-      borderRadius: '8px',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
+      borderRadius: '12px',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
+      border: '1px solid rgba(0, 0, 0, 0.06)',
       transition: 'all 0.3s ease',
       overflow: 'hidden'
     },
@@ -102,11 +102,11 @@ export default function HistoryTimeline() {
       alignItems: 'center',
       justifyContent: 'space-between',
       cursor: 'pointer',
-      background: 'rgba(0, 0, 0, 0.2)',
-      borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.1)' : 'none'
+      background: 'transparent',
+      borderBottom: isExpanded ? '1px solid rgba(0, 0, 0, 0.06)' : 'none'
     },
     title: {
-      color: '#fff',
+      color: '#374151',
       fontSize: '13px',
       fontWeight: '600',
       display: 'flex',
@@ -114,64 +114,66 @@ export default function HistoryTimeline() {
       gap: '8px'
     },
     count: {
-      background: 'rgba(96, 165, 250, 0.2)',
-      color: '#60a5fa',
+      background: 'rgba(107, 114, 128, 0.1)',
+      color: '#6b7280',
       padding: '2px 8px',
       borderRadius: '10px',
       fontSize: '11px',
-      fontWeight: '500'
+      fontWeight: '600'
     },
     expandIcon: {
+      fontSize: '12px',
       color: '#9ca3af',
-      fontSize: '16px',
       transition: 'transform 0.3s ease',
       transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
     },
     historyList: {
-      maxHeight: isExpanded ? '400px' : '0',
+      maxHeight: '400px',
       overflowY: 'auto',
-      overflowX: 'hidden',
-      transition: 'max-height 0.3s ease'
+      padding: '8px'
     },
     historyItem: {
-      padding: '10px 16px',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '8px',
+      padding: '10px 12px',
+      marginBottom: '4px',
+      borderRadius: '6px',
+      cursor: 'pointer',
       transition: 'all 0.2s ease',
-      cursor: 'pointer'
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+      background: '#f9fafb',
+      border: '1px solid rgba(0, 0, 0, 0.04)'
     },
     historyItemCurrent: {
-      background: 'rgba(96, 165, 250, 0.15)',
-      borderLeft: '3px solid #60a5fa'
+      background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
+      border: '1px solid rgba(0, 0, 0, 0.08)',
+      fontWeight: '600'
     },
     bullet: {
-      width: '6px',
-      height: '6px',
+      width: '8px',
+      height: '8px',
       borderRadius: '50%',
+      marginRight: '8px',
       flexShrink: 0
     },
     bulletDone: {
-      background: '#60a5fa'
+      background: '#10b981'
     },
     bulletUndone: {
-      background: '#6b7280',
-      opacity: 0.5
+      background: '#9ca3af'
     },
     itemContent: {
       flex: 1,
       minWidth: 0
     },
     itemDescription: {
-      color: '#fff',
       fontSize: '12px',
-      marginBottom: '2px',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis',
-      whiteSpace: 'nowrap'
+      color: '#374151',
+      lineHeight: '1.4',
+      wordBreak: 'break-word'
     },
     itemDescriptionUndone: {
+      color: '#9ca3af',
       opacity: 0.5,
       textDecoration: 'line-through'
     },
@@ -180,7 +182,7 @@ export default function HistoryTimeline() {
       fontSize: '10px'
     },
     itemUser: {
-      color: '#60a5fa',
+      color: '#6b7280',
       fontSize: '10px',
       fontWeight: '500',
       marginTop: '2px'
@@ -188,7 +190,7 @@ export default function HistoryTimeline() {
     empty: {
       padding: '24px 16px',
       textAlign: 'center',
-      color: '#6b7280',
+      color: '#9ca3af',
       fontSize: '12px'
     },
     trashButton: {
@@ -224,7 +226,8 @@ export default function HistoryTimeline() {
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {totalOperations > 0 && (
+            {/* Garbage can - only visible when expanded */}
+            {isExpanded && totalOperations > 0 && (
               <button
                 style={styles.trashButton}
                 onClick={handleClearHistory}
@@ -254,13 +257,23 @@ export default function HistoryTimeline() {
                 Create, move, or edit shapes to build history.
               </div>
             ) : (
-              history.map((item) => {
-                const userName = item.user?.displayName || 'Unknown';
+              history.map((item, idx) => {
                 const isCurrent = item.isCurrent;
-                
+                // Extract user name properly - item.user might be a string or object
+                let userName = 'Unknown';
+                if (item.user) {
+                  if (typeof item.user === 'string') {
+                    userName = item.user;
+                  } else if (item.user.displayName) {
+                    userName = item.user.displayName;
+                  } else if (item.user.email) {
+                    userName = item.user.email.split('@')[0];
+                  }
+                }
+
                 return (
                   <div
-                    key={item.id}
+                    key={idx}
                     style={{
                       ...styles.historyItem,
                       ...(isCurrent ? styles.historyItemCurrent : {})
@@ -268,13 +281,13 @@ export default function HistoryTimeline() {
                     onClick={() => handleHistoryItemClick(item)}
                     onMouseOver={(e) => {
                       if (!isCurrent) {
-                        e.currentTarget.style.background = 'rgba(96, 165, 250, 0.1)';
+                        e.currentTarget.style.background = '#f3f4f6';
                         e.currentTarget.style.transform = 'translateX(4px)';
                       }
                     }}
                     onMouseOut={(e) => {
                       if (!isCurrent) {
-                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.background = '#f9fafb';
                         e.currentTarget.style.transform = 'translateX(0)';
                       }
                     }}
@@ -334,4 +347,3 @@ export default function HistoryTimeline() {
     </div>
   );
 }
-
