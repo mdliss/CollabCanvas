@@ -35,7 +35,8 @@ export default function HelpMenu({ isVisible, onClose }) {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 100000,
-      backdropFilter: 'blur(4px)'
+      backdropFilter: 'blur(4px)',
+      animation: 'fadeIn 0.2s ease-out'
     },
     panel: {
       backgroundColor: '#1a1a1a',
@@ -46,7 +47,8 @@ export default function HelpMenu({ isVisible, onClose }) {
       overflowY: 'auto',
       boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
       border: '1px solid rgba(255, 255, 255, 0.1)',
-      color: '#fff'
+      color: '#fff',
+      animation: 'scaleIn 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     header: {
       fontSize: '24px',
@@ -114,7 +116,29 @@ export default function HelpMenu({ isVisible, onClose }) {
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <>
+      <style>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+          }
+          to {
+            opacity: 1;
+          }
+        }
+        
+        @keyframes scaleIn {
+          from {
+            transform: scale(0.9);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+      `}</style>
+      <div style={styles.overlay} onClick={onClose}>
       <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
         <div style={styles.header}>
           <span>📚 CollabCanvas Help</span>
@@ -186,6 +210,11 @@ export default function HelpMenu({ isVisible, onClose }) {
           </div>
           
           <div style={styles.item}>
+            <span style={styles.key}>Cmd/Ctrl + X</span>
+            <span style={styles.desc}>Cut selected shape(s)</span>
+          </div>
+          
+          <div style={styles.item}>
             <span style={styles.key}>Cmd/Ctrl + C</span>
             <span style={styles.desc}>Copy selected shape(s)</span>
           </div>
@@ -193,6 +222,16 @@ export default function HelpMenu({ isVisible, onClose }) {
           <div style={styles.item}>
             <span style={styles.key}>Cmd/Ctrl + V</span>
             <span style={styles.desc}>Paste copied shape(s)</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Cmd/Ctrl + D</span>
+            <span style={styles.desc}>Duplicate selected shape(s)</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Right-Click</span>
+            <span style={styles.desc}>Open context menu with all actions</span>
           </div>
           
           <div style={styles.item}>
@@ -336,6 +375,7 @@ export default function HelpMenu({ isVisible, onClose }) {
         </div>
       </div>
     </div>
+    </>
   );
 }
 

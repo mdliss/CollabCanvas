@@ -20,6 +20,7 @@ export default function ShapeRenderer({
   onTransformStart,
   onTransformEnd,
   onTextUpdate,
+  onContextMenu,
   isBeingDraggedByOther = false
 }) {
   const shapeRef = useRef(null);
@@ -290,6 +291,11 @@ export default function ShapeRenderer({
     onDragEnd: handleDragEnd,
     onTransformEnd: handleTransformEnd,
     onTransformStart: handleTransformStart,
+    onContextMenu: (e) => {
+      if (onContextMenu) {
+        onContextMenu(e, shape.id);
+      }
+    },
     perfectDrawEnabled: false,
     hitStrokeWidth: 8,
     stroke: strokeColor,

@@ -5,6 +5,7 @@ import ConfirmationModal from './ConfirmationModal';
 export default function HistoryTimeline() {
   const { getStackSizes, undoStackSize, redoStackSize, clear } = useUndo();
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
   const [history, setHistory] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(null);
@@ -84,7 +85,8 @@ export default function HistoryTimeline() {
       bottom: '16px',
       left: '16px',
       zIndex: 9999,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      transformOrigin: 'bottom left'
     },
     collapsed: {
       width: isExpanded ? '320px' : '140px',
@@ -93,8 +95,12 @@ export default function HistoryTimeline() {
       borderRadius: '12px',
       boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
       border: '1px solid rgba(0, 0, 0, 0.06)',
-      transition: 'all 0.3s ease',
-      overflow: 'hidden'
+      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflow: 'hidden',
+      transformOrigin: 'bottom left',
+      animation: isClosing 
+        ? 'collapseToBottomLeft 0.25s cubic-bezier(0.4, 0, 0.2, 1)' 
+        : (isExpanded ? 'expandFromBottomLeft 0.3s cubic-bezier(0.4, 0, 0.2, 1)' : 'none')
     },
     header: {
       padding: '12px 16px',
@@ -132,7 +138,7 @@ export default function HistoryTimeline() {
       overflowY: 'auto',
       padding: '8px'
     },
-    historyItem: {
+    historyItem: (index) => ({
       padding: '10px 12px',
       marginBottom: '4px',
       borderRadius: '6px',
@@ -142,8 +148,9 @@ export default function HistoryTimeline() {
       flexDirection: 'column',
       gap: '4px',
       background: '#f9fafb',
-      border: '1px solid rgba(0, 0, 0, 0.04)'
-    },
+      border: '1px solid rgba(0, 0, 0, 0.04)',
+      animation: `slideInFromTop 0.3s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.03}s backwards`
+    }),
     historyItemCurrent: {
       background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
       border: '1px solid rgba(0, 0, 0, 0.08)',
@@ -211,12 +218,58 @@ export default function HistoryTimeline() {
   const totalOperations = history.length;
 
   return (
-    <div style={styles.container}>
+    <>
+      <style>{`
+        @keyframes expandFromBottomLeft {
+          from {
+            transform: scale(0.85);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+        
+        @keyframes collapseToBottomLeft {
+          from {
+            transform: scale(1);
+            opacity: 1;
+          }
+          to {
+            transform: scale(0.85);
+            opacity: 0;
+          }
+        }
+        
+        @keyframes slideInFromTop {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
+      <div style={styles.container}>
       <div style={styles.collapsed}>
         {/* Header */}
         <div 
           style={styles.header}
-          onClick={() => setIsExpanded(!isExpanded)}
+          onClick={() => {
+            if (isExpanded) {
+              // Start closing animation
+              setIsClosing(true);
+              setTimeout(() => {
+                setIsExpanded(false);
+                setIsClosing(false);
+              }, 250); // Match animation duration
+            } else {
+              setIsExpanded(true);
+            }
+          }}
         >
           <div style={styles.title}>
             <span>📜</span>
@@ -275,7 +328,7 @@ export default function HistoryTimeline() {
                   <div
                     key={idx}
                     style={{
-                      ...styles.historyItem,
+                      ...styles.historyItem(idx),
                       ...(isCurrent ? styles.historyItemCurrent : {})
                     }}
                     onClick={() => handleHistoryItemClick(item)}
@@ -345,5 +398,6 @@ export default function HistoryTimeline() {
         cancelText="Cancel"
       />
     </div>
+    </>
   );
 }

@@ -417,21 +417,35 @@ export default function AuthBar({ onShowEmailLogin }) {
 
         {/* Enhanced Dropdown menu */}
         {showDropdown && (
-          <div
-            style={{
-              position: 'absolute',
-              top: '100%',
-              right: 0,
-              marginTop: '8px',
-              background: 'white',
-              borderRadius: '12px',
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
-              border: '1px solid rgba(0, 0, 0, 0.1)',
-              width: '320px',
-              maxHeight: '500px',
-              overflowY: 'auto',
-              zIndex: 10001
-            }}
+          <>
+            <style>{`
+              @keyframes slideDown {
+                from {
+                  opacity: 0;
+                  transform: translateY(-10px);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0);
+                }
+              }
+            `}</style>
+            <div
+              style={{
+                position: 'absolute',
+                top: '100%',
+                right: 0,
+                marginTop: '8px',
+                background: 'white',
+                borderRadius: '12px',
+                boxShadow: '0 4px 16px rgba(0, 0, 0, 0.12)',
+                border: '1px solid rgba(0, 0, 0, 0.1)',
+                width: '320px',
+                maxHeight: '500px',
+                overflowY: 'auto',
+                zIndex: 10001,
+                animation: 'slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
           >
             {/* Profile Section */}
             <div
@@ -883,6 +897,7 @@ export default function AuthBar({ onShowEmailLogin }) {
               </button>
             </div>
           </div>
+          </>
         )}
       </div>
     </div>

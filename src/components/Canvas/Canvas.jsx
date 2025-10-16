@@ -16,6 +16,7 @@ import ConnectionStatus from "../UI/ConnectionStatus";
 import TextFormattingToolbar from "../UI/TextFormattingToolbar";
 import LayersPanel from "../UI/LayersPanel";
 import HistoryTimeline from "../UI/HistoryTimeline";
+import ContextMenu from "../UI/ContextMenu";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -48,6 +49,7 @@ export default function Canvas() {
   const [textToolbarPosition, setTextToolbarPosition] = useState({ x: 0, y: 0 });
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
   const [copiedShapes, setCopiedShapes] = useState([]);
+  const [contextMenu, setContextMenu] = useState(null); // { x, y, shapeId }
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
@@ -205,6 +207,47 @@ export default function Canvas() {
         return;
       }
       
+      // Duplicate selected shapes (Cmd/Ctrl + D)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
+        e.preventDefault();
+        await handleDuplicate();
+        return;
+      }
+      
+      // Cut selected shapes (Cmd/Ctrl + X)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x' && selectedIds.length > 0) {
+        e.preventDefault();
+        const shapesToCopy = selectedIds
+          .map(id => shapes.find(s => s.id === id))
+          .filter(Boolean);
+        setCopiedShapes(shapesToCopy);
+        showFeedback(`Cut ${shapesToCopy.length} shape${shapesToCopy.length > 1 ? 's' : ''}`);
+        
+        // Delete the cut shapes
+        const shouldBatch = selectedIds.length > 1;
+        if (shouldBatch) {
+          startBatch(`Cut ${selectedIds.length} shapes`);
+        }
+        
+        try {
+          for (const id of selectedIds) {
+            const shape = shapes.find(s => s.id === id);
+            if (!shape) continue;
+            
+            const command = new DeleteShapeCommand(CANVAS_ID, shape, user, deleteShape, createShape);
+            await execute(command, user);
+          }
+          
+          selectedIds.forEach(id => clearSelection(id));
+          setSelectedIds([]);
+        } finally {
+          if (shouldBatch) {
+            await endBatch();
+          }
+        }
+        return;
+      }
+      
       // Copy selected shapes (Cmd/Ctrl + C)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selectedIds.length > 0) {
         e.preventDefault();
@@ -222,61 +265,7 @@ export default function Canvas() {
       // Paste copied shapes (Cmd/Ctrl + V)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && copiedShapes.length > 0) {
         e.preventDefault();
-        
-        const shouldBatch = copiedShapes.length > 1;
-        if (shouldBatch) {
-          startBatch(`Pasted ${copiedShapes.length} shapes`);
-        }
-        
-        try {
-          const pastedIds = [];
-          const PASTE_OFFSET = 20; // Pixels to offset pasted shapes
-          
-          for (const shapeToCopy of copiedShapes) {
-            // Create a new shape with a new ID and offset position
-            const newShape = {
-              ...shapeToCopy,
-              id: `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-              x: shapeToCopy.x + PASTE_OFFSET,
-              y: shapeToCopy.y + PASTE_OFFSET,
-              createdAt: Date.now(),
-              createdBy: user?.uid || 'anonymous',
-              isLocked: false,
-              lockedBy: null,
-              lockedAt: null
-            };
-            
-            const command = new CreateShapeCommand(
-              CANVAS_ID,
-              newShape,
-              user,
-              createShape,
-              deleteShape
-            );
-            
-            await execute(command, user);
-            pastedIds.push(newShape.id);
-          }
-          
-          // Select the pasted shapes
-          selectedIds.forEach(id => clearSelection(id));
-          setSelectedIds(pastedIds);
-          pastedIds.forEach(id => {
-            if (user?.uid) {
-              const name = user.displayName || user.email?.split('@')[0] || 'User';
-              const color = generateUserColor(user.uid);
-              setSelection(id, user.uid, name, color);
-            }
-          });
-          
-          showFeedback(`Pasted ${pastedIds.length} shape${pastedIds.length > 1 ? 's' : ''}`);
-          setTimeout(() => logUndoState('AFTER PASTE'), 300);
-        } finally {
-          if (shouldBatch) {
-            await endBatch();
-          }
-        }
-        
+        await handlePaste(); // Uses default offset behavior (no position argument)
         return;
       }
       
@@ -1400,6 +1389,171 @@ export default function Canvas() {
     }
   };
 
+  const handleContextMenu = (e, shapeId) => {
+    e.evt.preventDefault(); // Prevent default browser context menu
+    e.cancelBubble = true; // Stop event from bubbling to Stage
+    
+    // If right-clicking on an unselected shape, select it first
+    if (shapeId && !selectedIds.includes(shapeId)) {
+      setSelectedIds([shapeId]);
+      if (user?.uid) {
+        const name = user.displayName || user.email?.split('@')[0] || 'User';
+        const color = generateUserColor(user.uid);
+        setSelection(shapeId, user.uid, name, color);
+      }
+    }
+    
+    setContextMenu({
+      x: e.evt.clientX,
+      y: e.evt.clientY,
+      shapeId
+    });
+  };
+
+  const handleCut = async () => {
+    if (!user || selectedIds.length === 0) return;
+    
+    const shapesToCopy = selectedIds
+      .map(id => shapes.find(s => s.id === id))
+      .filter(Boolean);
+    setCopiedShapes(shapesToCopy);
+    showFeedback(`Cut ${shapesToCopy.length} shape${shapesToCopy.length > 1 ? 's' : ''}`);
+    
+    // Delete the cut shapes
+    const shouldBatch = selectedIds.length > 1;
+    if (shouldBatch) {
+      startBatch(`Cut ${selectedIds.length} shapes`);
+    }
+    
+    try {
+      for (const id of selectedIds) {
+        const shape = shapes.find(s => s.id === id);
+        if (!shape) continue;
+        
+        const command = new DeleteShapeCommand(CANVAS_ID, shape, user, deleteShape, createShape);
+        await execute(command, user);
+      }
+      
+      selectedIds.forEach(id => clearSelection(id));
+      setSelectedIds([]);
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
+    }
+  };
+
+  const handleCopy = () => {
+    if (selectedIds.length === 0) return;
+    
+    const shapesToCopy = selectedIds
+      .map(id => shapes.find(s => s.id === id))
+      .filter(Boolean);
+    
+    if (shapesToCopy.length > 0) {
+      setCopiedShapes(shapesToCopy);
+      showFeedback(`Copied ${shapesToCopy.length} shape${shapesToCopy.length > 1 ? 's' : ''}`);
+    }
+  };
+
+  const handlePaste = async (pastePosition = null) => {
+    if (!user || copiedShapes.length === 0) return;
+    
+    const shouldBatch = copiedShapes.length > 1;
+    if (shouldBatch) {
+      startBatch(`Pasted ${copiedShapes.length} shapes`);
+    }
+    
+    try {
+      const pastedIds = [];
+      const PASTE_OFFSET = 20;
+      
+      // If pasting from context menu, calculate offset to paste position
+      let offsetX = PASTE_OFFSET;
+      let offsetY = PASTE_OFFSET;
+      
+      if (pastePosition && copiedShapes.length > 0) {
+        // Convert screen coordinates to canvas coordinates
+        const stage = stageRef.current;
+        if (stage) {
+          const stageObj = stage.getStage();
+          const scale = stageObj.scaleX();
+          const stagePos = stageObj.position();
+          
+          // Convert screen coordinates to canvas coordinates
+          const canvasX = (pastePosition.x - stagePos.x) / scale;
+          const canvasY = (pastePosition.y - stagePos.y) / scale;
+          
+          // Use the first copied shape as reference point and center it at click position
+          const firstShape = copiedShapes[0];
+          
+          // Calculate the visual center of the first shape
+          // In Konva: Rect/Diamond use top-left (x,y), but Circle/Star use center (x,y)
+          let centerX = firstShape.x;
+          let centerY = firstShape.y;
+          
+          if (firstShape.type === 'rectangle' || firstShape.type === 'diamond') {
+            // Rectangle and diamond: x,y is top-left, so add half dimensions
+            centerX = firstShape.x + (firstShape.width || 100) / 2;
+            centerY = firstShape.y + (firstShape.height || 100) / 2;
+          } else if (firstShape.type === 'circle') {
+            // Circle: x,y is already the center in Konva
+            centerX = firstShape.x;
+            centerY = firstShape.y;
+          } else if (firstShape.type === 'star' || firstShape.type === 'triangle') {
+            // Star and triangle: x,y is already the center
+            centerX = firstShape.x;
+            centerY = firstShape.y;
+          } else if (firstShape.type === 'text') {
+            // Text: x,y is top-left, estimate dimensions
+            const estimatedWidth = (firstShape.text?.length || 10) * (firstShape.fontSize || 24) * 0.6;
+            centerX = firstShape.x + estimatedWidth / 2;
+            centerY = firstShape.y + (firstShape.fontSize || 24) / 2;
+          }
+          
+          // Calculate offset so the center of the first shape appears at click position
+          offsetX = canvasX - centerX;
+          offsetY = canvasY - centerY;
+        }
+      }
+      
+      for (const shapeToCopy of copiedShapes) {
+        const newShape = {
+          ...shapeToCopy,
+          id: `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          x: shapeToCopy.x + offsetX,
+          y: shapeToCopy.y + offsetY,
+          createdAt: Date.now(),
+          createdBy: user?.uid || 'anonymous',
+          isLocked: false,
+          lockedBy: null,
+          lockedAt: null
+        };
+        
+        const command = new CreateShapeCommand(CANVAS_ID, newShape, user, createShape, deleteShape);
+        await execute(command, user);
+        pastedIds.push(newShape.id);
+      }
+      
+      // Select pasted shapes
+      selectedIds.forEach(id => clearSelection(id));
+      setSelectedIds(pastedIds);
+      pastedIds.forEach(id => {
+        if (user?.uid) {
+          const name = user.displayName || user.email?.split('@')[0] || 'User';
+          const color = generateUserColor(user.uid);
+          setSelection(id, user.uid, name, color);
+        }
+      });
+      
+      showFeedback(`Pasted ${pastedIds.length} shape${pastedIds.length > 1 ? 's' : ''}`);
+    } finally {
+      if (shouldBatch) {
+        await endBatch();
+      }
+    }
+  };
+
   const handleDuplicate = async () => {
     if (!user || selectedIds.length === 0) return;
     
@@ -1601,7 +1755,17 @@ export default function Canvas() {
   };
 
   const handleStageClick = (e) => {
+    // Only handle left-clicks (ignore right-clicks)
+    if (e.evt.button !== 0) {
+      return;
+    }
+    
     if (e.target === e.target.getStage() && !selectionBox && !selectionStartRef.current) {
+      // Close context menu when clicking on canvas
+      if (contextMenu) {
+        setContextMenu(null);
+      }
+      
       if (selectedIds.length > 0) {
         selectedIds.forEach(id => {
           clearSelection(id);
@@ -1811,6 +1975,7 @@ export default function Canvas() {
         onSendBackward={handleSendBackward}
         onDuplicate={handleDuplicate}
         hasSelection={selectedIds.length > 0}
+        isLayersPanelVisible={isLayersPanelVisible}
       />
       
       {/* Color Palette - shows when shapes are selected */}
@@ -1819,6 +1984,50 @@ export default function Canvas() {
           onColorSelect={handleColorChange}
           onGradientSelect={handleGradientChange}
           selectedCount={selectedIds.length}
+        />
+      )}
+      
+      {/* Context Menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onCut={handleCut}
+          onCopy={handleCopy}
+          onPaste={() => handlePaste({ x: contextMenu.x, y: contextMenu.y })}
+          onDuplicate={handleDuplicate}
+          onBringToFront={() => handleBringToFront()}
+          onSendToBack={() => handleSendToBack()}
+          onBringForward={() => handleBringForward()}
+          onSendBackward={() => handleSendBackward()}
+          onLock={() => handleToggleLock(contextMenu.shapeId || selectedIds[0])}
+          onDelete={async () => {
+            const shouldBatch = selectedIds.length > 1;
+            if (shouldBatch) {
+              startBatch(`Deleted ${selectedIds.length} shapes`);
+            }
+            
+            try {
+              for (const id of selectedIds) {
+                const shape = shapes.find(s => s.id === id);
+                if (!shape) continue;
+                
+                const command = new DeleteShapeCommand(CANVAS_ID, shape, user, deleteShape, createShape);
+                await execute(command, user);
+              }
+              
+              selectedIds.forEach(id => clearSelection(id));
+              setSelectedIds([]);
+            } finally {
+              if (shouldBatch) {
+                await endBatch();
+              }
+            }
+          }}
+          isLocked={contextMenu.shapeId ? shapes.find(s => s.id === contextMenu.shapeId)?.isLocked : false}
+          hasSelection={selectedIds.length > 0}
+          hasCopiedShapes={copiedShapes.length > 0}
         />
       )}
       
@@ -1884,10 +2093,20 @@ export default function Canvas() {
         onMouseMove={handleStageMouseMove}
         onMouseUp={handleStageMouseUp}
         onMouseLeave={handleStageMouseLeave}
+        onContextMenu={(e) => {
+          e.evt.preventDefault();
+          // Always show context menu when right-clicking on Stage
+          setContextMenu({
+            x: e.evt.clientX,
+            y: e.evt.clientY,
+            shapeId: null
+          });
+        }}
       >
         <Layer>
-          {/* Canvas background - listening={false} so clicks pass through to Stage */}
+          {/* Canvas background - let clicks pass through to Stage handler */}
           <Rect
+            name="canvas-background"
             x={0} 
             y={0} 
             width={CANVAS_WIDTH} 
@@ -1960,6 +2179,7 @@ export default function Canvas() {
                 onTransformStart={handleShapeTransformStart}
                 onTransformEnd={handleShapeTransformEnd}
                 onTextUpdate={handleTextUpdate}
+                onContextMenu={handleContextMenu}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />

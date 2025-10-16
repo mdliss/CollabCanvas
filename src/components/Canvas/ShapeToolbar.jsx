@@ -14,7 +14,8 @@ export default function ShapeToolbar({
   onBringForward,
   onSendBackward,
   onDuplicate,
-  hasSelection = false
+  hasSelection = false,
+  isLayersPanelVisible = false
 }) {
   const [activeTool, setActiveTool] = useState(null);
   const [hoveredTool, setHoveredTool] = useState(null);
@@ -122,7 +123,8 @@ export default function ShapeToolbar({
               pointerEvents: 'none',
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
               zIndex: 10000,
-              border: '1px solid rgba(255, 255, 255, 0.1)'
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth animation
             }}
           >
             <div style={{ marginBottom: '2px' }}>{config.label}</div>
@@ -146,7 +148,7 @@ export default function ShapeToolbar({
     <div
       style={{
         position: 'fixed',
-        right: '16px',
+        right: isLayersPanelVisible ? '356px' : '16px', // 340px panel width + 16px margin
         top: '50%',
         transform: 'translateY(-50%)',
         display: 'flex',
@@ -158,7 +160,8 @@ export default function ShapeToolbar({
         borderRadius: '16px',
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
         backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(0, 0, 0, 0.06)'
+        border: '1px solid rgba(0, 0, 0, 0.06)',
+        transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth animation
       }}
     >
       {/* Undo/Redo Buttons */}

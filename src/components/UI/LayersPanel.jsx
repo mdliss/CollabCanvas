@@ -261,7 +261,8 @@ export default function LayersPanel({
       flexDirection: 'column',
       boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12), -2px 0 8px rgba(0, 0, 0, 0.08)',
       zIndex: 10000,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      animation: 'slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     header: {
       padding: '20px',
@@ -431,7 +432,20 @@ export default function LayersPanel({
   const hasChecked = checkedIds.length > 0;
 
   return (
-    <div style={styles.panel} ref={panelRef}>
+    <>
+      <style>{`
+        @keyframes slideInRight {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
+      <div style={styles.panel} ref={panelRef}>
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.title}>
@@ -643,5 +657,6 @@ export default function LayersPanel({
         {checkedIds.length > 0 && ` · ${checkedIds.length} checked`}
       </div>
     </div>
+    </>
   );
 }
