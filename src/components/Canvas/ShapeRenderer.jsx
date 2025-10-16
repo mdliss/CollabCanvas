@@ -19,6 +19,7 @@ export default function ShapeRenderer({
   onDragEnd,
   onTransformStart,
   onTransformEnd,
+  onTextUpdate,
   isBeingDraggedByOther = false
 }) {
   const shapeRef = useRef(null);
@@ -359,9 +360,9 @@ export default function ShapeRenderer({
               }
               
               const newText = window.prompt('Edit text:', shape.text || 'Text');
-              if (newText !== null && newText.trim() !== '') {
+              if (newText !== null && newText.trim() !== '' && newText !== shape.text) {
                 try {
-                  await updateShape('global-canvas-v1', shape.id, { text: newText }, currentUser);
+                  await onTextUpdate(shape.id, newText);
                 } catch (error) {
                   console.error('[Text Edit] Update failed:', error);
                   alert('Failed to update text: ' + (error.message || 'Unknown error'));
@@ -380,6 +381,9 @@ export default function ShapeRenderer({
             width={shape.width || 100}
             height={shape.height || 100}
             fill={shape.fill}
+            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
             rotation={(shape.rotation || 0) + 45}
             offsetX={(shape.width || 100) / 2}
             offsetY={(shape.height || 100) / 2}
@@ -401,6 +405,9 @@ export default function ShapeRenderer({
               triWidth / 2, 0
             ]}
             fill={shape.fill}
+            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
             closed={true}
             rotation={shape.rotation || 0}
           />
@@ -417,6 +424,9 @@ export default function ShapeRenderer({
             innerRadius={(shape.width || 80) * 0.25}
             outerRadius={(shape.width || 80) * 0.5}
             fill={shape.fill}
+            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
             rotation={shape.rotation || 0}
           />
         );

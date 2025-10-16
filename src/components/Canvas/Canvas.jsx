@@ -643,7 +643,7 @@ export default function Canvas() {
     // Transform started (scaling, rotating) - store initial state for undo
     setEditing(true);
     
-    // Store the initial transform state
+    // Store the COMPLETE initial state (including all visual properties)
     const shape = shapes.find(s => s.id === shapeId);
     if (shape && !dragStartStateRef.current[shapeId]) {
       dragStartStateRef.current[shapeId] = {
@@ -656,7 +656,22 @@ export default function Canvas() {
         scaleY: shape.scaleY || 1,
         radius: shape.radius,
         radiusX: shape.radiusX,
-        radiusY: shape.radiusY
+        radiusY: shape.radiusY,
+        // Also store visual properties
+        fill: shape.fill,
+        opacity: shape.opacity,
+        fillLinearGradientStartPoint: shape.fillLinearGradientStartPoint,
+        fillLinearGradientEndPoint: shape.fillLinearGradientEndPoint,
+        fillLinearGradientColorStops: shape.fillLinearGradientColorStops,
+        // Text properties
+        text: shape.text,
+        fontSize: shape.fontSize,
+        fontFamily: shape.fontFamily,
+        fontStyle: shape.fontStyle,
+        fontWeight: shape.fontWeight,
+        textDecoration: shape.textDecoration,
+        align: shape.align,
+        lineHeight: shape.lineHeight
       };
     }
   };
@@ -977,11 +992,58 @@ export default function Canvas() {
     }
     
     try {
-      await updateShape(CANVAS_ID, shapeId, formatProps, user);
+      // Store old properties for undo
+      const oldProps = {};
+      Object.keys(formatProps).forEach(key => {
+        oldProps[key] = shape[key];
+      });
+      
+      // Wrap in command for undo/redo
+      const command = new UpdateShapeCommand(
+        CANVAS_ID,
+        shapeId,
+        formatProps,  // new properties
+        oldProps,     // old properties
+        user,
+        updateShape
+      );
+      
+      await execute(command, user);
       console.log('[TextFormat] Updated:', shapeId, formatProps);
     } catch (error) {
       console.error('[TextFormat] Update failed:', error);
       showFeedback('Failed to update text formatting');
+    }
+  };
+
+  const handleTextUpdate = async (shapeId, newText) => {
+    if (!user) return;
+    
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape || shape.type !== 'text') return;
+    
+    if (shape.isLocked && shape.lockedBy !== user.uid) {
+      showFeedback('Shape is locked by another user');
+      return;
+    }
+    
+    try {
+      // Wrap in command for undo/redo
+      const command = new UpdateShapeCommand(
+        CANVAS_ID,
+        shapeId,
+        { text: newText },    // new property
+        { text: shape.text }, // old property
+        user,
+        updateShape
+      );
+      
+      await execute(command, user);
+      console.log('[TextUpdate] Updated:', shapeId, newText);
+    } catch (error) {
+      console.error('[TextUpdate] Update failed:', error);
+      showFeedback('Failed to update text');
+      throw error;
     }
   };
 
@@ -1802,6 +1864,7 @@ export default function Canvas() {
                 onDragEnd={handleShapeDragEnd}
                 onTransformStart={handleShapeTransformStart}
                 onTransformEnd={handleShapeTransformEnd}
+                onTextUpdate={handleTextUpdate}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />
