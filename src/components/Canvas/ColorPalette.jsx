@@ -16,7 +16,8 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
   const [scrollIndex, setScrollIndex] = useState(0);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showGradientPicker, setShowGradientPicker] = useState(false);
-  const { history, addColor, addGradient } = useColorHistory();
+  const [isHistoryHovered, setIsHistoryHovered] = useState(false);
+  const { history, addColor, addGradient, clearHistory } = useColorHistory();
   const paletteRef = useRef(null);
   
   const VISIBLE_COLORS = 10; // Show 10 colors at a time
@@ -160,12 +161,15 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
         {history.length > 0 && (
           <>
             <div
+              onMouseEnter={() => setIsHistoryHovered(true)}
+              onMouseLeave={() => setIsHistoryHovered(false)}
               style={{
                 display: 'flex',
                 gap: '3px',
                 alignItems: 'center',
                 paddingRight: '8px',
-                borderRight: '1px solid rgba(0, 0, 0, 0.1)'
+                borderRight: '1px solid rgba(0, 0, 0, 0.1)',
+                position: 'relative'
               }}
             >
               {history.slice(0, 4).map((item, idx) => {
@@ -249,6 +253,47 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
                   </button>
                 );
               })}
+              
+              {/* Clear History Button - Only visible on hover */}
+              {isHistoryHovered && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm('Clear all color history?')) {
+                      clearHistory();
+                    }
+                  }}
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    padding: '0',
+                    outline: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '14px',
+                    marginLeft: '4px'
+                  }}
+                  title="Clear history"
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+                    e.currentTarget.style.transform = 'scale(1.05)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
+                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+                    e.currentTarget.style.transform = 'scale(1)';
+                  }}
+                >
+                  🗑️
+                </button>
+              )}
             </div>
           </>
         )}

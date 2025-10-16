@@ -38,16 +38,22 @@ export class CreateShapeCommand extends Command {
   }
 
   async execute() {
+    console.log('[CreateShapeCommand] EXECUTE: Creating shape', this.shape.id, this.shape.type);
     await this.createShapeFn(this.canvasId, this.shape, this.user);
+    console.log('[CreateShapeCommand] EXECUTE: Shape created successfully');
   }
 
   async undo() {
-    await this.deleteShapeFn(this.canvasId, this.shape.id, this.user);
+    console.log('[CreateShapeCommand] UNDO: Deleting shape', this.shape.id, this.shape.type);
+    await this.deleteShapeFn(this.canvasId, this.shape.id);
+    console.log('[CreateShapeCommand] UNDO: Shape deleted successfully');
   }
 
   getDescription() {
-    const userName = this.metadata?.user?.displayName || this.user?.displayName || 'Unknown';
-    return `Created ${this.shape.type}`;
+    const typeName = this.shape.type.charAt(0).toUpperCase() + this.shape.type.slice(1);
+    const colorInfo = this.shape.fill ? ` (${this.shape.fill})` : '';
+    const position = ` at (${Math.round(this.shape.x)}, ${Math.round(this.shape.y)})`;
+    return `Created ${typeName}${colorInfo}${position}`;
   }
 
   getUserName() {
@@ -170,7 +176,9 @@ export class DeleteShapeCommand extends Command {
   }
 
   getDescription() {
-    return `Deleted ${this.shape.type}`;
+    const typeName = this.shape.type.charAt(0).toUpperCase() + this.shape.type.slice(1);
+    const colorInfo = this.shape.fill ? ` (${this.shape.fill})` : '';
+    return `Deleted ${typeName}${colorInfo}`;
   }
 
   getUserName() {
@@ -199,7 +207,9 @@ export class MoveShapeCommand extends Command {
   }
 
   getDescription() {
-    return `Moved shape`;
+    const fromPos = `(${Math.round(this.oldPosition.x)}, ${Math.round(this.oldPosition.y)})`;
+    const toPos = `(${Math.round(this.newPosition.x)}, ${Math.round(this.newPosition.y)})`;
+    return `Moved shape from ${fromPos} to ${toPos}`;
   }
 
   getUserName() {

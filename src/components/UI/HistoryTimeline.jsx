@@ -3,12 +3,13 @@ import { useUndo } from '../../contexts/UndoContext';
 import ConfirmationModal from './ConfirmationModal';
 
 export default function HistoryTimeline() {
-  const { getStackSizes, undoStackSize, redoStackSize } = useUndo();
+  const { getStackSizes, undoStackSize, redoStackSize, clear } = useUndo();
   const [isExpanded, setIsExpanded] = useState(false);
   const [history, setHistory] = useState([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
 
   useEffect(() => {
     // Listen for changes to the undo manager
@@ -59,6 +60,22 @@ export default function HistoryTimeline() {
     setShowConfirmModal(false);
     setSelectedHistoryIndex(null);
     setSelectedHistoryItem(null);
+  };
+
+  const handleClearHistory = (e) => {
+    e.stopPropagation(); // Prevent triggering expand/collapse
+    setShowClearConfirmModal(true);
+  };
+
+  const handleConfirmClear = () => {
+    if (clear) {
+      clear();
+      setShowClearConfirmModal(false);
+    }
+  };
+
+  const handleCancelClear = () => {
+    setShowClearConfirmModal(false);
   };
 
   const styles = {
@@ -173,6 +190,19 @@ export default function HistoryTimeline() {
       textAlign: 'center',
       color: '#6b7280',
       fontSize: '12px'
+    },
+    trashButton: {
+      background: 'transparent',
+      border: 'none',
+      color: '#9ca3af',
+      fontSize: '16px',
+      cursor: 'pointer',
+      padding: '4px 8px',
+      borderRadius: '4px',
+      transition: 'all 0.2s ease',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     }
   };
 
@@ -193,7 +223,26 @@ export default function HistoryTimeline() {
               <span style={styles.count}>{totalOperations}</span>
             )}
           </div>
-          <span style={styles.expandIcon}>▼</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {totalOperations > 0 && (
+              <button
+                style={styles.trashButton}
+                onClick={handleClearHistory}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.color = '#ef4444';
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.color = '#9ca3af';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+                title="Clear history"
+              >
+                🗑️
+              </button>
+            )}
+            <span style={styles.expandIcon}>▼</span>
+          </div>
         </div>
 
         {/* History List */}
@@ -261,7 +310,7 @@ export default function HistoryTimeline() {
         )}
       </div>
 
-      {/* Confirmation Modal */}
+      {/* Revert Confirmation Modal */}
       <ConfirmationModal
         isOpen={showConfirmModal}
         onConfirm={handleConfirmRevert}
@@ -269,6 +318,17 @@ export default function HistoryTimeline() {
         title="Revert to History Point"
         message={`Are you sure you want to revert to: "${selectedHistoryItem?.description}"? This will undo all changes made after this point.`}
         confirmText="Revert"
+        cancelText="Cancel"
+      />
+
+      {/* Clear History Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showClearConfirmModal}
+        onConfirm={handleConfirmClear}
+        onCancel={handleCancelClear}
+        title="Clear History"
+        message="Are you sure you want to clear all history? This action cannot be undone."
+        confirmText="Clear"
         cancelText="Cancel"
       />
     </div>

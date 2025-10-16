@@ -47,6 +47,7 @@ export default function Canvas() {
   const [textToolbarVisible, setTextToolbarVisible] = useState(false);
   const [textToolbarPosition, setTextToolbarPosition] = useState({ x: 0, y: 0 });
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
+  const [copiedShapes, setCopiedShapes] = useState([]);
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport');
@@ -99,7 +100,11 @@ export default function Canvas() {
   useEffect(() => {
     let unsub = () => {};
     (async () => {
-      unsub = await subscribeToShapes(CANVAS_ID, setShapes);
+      unsub = await subscribeToShapes(CANVAS_ID, (newShapes) => {
+        console.log('[Canvas] Shapes updated from Firestore. Count:', newShapes.length);
+        console.log('[Canvas] Current undo stack size:', window.undoManager?.undoStack?.length || 0);
+        setShapes(newShapes);
+      });
     })();
     return () => { 
       try { 
@@ -138,6 +143,20 @@ export default function Canvas() {
     setTimeout(() => setFeedbackMessage(null), 2000);
   };
 
+  // Debug helper to verify undo/redo state
+  const logUndoState = (operation) => {
+    const undoStack = window.undoManager?.undoStack || [];
+    const redoStack = window.undoManager?.redoStack || [];
+    console.log(`[DEBUG] ${operation}:`, {
+      shapesOnCanvas: shapes.length,
+      undoStackSize: undoStack.length,
+      redoStackSize: redoStack.length,
+      undoCommands: undoStack.map(cmd => cmd.getDescription()),
+      canUndo: window.undoManager?.canUndo() || false,
+      canRedo: window.undoManager?.canRedo() || false
+    });
+  };
+
   useEffect(() => {
     const handleKeyDown = async (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -149,29 +168,115 @@ export default function Canvas() {
           // Redo
           if (canRedo) {
             try {
+              logUndoState('BEFORE REDO');
               const description = await redo();
               if (description) {
                 showFeedback(`Redo: ${description}`);
               }
+              setTimeout(() => logUndoState('AFTER REDO'), 500);
             } catch (error) {
               console.error('[Redo] Failed:', error);
               showFeedback('Redo failed');
             }
+          } else {
+            console.warn('[Redo] canRedo is false');
+            logUndoState('REDO ATTEMPTED BUT BLOCKED');
           }
         } else {
           // Undo
           if (canUndo) {
             try {
+              logUndoState('BEFORE UNDO');
               const description = await undo();
               if (description) {
                 showFeedback(`Undo: ${description}`);
               }
+              // Wait a moment for Firestore to sync
+              setTimeout(() => logUndoState('AFTER UNDO'), 500);
             } catch (error) {
               console.error('[Undo] Failed:', error);
               showFeedback('Undo failed');
             }
+          } else {
+            console.warn('[Undo] canUndo is false');
+            logUndoState('UNDO ATTEMPTED BUT BLOCKED');
           }
         }
+        return;
+      }
+      
+      // Copy selected shapes (Cmd/Ctrl + C)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c' && selectedIds.length > 0) {
+        e.preventDefault();
+        const shapesToCopy = selectedIds
+          .map(id => shapes.find(s => s.id === id))
+          .filter(Boolean);
+        
+        if (shapesToCopy.length > 0) {
+          setCopiedShapes(shapesToCopy);
+          showFeedback(`Copied ${shapesToCopy.length} shape${shapesToCopy.length > 1 ? 's' : ''}`);
+        }
+        return;
+      }
+      
+      // Paste copied shapes (Cmd/Ctrl + V)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && copiedShapes.length > 0) {
+        e.preventDefault();
+        
+        const shouldBatch = copiedShapes.length > 1;
+        if (shouldBatch) {
+          startBatch(`Pasted ${copiedShapes.length} shapes`);
+        }
+        
+        try {
+          const pastedIds = [];
+          const PASTE_OFFSET = 20; // Pixels to offset pasted shapes
+          
+          for (const shapeToCopy of copiedShapes) {
+            // Create a new shape with a new ID and offset position
+            const newShape = {
+              ...shapeToCopy,
+              id: `shape-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              x: shapeToCopy.x + PASTE_OFFSET,
+              y: shapeToCopy.y + PASTE_OFFSET,
+              createdAt: Date.now(),
+              createdBy: user?.uid || 'anonymous',
+              isLocked: false,
+              lockedBy: null,
+              lockedAt: null
+            };
+            
+            const command = new CreateShapeCommand(
+              CANVAS_ID,
+              newShape,
+              user,
+              createShape,
+              deleteShape
+            );
+            
+            await execute(command, user);
+            pastedIds.push(newShape.id);
+          }
+          
+          // Select the pasted shapes
+          selectedIds.forEach(id => clearSelection(id));
+          setSelectedIds(pastedIds);
+          pastedIds.forEach(id => {
+            if (user?.uid) {
+              const name = user.displayName || user.email?.split('@')[0] || 'User';
+              const color = generateUserColor(user.uid);
+              setSelection(id, user.uid, name, color);
+            }
+          });
+          
+          showFeedback(`Pasted ${pastedIds.length} shape${pastedIds.length > 1 ? 's' : ''}`);
+          setTimeout(() => logUndoState('AFTER PASTE'), 300);
+        } finally {
+          if (shouldBatch) {
+            await endBatch();
+          }
+        }
+        
         return;
       }
       
@@ -344,6 +449,7 @@ export default function Canvas() {
     
     try {
       await execute(command, user);
+      setTimeout(() => logUndoState(`AFTER CREATE ${type.toUpperCase()}`), 300);
     } catch (e) {
       setLastError(String(e));
     }
@@ -1065,11 +1171,16 @@ export default function Canvas() {
       return shapes;
     };
 
+    window.debugUndoState = () => {
+      logUndoState('MANUAL DEBUG CHECK');
+    };
+
     return () => {
       delete window.debugUpdateText;
       delete window.debugGetShapes;
+      delete window.debugUndoState;
     };
-  }, [user, shapes]);
+  }, [user, shapes, logUndoState]);
 
   const renderGrid = () => {
     const lines = [];

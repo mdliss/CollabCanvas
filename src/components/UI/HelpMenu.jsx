@@ -184,6 +184,31 @@ export default function HelpMenu({ isVisible, onClose }) {
             <span style={styles.key}>V</span>
             <span style={styles.desc}>Deselect all shapes</span>
           </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Cmd/Ctrl + C</span>
+            <span style={styles.desc}>Copy selected shape(s)</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Cmd/Ctrl + V</span>
+            <span style={styles.desc}>Paste copied shape(s)</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Cmd/Ctrl + Z</span>
+            <span style={styles.desc}>Undo last action</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Cmd/Ctrl + Shift + Z</span>
+            <span style={styles.desc}>Redo last undone action</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Shift + L</span>
+            <span style={styles.desc}>Toggle layers panel</span>
+          </div>
         </div>
 
         {/* Performance Metrics */}

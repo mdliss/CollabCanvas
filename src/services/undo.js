@@ -26,16 +26,20 @@ class UndoManager {
       command.metadata.timestamp = Date.now();
       command.metadata.user = user;
       
-      await command.execute();
-      
-      // If in batch mode, collect commands
+      // If in batch mode, collect commands WITHOUT executing them
+      // They will be executed by the MultiShapeCommand later
       if (this.batchMode) {
         this.batchCommands.push(command);
+        console.log('[UndoManager] Command added to batch (not yet executed):', command.getDescription());
         return true;
       }
       
+      // Not in batch mode - execute immediately and add to stack
+      await command.execute();
+      
       // Add to undo stack
       this.undoStack.push(command);
+      console.log('[UndoManager] Command executed and added to undo stack:', command.getDescription(), 'Stack size:', this.undoStack.length);
       
       // Clear redo stack (new action invalidates redo history)
       this.redoStack = [];
@@ -69,8 +73,11 @@ class UndoManager {
     this.batchMode = false;
     
     if (this.batchCommands.length === 0) {
+      console.log('[UndoManager] endBatch called but no commands in batch');
       return true;
     }
+    
+    console.log('[UndoManager] Ending batch with', this.batchCommands.length, 'commands');
     
     // Import MultiShapeCommand dynamically to avoid circular dependency
     const { MultiShapeCommand } = await import('../utils/commands.js');
@@ -86,6 +93,17 @@ class UndoManager {
       batchCommand.metadata = { ...this.batchCommands[0].metadata };
     }
     
+    // NOW execute the batch command (which executes all collected commands)
+    try {
+      await batchCommand.execute();
+      console.log('[UndoManager] Batch executed successfully');
+    } catch (error) {
+      console.error('[UndoManager] Batch execution failed:', error);
+      this.batchCommands = [];
+      this.batchDescription = '';
+      throw error;
+    }
+    
     // Add to undo stack
     this.undoStack.push(batchCommand);
     this.redoStack = [];
@@ -95,6 +113,8 @@ class UndoManager {
     }
     
     this.notifyListeners();
+    console.log('[UndoManager] Batch added to undo stack. Stack size:', this.undoStack.length);
+    
     this.batchCommands = [];
     this.batchDescription = '';
     return true;
@@ -110,11 +130,13 @@ class UndoManager {
     }
 
     const command = this.undoStack.pop();
+    console.log('[UndoManager] Undoing:', command.getDescription(), 'Remaining in undo stack:', this.undoStack.length);
     
     try {
       await command.undo();
       this.redoStack.push(command);
       this.notifyListeners();
+      console.log('[UndoManager] Undo successful, added to redo stack. Redo stack size:', this.redoStack.length);
       return command.getDescription();
     } catch (error) {
       console.error('[UndoManager] Undo failed:', error);
@@ -134,11 +156,13 @@ class UndoManager {
     }
 
     const command = this.redoStack.pop();
+    console.log('[UndoManager] Redoing:', command.getDescription(), 'Remaining in redo stack:', this.redoStack.length);
     
     try {
       await command.redo();
       this.undoStack.push(command);
       this.notifyListeners();
+      console.log('[UndoManager] Redo successful, added to undo stack. Undo stack size:', this.undoStack.length);
       return command.getDescription();
     } catch (error) {
       console.error('[UndoManager] Redo failed:', error);

@@ -55,11 +55,15 @@ export const createShape = async (canvasId, shapeData, user) => {
   try {
     const canvasRef = getCanvasDoc(canvasId);
     
+    // Use provided ID or generate new one
+    const shapeId = shapeData.id || `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     const newShape = {
-      id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      ...shapeData, // Spread all provided shape data first
+      id: shapeId,  // Then ensure ID is set correctly
       type: shapeData.type || 'rectangle',
-      x: shapeData.x || 200,
-      y: shapeData.y || 200,
+      x: shapeData.x !== undefined ? shapeData.x : 200,
+      y: shapeData.y !== undefined ? shapeData.y : 200,
       width: shapeData.width || 100,
       height: shapeData.height || 100,
       fill: shapeData.fill || '#cccccc',
@@ -71,6 +75,8 @@ export const createShape = async (canvasId, shapeData, user) => {
       lockedBy: null,
       lockedAt: null
     };
+
+    console.log('[createShape] Creating shape with ID:', shapeId);
 
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(canvasRef);
@@ -89,6 +95,8 @@ export const createShape = async (canvasId, shapeData, user) => {
         });
       }
     });
+    
+    console.log('[createShape] Shape created successfully with ID:', shapeId);
   } catch (error) {
     console.error("[createShape] Failed:", error);
     throw error;
@@ -165,6 +173,7 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
 };
 
 export const deleteShape = async (canvasId, shapeId) => {
+  console.log('[deleteShape] Starting deletion for shape:', shapeId);
   try {
     const canvasRef = getCanvasDoc(canvasId);
     
@@ -177,13 +186,27 @@ export const deleteShape = async (canvasId, shapeId) => {
       }
       
       const shapes = docSnap.data().shapes || [];
+      console.log('[deleteShape] Current shapes count:', shapes.length);
+      console.log('[deleteShape] Looking for shape to delete:', shapeId);
+      
+      const shapeExists = shapes.find(s => s.id === shapeId);
+      if (!shapeExists) {
+        console.warn('[deleteShape] Shape not found in Firestore:', shapeId);
+      } else {
+        console.log('[deleteShape] Found shape to delete:', shapeExists.type);
+      }
+      
       const filteredShapes = shapes.filter(shape => shape.id !== shapeId);
+      console.log('[deleteShape] Shapes after filtering:', filteredShapes.length, '(removed:', shapes.length - filteredShapes.length, ')');
       
       transaction.update(canvasRef, {
         shapes: filteredShapes,
         lastUpdated: serverTimestamp()
       });
+      
+      console.log('[deleteShape] Transaction committed - shape should be deleted');
     });
+    console.log('[deleteShape] Deletion completed successfully for:', shapeId);
   } catch (error) {
     console.error("[deleteShape] Failed:", error);
     console.error("[deleteShape] Error details:", {
