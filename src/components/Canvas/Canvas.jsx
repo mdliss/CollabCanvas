@@ -27,7 +27,7 @@ import { watchSelections, setSelection, clearSelection } from "../../services/se
 import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
-import { ref, remove } from "firebase/database";
+import { ref, remove, onValue } from "firebase/database";
 import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 
@@ -50,8 +50,8 @@ export default function Canvas() {
   const [copiedShapes, setCopiedShapes] = useState([]);
   
   const [stageScale, setStageScale] = useState(() => {
-    const saved = localStorage.getItem('collabcanvas-viewport');
-    return saved ? JSON.parse(saved).scale : 0.5;
+    const saved = localStorage.getItem('collabcanvas-viewport-scale');
+    return saved ? parseFloat(saved) : 0.5;
   });
   
   // Helper function to calculate centered viewport position
@@ -110,12 +110,10 @@ export default function Canvas() {
     return () => performanceMonitor.destroy();
   }, []);
 
+  // FEATURE 3: Save only zoom level to localStorage (position always centered)
   useEffect(() => {
-    localStorage.setItem('collabcanvas-viewport', JSON.stringify({
-      scale: stageScale,
-      pos: stagePos
-    }));
-  }, [stageScale, stagePos]);
+    localStorage.setItem('collabcanvas-viewport-scale', stageScale.toString());
+  }, [stageScale]);
 
   useEffect(() => {
     if (!user) return;
@@ -133,6 +131,46 @@ export default function Canvas() {
       unsub();
     };
   }, [user]);
+
+  // Helper function for user feedback
+  const showFeedback = (message) => {
+    setFeedbackMessage(message);
+    setTimeout(() => setFeedbackMessage(null), 2000);
+  };
+
+  // FEATURE 3: Auto-center view on login
+  useEffect(() => {
+    // Only center if user just logged in (not on every render)
+    // Skip if user was already present in previous render
+    if (user && user.uid) {
+      const centeredPos = getCenteredPosition(stageScale);
+      setStagePos(centeredPos);
+      showFeedback('View centered');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid]); // Only trigger when uid changes (login/logout)
+
+  // FEATURE 3: Auto-center view on reconnection (offline → online)
+  useEffect(() => {
+    const connectedRef = ref(rtdb, '.info/connected');
+    let wasOffline = false;
+    
+    const unsubscribe = onValue(connectedRef, (snapshot) => {
+      const isConnected = snapshot.val();
+      
+      if (isConnected && wasOffline) {
+        // Just reconnected after being offline
+        const centeredPos = getCenteredPosition(stageScale);
+        setStagePos(centeredPos);
+        showFeedback('Reconnected - View centered');
+      }
+      
+      // Track offline state for next iteration
+      wasOffline = !isConnected;
+    });
+    
+    return () => unsubscribe();
+  }, [getCenteredPosition, stageScale, showFeedback]);
 
   // Show text formatting toolbar when a single text shape is selected
   useEffect(() => {
@@ -156,11 +194,6 @@ export default function Canvas() {
       setTextToolbarVisible(false);
     }
   }, [selectedIds, shapes, stageScale, stagePos]);
-
-  const showFeedback = (message) => {
-    setFeedbackMessage(message);
-    setTimeout(() => setFeedbackMessage(null), 2000);
-  };
 
   // Debug helper to verify undo/redo state
   const logUndoState = (operation) => {
@@ -2219,45 +2252,70 @@ export default function Canvas() {
         </Layer>
       </Stage>
       
-      {/* Recenter Button - Bottom Right */}
+      {/* FEATURE 4: Recenter Button - Modernized to match toolbar style */}
       <button
         onClick={() => {
           const centeredPos = getCenteredPosition(stageScale);
           setStagePos(centeredPos);
           showFeedback('View centered');
         }}
+        onMouseDown={(e) => {
+          e.currentTarget.style.background = 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)';
+          e.currentTarget.style.transform = 'scale(0.96)';
+          e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1) inset';
+        }}
+        onMouseUp={(e) => {
+          e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+          e.currentTarget.style.transform = 'translateY(-1px)';
+          e.currentTarget.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.12)';
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+          e.currentTarget.style.transform = 'translateY(-1px)';
+          e.currentTarget.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.12)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.08)';
+        }}
         style={{
           position: 'fixed',
           bottom: '20px',
           right: '20px',
-          padding: '12px 20px',
-          backgroundColor: '#007AFF',
-          color: 'white',
-          border: 'none',
-          borderRadius: '8px',
-          fontSize: '14px',
-          fontWeight: '600',
-          cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(0, 122, 255, 0.3)',
-          zIndex: 1000,
-          transition: 'all 0.2s ease',
+          width: '48px',
+          height: '48px',
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
+          justifyContent: 'center',
+          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+          border: '1px solid rgba(0, 0, 0, 0.06)',
+          borderRadius: '10px',
+          cursor: 'pointer',
+          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+          zIndex: 1000,
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          padding: 0
         }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.backgroundColor = '#0051D5';
-          e.currentTarget.style.transform = 'translateY(-2px)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 122, 255, 0.4)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.backgroundColor = '#007AFF';
-          e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 8px rgba(0, 122, 255, 0.3)';
-        }}
+        title="Center View (0 or Home)"
       >
-        <span style={{ fontSize: '16px' }}>🎯</span>
-        Center View
+        <svg 
+          width="20" 
+          height="20" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="#374151" 
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {/* Crosshair icon */}
+          <line x1="12" y1="2" x2="12" y2="10" />
+          <line x1="12" y1="14" x2="12" y2="22" />
+          <line x1="2" y1="12" x2="10" y2="12" />
+          <line x1="14" y1="12" x2="22" y2="12" />
+          <circle cx="12" cy="12" r="2" fill="#374151" />
+        </svg>
       </button>
     </div>
   );
