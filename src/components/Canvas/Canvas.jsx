@@ -1,7 +1,7 @@
 import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper } from "../../services/canvas";
+import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, staleLockSweeper, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvas";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
 import ShapeToolbar from "./ShapeToolbar";
@@ -324,6 +324,19 @@ export default function Canvas() {
           setLastError(error.message);
         }
         return;
+      }
+      
+      // Z-Index shortcuts (Shift + [ and Shift + ])
+      if (e.shiftKey && selectedIds.length > 0) {
+        if (e.key === '[') {
+          e.preventDefault();
+          await handleSendBackward();
+          return;
+        } else if (e.key === ']') {
+          e.preventDefault();
+          await handleBringForward();
+          return;
+        }
       }
       
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -938,13 +951,101 @@ export default function Canvas() {
     
     try {
       if (shape.isLocked) {
-        await unlockShape(CANVAS_ID, shapeId, user);
+        await unlockShape(CANVAS_ID, shapeId, user.uid);
       } else {
-        await tryLockShape(CANVAS_ID, shapeId, user, LOCK_TTL_MS);
+        await tryLockShape(CANVAS_ID, shapeId, user.uid, LOCK_TTL_MS);
       }
     } catch (error) {
       console.error('[ToggleLock] Failed:', error);
       showFeedback('Failed to toggle lock');
+    }
+  };
+
+  const handleBringToFront = async (shapeId) => {
+    if (!user) return;
+    
+    // If shapeId is provided, use it; otherwise use selected shapes
+    const shapeIds = shapeId ? [shapeId] : selectedIds;
+    if (shapeIds.length === 0) return;
+    
+    try {
+      // Process all shapes
+      for (const id of shapeIds) {
+        await bringToFront(CANVAS_ID, id, user);
+      }
+      const message = shapeIds.length > 1 
+        ? `Brought ${shapeIds.length} shapes to front` 
+        : 'Brought to front';
+      showFeedback(message);
+    } catch (error) {
+      console.error('[BringToFront] Failed:', error);
+      showFeedback('Failed to bring to front');
+    }
+  };
+
+  const handleSendToBack = async (shapeId) => {
+    if (!user) return;
+    
+    // If shapeId is provided, use it; otherwise use selected shapes
+    const shapeIds = shapeId ? [shapeId] : selectedIds;
+    if (shapeIds.length === 0) return;
+    
+    try {
+      // Process all shapes
+      for (const id of shapeIds) {
+        await sendToBack(CANVAS_ID, id, user);
+      }
+      const message = shapeIds.length > 1 
+        ? `Sent ${shapeIds.length} shapes to back` 
+        : 'Sent to back';
+      showFeedback(message);
+    } catch (error) {
+      console.error('[SendToBack] Failed:', error);
+      showFeedback('Failed to send to back');
+    }
+  };
+
+  const handleBringForward = async (shapeId) => {
+    if (!user) return;
+    
+    // If shapeId is provided, use it; otherwise use selected shapes
+    const shapeIds = shapeId ? [shapeId] : selectedIds;
+    if (shapeIds.length === 0) return;
+    
+    try {
+      // Process all shapes
+      for (const id of shapeIds) {
+        await bringForward(CANVAS_ID, id, user);
+      }
+      const message = shapeIds.length > 1 
+        ? `Brought ${shapeIds.length} shapes forward` 
+        : 'Brought forward';
+      showFeedback(message);
+    } catch (error) {
+      console.error('[BringForward] Failed:', error);
+      showFeedback('Failed to bring forward');
+    }
+  };
+
+  const handleSendBackward = async (shapeId) => {
+    if (!user) return;
+    
+    // If shapeId is provided, use it; otherwise use selected shapes
+    const shapeIds = shapeId ? [shapeId] : selectedIds;
+    if (shapeIds.length === 0) return;
+    
+    try {
+      // Process all shapes
+      for (const id of shapeIds) {
+        await sendBackward(CANVAS_ID, id, user);
+      }
+      const message = shapeIds.length > 1 
+        ? `Sent ${shapeIds.length} shapes backward` 
+        : 'Sent backward';
+      showFeedback(message);
+    } catch (error) {
+      console.error('[SendBackward] Failed:', error);
+      showFeedback('Failed to send backward');
     }
   };
 
@@ -1110,12 +1211,12 @@ export default function Canvas() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      staleLockSweeper(CANVAS_ID);
+      staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
     }, 2000);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        staleLockSweeper(CANVAS_ID);
+        staleLockSweeper(CANVAS_ID, LOCK_TTL_MS);
       }
     };
 
@@ -1240,6 +1341,10 @@ export default function Canvas() {
           onRename={handleLayerRename}
           onToggleVisibility={handleToggleVisibility}
           onToggleLock={handleToggleLock}
+          onBringToFront={handleBringToFront}
+          onSendToBack={handleSendToBack}
+          onBringForward={handleBringForward}
+          onSendBackward={handleSendBackward}
           onClose={() => setIsLayersPanelVisible(false)}
           user={user}
         />
@@ -1288,6 +1393,11 @@ export default function Canvas() {
         }}
         canUndo={canUndo}
         canRedo={canRedo}
+        onBringToFront={handleBringToFront}
+        onSendToBack={handleSendToBack}
+        onBringForward={handleBringForward}
+        onSendBackward={handleSendBackward}
+        hasSelection={selectedIds.length > 0}
       />
       
       {/* Color Palette - shows when shapes are selected */}

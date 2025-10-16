@@ -209,6 +209,16 @@ export default function HelpMenu({ isVisible, onClose }) {
             <span style={styles.key}>Shift + L</span>
             <span style={styles.desc}>Toggle layers panel</span>
           </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Shift + ]</span>
+            <span style={styles.desc}>Bring selected shape(s) forward one layer</span>
+          </div>
+          
+          <div style={styles.item}>
+            <span style={styles.key}>Shift + [</span>
+            <span style={styles.desc}>Send selected shape(s) backward one layer</span>
+          </div>
         </div>
 
         {/* Performance Metrics */}

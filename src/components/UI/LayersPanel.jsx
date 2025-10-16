@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export default function LayersPanel({ 
   shapes, 
@@ -7,12 +7,30 @@ export default function LayersPanel({
   onRename,
   onToggleVisibility,
   onToggleLock,
+  onBringToFront,
+  onSendToBack,
+  onBringForward,
+  onSendBackward,
   onClose,
   user
 }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
+  const [expandedMenuId, setExpandedMenuId] = useState(null);
+  const panelRef = useRef(null);
+
+  // Close menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (expandedMenuId && panelRef.current && !panelRef.current.contains(e.target)) {
+        setExpandedMenuId(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [expandedMenuId]);
 
   const filteredShapes = shapes.filter(shape => {
     const name = shape.name || shape.type;
@@ -195,11 +213,39 @@ export default function LayersPanel({
       fontSize: '12px',
       color: '#9ca3af',
       textAlign: 'center'
+    },
+    zIndexMenu: {
+      position: 'absolute',
+      right: '60px',
+      backgroundColor: '#1f2937',
+      border: '1px solid #4b5563',
+      borderRadius: '6px',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.4)',
+      zIndex: 10001,
+      padding: '4px',
+      minWidth: '120px'
+    },
+    zIndexMenuItem: {
+      padding: '6px 12px',
+      fontSize: '12px',
+      color: '#fff',
+      cursor: 'pointer',
+      borderRadius: '4px',
+      transition: 'all 0.2s',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      backgroundColor: 'transparent'
+    },
+    zIndexInfo: {
+      fontSize: '10px',
+      color: '#6b7280',
+      marginLeft: '4px'
     }
   };
 
   return (
-    <div style={styles.panel}>
+    <div style={styles.panel} ref={panelRef}>
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.title}>📋 Layers</div>
@@ -344,6 +390,89 @@ export default function LayersPanel({
               >
                 {shape.isLocked ? '🔒' : '🔓'}
               </button>
+
+              {/* Z-Index Menu Button */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  style={styles.iconButton}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setExpandedMenuId(expandedMenuId === shape.id ? null : shape.id);
+                  }}
+                  title="Layer order"
+                  onMouseOver={(e) => e.target.style.backgroundColor = '#4b5563'}
+                  onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                >
+                  ⬍
+                </button>
+
+                {/* Z-Index Dropdown Menu */}
+                {expandedMenuId === shape.id && (
+                  <div style={styles.zIndexMenu}>
+                    <div
+                      style={styles.zIndexMenuItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBringToFront(shape.id);
+                        setExpandedMenuId(null);
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span>⬆️</span>
+                      <span>Bring to Front</span>
+                    </div>
+                    <div
+                      style={styles.zIndexMenuItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onBringForward(shape.id);
+                        setExpandedMenuId(null);
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span>🔼</span>
+                      <span>Bring Forward</span>
+                    </div>
+                    <div
+                      style={styles.zIndexMenuItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSendBackward(shape.id);
+                        setExpandedMenuId(null);
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span>🔽</span>
+                      <span>Send Backward</span>
+                    </div>
+                    <div
+                      style={styles.zIndexMenuItem}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSendToBack(shape.id);
+                        setExpandedMenuId(null);
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#374151'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span>⬇️</span>
+                      <span>Send to Back</span>
+                    </div>
+                    <div style={{ 
+                      borderTop: '1px solid #4b5563', 
+                      margin: '4px 0',
+                      padding: '6px 12px',
+                      fontSize: '10px',
+                      color: '#6b7280'
+                    }}>
+                      Z-Index: {shape.zIndex || 0}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           );
         })}

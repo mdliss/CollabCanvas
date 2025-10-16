@@ -58,28 +58,35 @@ export const createShape = async (canvasId, shapeData, user) => {
     // Use provided ID or generate new one
     const shapeId = shapeData.id || `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
-    const newShape = {
-      ...shapeData, // Spread all provided shape data first
-      id: shapeId,  // Then ensure ID is set correctly
-      type: shapeData.type || 'rectangle',
-      x: shapeData.x !== undefined ? shapeData.x : 200,
-      y: shapeData.y !== undefined ? shapeData.y : 200,
-      width: shapeData.width || 100,
-      height: shapeData.height || 100,
-      fill: shapeData.fill || '#cccccc',
-      createdBy: user?.uid || 'anonymous',
-      createdAt: Date.now(),
-      lastModifiedBy: user?.uid || 'anonymous',
-      lastModifiedAt: Date.now(),
-      isLocked: false,
-      lockedBy: null,
-      lockedAt: null
-    };
-
     console.log('[createShape] Creating shape with ID:', shapeId);
 
     await runTransaction(db, async (transaction) => {
       const docSnap = await transaction.get(canvasRef);
+      
+      const currentShapes = docSnap.exists() ? (docSnap.data().shapes || []) : [];
+      
+      // Calculate z-index: either use provided value or set to max + 1
+      const maxZIndex = currentShapes.reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+      const zIndex = shapeData.zIndex !== undefined ? shapeData.zIndex : maxZIndex + 1;
+      
+      const newShape = {
+        ...shapeData, // Spread all provided shape data first
+        id: shapeId,  // Then ensure ID is set correctly
+        type: shapeData.type || 'rectangle',
+        x: shapeData.x !== undefined ? shapeData.x : 200,
+        y: shapeData.y !== undefined ? shapeData.y : 200,
+        width: shapeData.width || 100,
+        height: shapeData.height || 100,
+        fill: shapeData.fill || '#cccccc',
+        zIndex: zIndex,
+        createdBy: user?.uid || 'anonymous',
+        createdAt: Date.now(),
+        lastModifiedBy: user?.uid || 'anonymous',
+        lastModifiedAt: Date.now(),
+        isLocked: false,
+        lockedBy: null,
+        lockedAt: null
+      };
       
       if (!docSnap.exists()) {
         transaction.set(canvasRef, {
@@ -88,7 +95,6 @@ export const createShape = async (canvasId, shapeData, user) => {
           lastUpdated: serverTimestamp()
         });
       } else {
-        const currentShapes = docSnap.data().shapes || [];
         transaction.update(canvasRef, {
           shapes: [...currentShapes, newShape],
           lastUpdated: serverTimestamp()
@@ -408,6 +414,164 @@ export const duplicateShapes = async (canvasId, shapeIds, user) => {
     return duplicatedCount;
   } catch (error) {
     console.error("[duplicateShapes] Failed:", error);
+    throw error;
+  }
+};
+
+// Z-Index Management Functions
+
+export const bringToFront = async (canvasId, shapeId, user) => {
+  try {
+    const canvasRef = getCanvasDoc(canvasId);
+    
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(canvasRef);
+      if (!docSnap.exists()) return;
+      
+      const shapes = docSnap.data().shapes || [];
+      const maxZIndex = shapes.reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
+      
+      const updatedShapes = shapes.map(shape => {
+        if (shape.id === shapeId) {
+          return {
+            ...shape,
+            zIndex: maxZIndex + 1,
+            lastModifiedBy: user?.uid || 'anonymous',
+            lastModifiedAt: Date.now()
+          };
+        }
+        return shape;
+      });
+      
+      transaction.update(canvasRef, {
+        shapes: updatedShapes,
+        lastUpdated: serverTimestamp()
+      });
+    });
+  } catch (error) {
+    console.error("[bringToFront] Failed:", error);
+    throw error;
+  }
+};
+
+export const sendToBack = async (canvasId, shapeId, user) => {
+  try {
+    const canvasRef = getCanvasDoc(canvasId);
+    
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(canvasRef);
+      if (!docSnap.exists()) return;
+      
+      const shapes = docSnap.data().shapes || [];
+      const minZIndex = shapes.reduce((min, s) => Math.min(min, s.zIndex || 0), 0);
+      
+      const updatedShapes = shapes.map(shape => {
+        if (shape.id === shapeId) {
+          return {
+            ...shape,
+            zIndex: minZIndex - 1,
+            lastModifiedBy: user?.uid || 'anonymous',
+            lastModifiedAt: Date.now()
+          };
+        }
+        return shape;
+      });
+      
+      transaction.update(canvasRef, {
+        shapes: updatedShapes,
+        lastUpdated: serverTimestamp()
+      });
+    });
+  } catch (error) {
+    console.error("[sendToBack] Failed:", error);
+    throw error;
+  }
+};
+
+export const bringForward = async (canvasId, shapeId, user) => {
+  try {
+    const canvasRef = getCanvasDoc(canvasId);
+    
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(canvasRef);
+      if (!docSnap.exists()) return;
+      
+      const shapes = docSnap.data().shapes || [];
+      const targetShape = shapes.find(s => s.id === shapeId);
+      if (!targetShape) return;
+      
+      // Find the next higher z-index
+      const currentZ = targetShape.zIndex || 0;
+      const higherShapes = shapes.filter(s => (s.zIndex || 0) > currentZ).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+      
+      if (higherShapes.length > 0) {
+        const nextZ = higherShapes[0].zIndex;
+        const newZ = nextZ + 1;
+        
+        const updatedShapes = shapes.map(shape => {
+          if (shape.id === shapeId) {
+            return {
+              ...shape,
+              zIndex: newZ,
+              lastModifiedBy: user?.uid || 'anonymous',
+              lastModifiedAt: Date.now()
+            };
+          }
+          return shape;
+        });
+        
+        transaction.update(canvasRef, {
+          shapes: updatedShapes,
+          lastUpdated: serverTimestamp()
+        });
+      }
+    });
+  } catch (error) {
+    console.error("[bringForward] Failed:", error);
+    throw error;
+  }
+};
+
+export const sendBackward = async (canvasId, shapeId, user) => {
+  try {
+    const canvasRef = getCanvasDoc(canvasId);
+    
+    await runTransaction(db, async (transaction) => {
+      const docSnap = await transaction.get(canvasRef);
+      if (!docSnap.exists()) return;
+      
+      const shapes = docSnap.data().shapes || [];
+      const targetShape = shapes.find(s => s.id === shapeId);
+      if (!targetShape) return;
+      
+      // Find the next lower z-index
+      const currentZ = targetShape.zIndex || 0;
+      const lowerShapes = shapes.filter(s => (s.zIndex || 0) < currentZ).sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+      
+      if (lowerShapes.length > 0) {
+        const prevZ = lowerShapes[0].zIndex;
+        const newZ = prevZ - 1;
+        
+        const updatedShapes = shapes.map(shape => {
+          if (shape.id === shapeId) {
+            return {
+              ...shape,
+              zIndex: newZ,
+              lastModifiedBy: user?.uid || 'anonymous',
+              lastModifiedAt: Date.now()
+            };
+          }
+          return shape;
+        });
+        
+        transaction.update(canvasRef, {
+          shapes: updatedShapes,
+          lastUpdated: serverTimestamp()
+        });
+      }
+    });
+  } catch (error) {
+    console.error("[sendBackward] Failed:", error);
     throw error;
   }
 };

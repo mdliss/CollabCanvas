@@ -8,7 +8,12 @@ export default function ShapeToolbar({
   onUndo, 
   onRedo, 
   canUndo = false, 
-  canRedo = false 
+  canRedo = false,
+  onBringToFront,
+  onSendToBack,
+  onBringForward,
+  onSendBackward,
+  hasSelection = false
 }) {
   const [activeTool, setActiveTool] = useState(null);
   const [hoveredTool, setHoveredTool] = useState(null);
@@ -141,6 +146,50 @@ export default function ShapeToolbar({
         shortcut: 'Cmd+Shift+Z',
         onClick: onRedo,
         disabled: !canRedo
+      })}
+      
+      {/* Divider */}
+      <div style={{
+        height: '1px',
+        background: 'rgba(0, 0, 0, 0.1)',
+        margin: '4px 0'
+      }} />
+      
+      {/* Z-Index Controls */}
+      {renderButton({
+        id: 'bringToFront',
+        label: 'Bring to Front',
+        icon: '⬆️',
+        shortcut: 'Selection',
+        onClick: onBringToFront,
+        disabled: !hasSelection
+      })}
+      
+      {renderButton({
+        id: 'bringForward',
+        label: 'Bring Forward',
+        icon: '🔼',
+        shortcut: 'Shift+]',
+        onClick: onBringForward,
+        disabled: !hasSelection
+      })}
+      
+      {renderButton({
+        id: 'sendBackward',
+        label: 'Send Backward',
+        icon: '🔽',
+        shortcut: 'Shift+[',
+        onClick: onSendBackward,
+        disabled: !hasSelection
+      })}
+      
+      {renderButton({
+        id: 'sendToBack',
+        label: 'Send to Back',
+        icon: '⬇️',
+        shortcut: 'Selection',
+        onClick: onSendToBack,
+        disabled: !hasSelection
       })}
       
       {/* Divider */}
