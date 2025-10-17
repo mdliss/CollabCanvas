@@ -242,8 +242,6 @@ import { useUndo } from '../../contexts/UndoContext';
 import { AIOperationCommand } from '../../utils/commands';
 import { deleteShape, createShape } from '../../services/canvasRTDB';
 
-const CANVAS_ID = 'global-canvas-v1';
-
 // Production Cloud Function endpoint
 const AI_ENDPOINT = 'https://us-central1-collabcanvas-99a09.cloudfunctions.net/aiCanvasAgent';
 
@@ -300,6 +298,7 @@ const getSessionId = () => {
  * />
  */
 export default function AICanvas({ 
+  canvasId = 'global-canvas-v1',
   selectedShapeIds = [], 
   shapes = [], 
   stagePos = { x: 0, y: 0 },
@@ -310,6 +309,8 @@ export default function AICanvas({
 }) {
   const { user } = useAuth();
   const { registerAIOperation } = useUndo();
+  
+  console.log('[AICanvas] Initialized with canvasId:', canvasId);
   
   // Use controlled state if provided, otherwise local state
   const [localIsOpen, setLocalIsOpen] = useState(false);
@@ -598,6 +599,8 @@ export default function AICanvas({
       };
 
       // Call AI endpoint with canvas context
+      console.log('[AI Canvas] Sending request to Cloud Function with canvasId:', canvasId);
+      
       const response = await fetch(AI_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -609,7 +612,7 @@ export default function AICanvas({
             role: m.role,
             content: m.content,
           })),
-          canvasId: CANVAS_ID,
+          canvasId: canvasId, // Dynamic canvas ID from props
           canvasContext, // Pass canvas context to AI
         }),
       });
@@ -792,7 +795,7 @@ export default function AICanvas({
             
             if (uniqueShapeIds.length > 0) {
               // Fetch current shape data for redo capability
-              const shapesPath = `canvas/${CANVAS_ID}/shapes`;
+              const shapesPath = `canvas/${canvasId}/shapes`;
               console.log('📥 [AI REGISTRATION] Fetching shape data from:', shapesPath);
               
               const shapesRef = ref(rtdb, shapesPath);
@@ -818,11 +821,11 @@ export default function AICanvas({
               const historyDesc = `AI: ${fullMessage.substring(0, 50)}${fullMessage.length > 50 ? '...' : ''}`;
               console.log('🏗️  [AI REGISTRATION] Creating AIOperationCommand...');
               console.log('   Description:', historyDesc);
-              console.log('   Canvas ID:', CANVAS_ID);
+              console.log('   Canvas ID:', canvasId);
               console.log('   Affected shapes:', uniqueShapeIds.length);
               
               const aiCommand = new AIOperationCommand({
-                canvasId: CANVAS_ID,
+                canvasId: canvasId,
                 description: historyDesc,
                 affectedShapeIds: uniqueShapeIds,
                 shapeData: shapeData,

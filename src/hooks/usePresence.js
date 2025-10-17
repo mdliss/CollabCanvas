@@ -6,39 +6,41 @@ import { db, rtdb } from "../services/firebase";
 import { ref, update } from "firebase/database";
 
 /**
- * Hook to manage user presence
+ * Hook to manage user presence for a specific canvas
  * Returns onlineUsers WITHOUT filtering self
  * Syncs photoURL and displayName from Firestore to RTDB automatically
+ * 
+ * @param {string} canvasId - Canvas ID for presence tracking
  */
-export default function usePresence() {
+export default function usePresence(canvasId = 'global-canvas-v1') {
   const { user } = useAuth();
   const [onlineUsers, setOnlineUsers] = useState([]);
 
   // Main presence effect
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !canvasId) return;
 
     const uid = user.uid;
     const name = user.displayName || user.email?.split('@')[0] || 'User';
     const color = generateUserColor(uid) || '#1e88e5';
     const photoURL = user.photoURL || null;
 
-    console.log('[usePresence] Setting user online:', uid, name, photoURL ? '(with photo)' : '(no photo)');
+    console.log('[usePresence] Setting user online:', uid, name, photoURL ? '(with photo)' : '(no photo)', 'Canvas:', canvasId);
 
-    setUserOnline(uid, name, color, photoURL);
+    setUserOnline(canvasId, uid, name, color, photoURL);
 
-    const unsub = watchPresence(setOnlineUsers);
+    const unsub = watchPresence(canvasId, setOnlineUsers);
 
     return () => {
-      console.log('[usePresence] CLEANUP: Removing user from presence:', uid);
+      console.log('[usePresence] CLEANUP: Removing user from presence:', uid, 'Canvas:', canvasId);
       if (unsub) unsub();
-      setUserOffline(uid);
+      setUserOffline(canvasId, uid);
     };
-  }, [user]);
+  }, [user, canvasId]);
 
   // Watch Firestore profile for photoURL AND displayName changes and sync to RTDB
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !canvasId) return;
 
     console.log('[usePresence] Setting up Firestore profile watcher for user:', user.uid);
 
@@ -54,7 +56,7 @@ export default function usePresence() {
         console.log('[usePresence] - displayName:', newDisplayName);
 
         // Update RTDB with new photoURL AND displayName
-        const sessionRef = ref(rtdb, `sessions/global-canvas-v1/${user.uid}`);
+        const sessionRef = ref(rtdb, `sessions/${canvasId}/${user.uid}`);
         update(sessionRef, { 
           photoURL: newPhotoURL,
           displayName: newDisplayName
@@ -71,7 +73,7 @@ export default function usePresence() {
     });
 
     return unsubscribe;
-  }, [user?.uid, user?.displayName, user?.email]);
+  }, [user?.uid, user?.displayName, user?.email, canvasId]);
 
   return { onlineUsers };
 }

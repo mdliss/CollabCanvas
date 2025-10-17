@@ -5,10 +5,13 @@ import { generateUserColor } from "../services/presence";
 import { performanceMonitor } from "../services/performance";
 
 /**
- * Hook to manage cursor positions
+ * Hook to manage cursor positions for a specific canvas
  * Uses direct stage event listeners for mouse tracking
+ * 
+ * @param {React.RefObject} stageRef - Reference to Konva Stage
+ * @param {string} canvasId - Canvas ID for cursor tracking
  */
-export default function useCursors(stageRef) {
+export default function useCursors(stageRef, canvasId = 'global-canvas-v1') {
   const { user } = useAuth();
   const [cursors, setCursors] = useState({});
   const userColorRef = useRef(null);
@@ -28,7 +31,7 @@ export default function useCursors(stageRef) {
 
   // Mouse tracking + cursor subscription
   useEffect(() => {
-    if (!user?.uid || !stageRef.current) return;
+    if (!user?.uid || !stageRef.current || !canvasId) return;
 
     const stage = stageRef.current;
     const uid = user.uid;
@@ -42,7 +45,7 @@ export default function useCursors(stageRef) {
       const x = (pointer.x - stage.position().x) / stage.scaleX();
       const y = (pointer.y - stage.position().y) / stage.scaleY();
 
-      writeCursor(uid, x, y, userNameRef.current, userColorRef.current, userPhotoRef.current);
+      writeCursor(canvasId, uid, x, y, userNameRef.current, userColorRef.current, userPhotoRef.current);
       performanceMonitor.trackCursorUpdate();
     };
 
@@ -50,7 +53,7 @@ export default function useCursors(stageRef) {
     stage.on('mousemove', handleMouseMove);
 
     // Watch all cursors
-    const unsubscribe = watchCursors((all) => {
+    const unsubscribe = watchCursors(canvasId, (all) => {
       const receiveTime = performance.now();
       
       // LATENCY MEASUREMENT: Calculate cursor sync latency
@@ -71,9 +74,9 @@ export default function useCursors(stageRef) {
     return () => {
       stage.off('mousemove', handleMouseMove);
       if (unsubscribe) unsubscribe();
-      clearCursor(uid);
+      clearCursor(canvasId, uid);
     };
-  }, [user, stageRef]);
+  }, [user, stageRef, canvasId]);
 
   return { cursors };
 }

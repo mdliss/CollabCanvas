@@ -147,6 +147,7 @@
 
 import { Stage, Layer, Rect, Line as KonvaLine, Group, Circle } from "react-konva";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 // ACTIVE: RTDB-based shape storage (current implementation)
 import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, unlockShapeOptimistic, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvasRTDB";
@@ -181,12 +182,16 @@ import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 import AICanvas from "../AI/AICanvas";
 
-const CANVAS_ID = "global-canvas-v1";
 const GRID_SIZE = 50;
 const GRID_COLOR = "#e0e0e0";
 
 export default function Canvas() {
   const { user } = useAuth();
+  const { canvasId } = useParams();
+  const navigate = useNavigate();
+  
+  // Dynamic canvas ID from URL params or fallback to global canvas
+  const CANVAS_ID = canvasId || "global-canvas-v1";
   const [shapes, setShapes] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
@@ -274,19 +279,19 @@ export default function Canvas() {
    */
   const selectionLocksRef = useRef(new Set());
 
-  const { onlineUsers } = usePresence();
-  const { cursors } = useCursors(stageRef);
+  const { onlineUsers } = usePresence(CANVAS_ID);
+  const { cursors } = useCursors(stageRef, CANVAS_ID);
   const { activeDrags } = useDragStreams();
   const [selections, setSelections] = useState({});
   const { setEditing, isVisible, toggleVisibility } = usePerformance();
   const { undo, redo, canUndo, canRedo, execute, startBatch, endBatch } = useUndo();
 
   useEffect(() => {
-    const unsubscribe = watchSelections(setSelections);
+    const unsubscribe = watchSelections(CANVAS_ID, setSelections);
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [CANVAS_ID]);
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -477,7 +482,7 @@ export default function Canvas() {
             await execute(command, user);
           }
           
-          selectedIds.forEach(id => clearSelection(id));
+          selectedIds.forEach(id => clearSelection(CANVAS_ID, id));
           setSelectedIds([]);
         } finally {
           if (shouldBatch) {
@@ -545,7 +550,7 @@ export default function Canvas() {
             }
           }
 
-          selectedIds.forEach(id => clearSelection(id));
+          selectedIds.forEach(id => clearSelection(CANVAS_ID, id));
           setSelectedIds([]);
         } catch (error) {
           console.error("[Canvas] Delete failed:", error.message);
@@ -777,7 +782,7 @@ export default function Canvas() {
           case 'v':
             e.preventDefault();
             if (selectedIds.length > 0) {
-              selectedIds.forEach(id => clearSelection(id));
+              selectedIds.forEach(id => clearSelection(CANVAS_ID, id));
               setSelectedIds([]);
             }
             break;
@@ -1390,7 +1395,7 @@ export default function Canvas() {
         if (user?.uid) {
           const name = user.displayName || user.email?.split('@')[0] || 'User';
           const color = generateUserColor(user.uid);
-          setSelection(shapeId, user.uid, name, color);
+          setSelection(CANVAS_ID, shapeId, user.uid, name, color);
         }
         
         console.log(`[Selection] 📋 Multi-select updated:`, {
@@ -2257,7 +2262,7 @@ export default function Canvas() {
         if (user?.uid) {
           const name = user.displayName || user.email?.split('@')[0] || 'User';
           const color = generateUserColor(user.uid);
-          setSelection(id, user.uid, name, color);
+          setSelection(CANVAS_ID, id, user.uid, name, color);
         }
       });
       
@@ -2320,7 +2325,7 @@ export default function Canvas() {
         if (user?.uid) {
           const name = user.displayName || user.email?.split('@')[0] || 'User';
           const color = generateUserColor(user.uid);
-          setSelection(id, user.uid, name, color);
+          setSelection(CANVAS_ID, id, user.uid, name, color);
         }
       });
       
@@ -2587,11 +2592,11 @@ export default function Canvas() {
       if (user?.uid) {
         console.log('[Canvas] beforeunload: cleaning up user', user.uid);
         // Synchronous cleanup before page unloads
-        const userRef = ref(rtdb, `sessions/global-canvas-v1/${user.uid}`);
+        const userRef = ref(rtdb, `sessions/${CANVAS_ID}/${user.uid}`);
         remove(userRef);
         
         // Clear selections
-        selectedIds.forEach(id => clearSelection(id));
+        selectedIds.forEach(id => clearSelection(CANVAS_ID, id));
       }
     };
 
@@ -2600,7 +2605,7 @@ export default function Canvas() {
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
-  }, [user, selectedIds]);
+  }, [user, selectedIds, CANVAS_ID]);
 
   useEffect(() => {
     window.debugUpdateText = (shapeId, newText) => {
@@ -2670,6 +2675,42 @@ export default function Canvas() {
 
   return (
     <div>
+      {/* Back to Projects Button */}
+      <button
+        onClick={() => navigate('/')}
+        style={{
+          position: 'fixed',
+          top: '20px',
+          left: '20px',
+          padding: '10px 16px',
+          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+          border: '1px solid rgba(0, 0, 0, 0.06)',
+          borderRadius: '10px',
+          fontSize: '14px',
+          fontWeight: '600',
+          color: '#374151',
+          cursor: 'pointer',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+          e.target.style.transform = 'translateY(-1px)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+          e.target.style.transform = 'translateY(0)';
+        }}
+        title="Back to projects"
+      >
+        <span>←</span>
+        <span>Projects</span>
+      </button>
+      
       <ConnectionStatus />
       <PerformanceMonitor isVisible={isVisible} onToggle={toggleVisibility} />
       <PerformanceToggleButton onClick={toggleVisibility} isVisible={isVisible} />
@@ -3140,6 +3181,7 @@ export default function Canvas() {
       {/* AI Canvas Assistant with Canvas Context
           Controlled open state for canvas click-to-close */}
       <AICanvas 
+        canvasId={CANVAS_ID}
         selectedShapeIds={selectedIds}
         shapes={shapes}
         stagePos={stagePos}

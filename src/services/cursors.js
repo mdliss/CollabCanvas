@@ -1,7 +1,6 @@
 import { rtdb } from "./firebase";
 import { ref, update, onValue, serverTimestamp, onDisconnect } from "firebase/database";
 
-const BASE = 'sessions/global-canvas-v1';
 const THROTTLE_MS = 33;
 
 let lastUpdateTime = 0;
@@ -11,8 +10,13 @@ let lastX = null;
 let lastY = null;
 let disconnectSet = new Set();
 
-export const writeCursor = (uid, x, y, name, color, photoURL = null) => {
-  if (!uid) return;
+/**
+ * Get sessions base path for a canvas
+ */
+const getSessionsPath = (canvasId) => `sessions/${canvasId}`;
+
+export const writeCursor = (canvasId, uid, x, y, name, color, photoURL = null) => {
+  if (!uid || !canvasId) return;
 
   // 2px delta filter: Skip updates if movement is less than 2 pixels
   // This reduces unnecessary network traffic for tiny cursor movements
@@ -31,7 +35,7 @@ export const writeCursor = (uid, x, y, name, color, photoURL = null) => {
   const now = Date.now();
   const timeSinceLastUpdate = now - lastUpdateTime;
 
-  pendingUpdate = { uid, x, y, name, color, photoURL };
+  pendingUpdate = { canvasId, uid, x, y, name, color, photoURL };
 
   if (timeSinceLastUpdate >= THROTTLE_MS) {
     flushCursorUpdate();
@@ -46,8 +50,8 @@ export const writeCursor = (uid, x, y, name, color, photoURL = null) => {
 const flushCursorUpdate = () => {
   if (!pendingUpdate) return;
 
-  const { uid, x, y, name, color, photoURL } = pendingUpdate;
-  const userRef = ref(rtdb, `${BASE}/${uid}`);
+  const { canvasId, uid, x, y, name, color, photoURL } = pendingUpdate;
+  const userRef = ref(rtdb, `${getSessionsPath(canvasId)}/${uid}`);
   
   // LATENCY MEASUREMENT: Record send timestamp
   const sendTimestamp = performance.now();
@@ -86,12 +90,13 @@ const flushCursorUpdate = () => {
 };
 
 /**
- * Watch cursor updates for all users
+ * Watch cursor updates for all users on a canvas
+ * @param {string} canvasId - Canvas ID
  * @param {Function} callback - Called with object keyed by uid: {x, y, name, color}
  * @returns {Function} Unsubscribe function
  */
-export const watchCursors = (callback) => {
-  return onValue(ref(rtdb, BASE), (snapshot) => {
+export const watchCursors = (canvasId, callback) => {
+  return onValue(ref(rtdb, getSessionsPath(canvasId)), (snapshot) => {
     const val = snapshot.val() || {};
     const out = {};
     
@@ -113,13 +118,14 @@ export const watchCursors = (callback) => {
 };
 
 /**
- * Clear cursor for user
+ * Clear cursor for user on a canvas
+ * @param {string} canvasId - Canvas ID
  * @param {string} uid - User ID
  */
-export const clearCursor = (uid) => {
-  if (!uid) return;
+export const clearCursor = (canvasId, uid) => {
+  if (!uid || !canvasId) return;
   
-  const userRef = ref(rtdb, `${BASE}/${uid}`);
+  const userRef = ref(rtdb, `${getSessionsPath(canvasId)}/${uid}`);
   update(userRef, {
     cursorX: null,
     cursorY: null,

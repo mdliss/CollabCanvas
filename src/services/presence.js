@@ -1,7 +1,10 @@
 import { rtdb } from "./firebase";
 import { ref, set, onValue, onDisconnect, serverTimestamp, remove } from "firebase/database";
 
-const BASE = 'sessions/global-canvas-v1';
+/**
+ * Get presence base path for a canvas
+ */
+const getPresencePath = (canvasId) => `sessions/${canvasId}`;
 
 export const generateUserColor = (uid) => {
   const colors = [
@@ -12,10 +15,10 @@ export const generateUserColor = (uid) => {
   return colors[hash % colors.length];
 };
 
-export const setUserOnline = async (uid, name, color, photoURL = null) => {
+export const setUserOnline = async (canvasId, uid, name, color, photoURL = null) => {
   if (!uid) return;
 
-  const userRef = ref(rtdb, `${BASE}/${uid}`);
+  const userRef = ref(rtdb, `${getPresencePath(canvasId)}/${uid}`);
   
   const data = {
     displayName: name,
@@ -35,15 +38,15 @@ export const setUserOnline = async (uid, name, color, photoURL = null) => {
   await onDisconnect(userRef).remove();
 };
 
-export const setUserOffline = async (uid) => {
+export const setUserOffline = async (canvasId, uid) => {
   if (!uid) return;
   
-  const userRef = ref(rtdb, `${BASE}/${uid}`);
+  const userRef = ref(rtdb, `${getPresencePath(canvasId)}/${uid}`);
   await remove(userRef);
 };
 
-export const watchPresence = (callback) => {
-  return onValue(ref(rtdb, BASE), (s) => {
+export const watchPresence = (canvasId, callback) => {
+  return onValue(ref(rtdb, getPresencePath(canvasId)), (s) => {
     const v = s.val() || {};
     // Only include users who are actually online with valid data
     const arr = Object.entries(v)

@@ -7,6 +7,9 @@ import { z } from 'zod';
 admin.initializeApp();
 const rtdb = admin.database();
 
+// Export Stripe functions
+export { createCheckoutSession, createPortalSession, stripeWebhook } from './stripe';
+
 // Initialize OpenAI
 const openai = new OpenAI({
     apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
@@ -134,32 +137,33 @@ function checkRateLimit(userId: string): boolean {
   return true;
 }
 
-async function getShapes(): Promise<any[]> {
-  const snapshot = await rtdb.ref(`canvas/${CANVAS_ID}/shapes`).once('value');
+async function getShapes(canvasId: string = CANVAS_ID): Promise<any[]> {
+  const snapshot = await rtdb.ref(`canvas/${canvasId}/shapes`).once('value');
   const shapesMap = snapshot.val() || {};
   return Object.values(shapesMap).sort(
     (a: any, b: any) => (a.zIndex || 0) - (b.zIndex || 0)
   );
 }
 
-async function getMaxZIndex(): Promise<number> {
-  const shapes = await getShapes();
+async function getMaxZIndex(canvasId: string = CANVAS_ID): Promise<number> {
+  const shapes = await getShapes(canvasId);
   return shapes.reduce((max, s: any) => Math.max(max, s.zIndex || 0), 0);
 }
 
 // Tool implementations
-async function createShapeTool(params: any, userId: string): Promise<string> {
+async function createShapeTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('🔨 [createShapeTool] CALLED');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('Params:', JSON.stringify(params, null, 2));
   console.log('User ID:', userId);
+  console.log('Canvas ID:', canvasId);
   
   const validated = CreateShapeSchema.parse(params);
   const shapeId = `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   console.log('Generated shape ID:', shapeId);
 
-  const maxZ = await getMaxZIndex();
+  const maxZ = await getMaxZIndex(canvasId);
   console.log('Max Z-index:', maxZ);
 
   /**
@@ -207,14 +211,14 @@ async function createShapeTool(params: any, userId: string): Promise<string> {
     shape.fontSize = validated.fontSize || 120; // LARGE canvas-scale font (120px)
   }
 
-  const shapePath = `canvas/${CANVAS_ID}/shapes/${shapeId}`;
+  const shapePath = `canvas/${canvasId}/shapes/${shapeId}`;
   console.log('Writing shape to RTDB:', shapePath);
   console.log('Shape data:', JSON.stringify(shape, null, 2));
   
   await rtdb.ref(shapePath).set(shape);
   console.log('✅ Shape written to RTDB');
   
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
   console.log('✅ Metadata updated');
 
   // CRITICAL: Include shape ID in result so extractShapeIdsFromResult can find it
@@ -228,11 +232,11 @@ async function createShapeTool(params: any, userId: string): Promise<string> {
   return resultMessage;
 }
 
-async function updateShapeTool(params: any, userId: string): Promise<string> {
+async function updateShapeTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = UpdateShapeSchema.parse(params);
   const { shapeId, ...updates } = validated;
 
-  const shapeRef = rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shapeId}`);
+  const shapeRef = rtdb.ref(`canvas/${canvasId}/shapes/${shapeId}`);
   const snapshot = await shapeRef.once('value');
 
   if (!snapshot.exists()) {
@@ -260,17 +264,17 @@ async function updateShapeTool(params: any, userId: string): Promise<string> {
   }
 
   await shapeRef.update(updateData);
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
 
   console.log(`[AI Tool] Updated shape: ${shapeId}`);
   return `Successfully updated shape`;
 }
 
-async function moveShapeTool(params: any, userId: string): Promise<string> {
+async function moveShapeTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = MoveShapeSchema.parse(params);
   const { shapeId, x, y } = validated;
 
-  const shapeRef = rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shapeId}`);
+  const shapeRef = rtdb.ref(`canvas/${canvasId}/shapes/${shapeId}`);
   const snapshot = await shapeRef.once('value');
 
   if (!snapshot.exists()) {
@@ -284,33 +288,33 @@ async function moveShapeTool(params: any, userId: string): Promise<string> {
     lastModifiedAt: Date.now(),
   });
 
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
 
   console.log(`[AI Tool] Moved shape ${shapeId} to (${x}, ${y})`);
   return `Successfully moved shape to (${x}, ${y})`;
 }
 
-async function deleteShapeTool(params: any, userId: string): Promise<string> {
+async function deleteShapeTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = DeleteShapeSchema.parse(params);
   const shapeIds = Array.isArray(validated.shapeIds)
     ? validated.shapeIds
     : [validated.shapeIds];
 
   for (const shapeId of shapeIds) {
-    await rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shapeId}`).remove();
+    await rtdb.ref(`canvas/${canvasId}/shapes/${shapeId}`).remove();
   }
 
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
 
   console.log(`[AI Tool] Deleted ${shapeIds.length} shape(s)`);
   return `Successfully deleted ${shapeIds.length} shape(s)`;
 }
 
-async function layoutArrangeTool(params: any, userId: string): Promise<string> {
+async function layoutArrangeTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = LayoutArrangeSchema.parse(params);
   const { shapeIds, arrangement, spacing = 50 } = validated;
 
-  const shapes = await getShapes();
+  const shapes = await getShapes(canvasId);
   const targetShapes = shapes.filter((s: any) => shapeIds.includes(s.id));
 
   if (targetShapes.length === 0) {
@@ -404,7 +408,7 @@ async function layoutArrangeTool(params: any, userId: string): Promise<string> {
   }
 
   for (const update of updates) {
-    await rtdb.ref(`canvas/${CANVAS_ID}/shapes/${update.shapeId}`).update({
+    await rtdb.ref(`canvas/${canvasId}/shapes/${update.shapeId}`).update({
       x: update.x,
       y: update.y,
       lastModifiedBy: userId,
@@ -412,14 +416,14 @@ async function layoutArrangeTool(params: any, userId: string): Promise<string> {
     });
   }
 
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
 
   console.log(`[AI Tool] Arranged ${updates.length} shapes in ${arrangement} layout`);
   return `Successfully arranged ${updates.length} shapes in ${arrangement} layout`;
 }
 
-async function queryCanvasTool(params: any): Promise<string> {
-  const shapes = await getShapes();
+async function queryCanvasTool(params: any, canvasId: string = CANVAS_ID): Promise<string> {
+  const shapes = await getShapes(canvasId);
 
   if (shapes.length === 0) {
     return 'The canvas is currently empty. No shapes have been created yet.';
@@ -742,7 +746,7 @@ const TEMPLATES: Record<string, (params: TemplateParams, userId: string) => any[
  * Creates complete multi-shape layouts from templates.
  * Single operation with perfect spacing and alignment.
  */
-async function createFromTemplateTool(params: any, userId: string): Promise<string> {
+async function createFromTemplateTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const { templateName, centerX, centerY, primaryColor, textColor, scale } = params;
   
   const templateFn = TEMPLATES[templateName];
@@ -763,10 +767,10 @@ async function createFromTemplateTool(params: any, userId: string): Promise<stri
   
   // Write all shapes to RTDB
   for (const shape of shapes) {
-    await rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shape.id}`).set(shape);
+    await rtdb.ref(`canvas/${canvasId}/shapes/${shape.id}`).set(shape);
   }
   
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
   
   console.log(`[AI Tool] Created ${shapes.length} shapes from template: ${templateName}`);
   return `Successfully created ${templateName} template with ${shapes.length} shapes at position (${centerX}, ${centerY})`;
@@ -909,7 +913,7 @@ async function trackAIOperation(
  * Reverses the last (or specified) AI operation atomically.
  * Deletes created shapes, restores modified shapes.
  */
-async function undoAIOperationTool(params: any, userId: string): Promise<string> {
+async function undoAIOperationTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const { operationId: specifiedOpId } = params;
   
   // Get operation ID (specified or last)
@@ -1091,9 +1095,9 @@ async function trackUsage(
  * 
  * Performance: 500 shapes in ~2 seconds (was ~50 seconds with sequential writes)
  */
-async function bulkCreateTool(params: any, userId: string): Promise<string> {
+async function bulkCreateTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = BulkCreateSchema.parse(params);
-  const maxZ = await getMaxZIndex();
+  const maxZ = await getMaxZIndex(canvasId);
   const timestamp = Date.now(); // Single timestamp for entire batch
 
   // Detailed request logging
@@ -1150,12 +1154,12 @@ async function bulkCreateTool(params: any, userId: string): Promise<string> {
     }
 
     // Add to batched updates
-    updates[`canvas/${CANVAS_ID}/shapes/${shapeId}`] = shape;
+    updates[`canvas/${canvasId}/shapes/${shapeId}`] = shape;
     createdIds.push(shapeId);
   }
 
   // Add metadata update
-  updates[`canvas/${CANVAS_ID}/metadata/lastUpdated`] = timestamp;
+  updates[`canvas/${canvasId}/metadata/lastUpdated`] = timestamp;
 
   // CRITICAL: Single batched write - 25× faster than sequential writes
   await rtdb.ref().update(updates);
@@ -1167,14 +1171,14 @@ async function bulkCreateTool(params: any, userId: string): Promise<string> {
   return `Successfully created ${createdIds.length} shapes: ${createdIds.join(', ')}`;
 }
 
-async function bulkUpdateTool(params: any, userId: string): Promise<string> {
+async function bulkUpdateTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = BulkUpdateSchema.parse(params);
   let updateCount = 0;
 
   for (const updateParams of validated.updates) {
     const { shapeId, ...updates } = updateParams;
 
-    const shapeRef = rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shapeId}`);
+    const shapeRef = rtdb.ref(`canvas/${canvasId}/shapes/${shapeId}`);
     const snapshot = await shapeRef.once('value');
 
     if (!snapshot.exists()) {
@@ -1207,7 +1211,7 @@ async function bulkUpdateTool(params: any, userId: string): Promise<string> {
     updateCount++;
   }
 
-  await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  await rtdb.ref(`canvas/${canvasId}/metadata/lastUpdated`).set(Date.now());
 
   console.log(`[AI Tool] Bulk updated ${updateCount} shapes`);
   return `Successfully updated ${updateCount} shapes`;
@@ -1289,14 +1293,21 @@ export const aiCanvasAgent = functions
     }
 
     // Parse request body
-    const { messages, stream = false, canvasContext } = req.body;
+    const { messages, stream = false, canvasContext, canvasId } = req.body;
 
     if (!messages || !Array.isArray(messages)) {
       res.status(400).json({ error: 'Invalid request: messages array required' });
       return;
     }
+    
+    // Use dynamic canvasId from request, fallback to global canvas
+    const targetCanvasId = canvasId || CANVAS_ID;
 
-    console.log(`[AI Agent] Processing request for user ${userId}, messages: ${messages.length}, stream: ${stream}`);
+    console.log(`[AI Agent] Processing request for user ${userId}`);
+    console.log(`  Messages: ${messages.length}`);
+    console.log(`  Canvas ID: ${targetCanvasId}`);
+    console.log(`  Stream: ${stream}`);
+    
     if (canvasContext) {
       console.log(`[AI Agent] Canvas context:`, {
         selectedShapes: canvasContext.selectedShapes?.length || 0,
@@ -1821,34 +1832,34 @@ Be helpful, creative, and produce professional-looking results.`;
 
           switch (functionName) {
             case 'create_shape':
-              result = await createShapeTool(functionArgs, userId);
+              result = await createShapeTool(functionArgs, userId, targetCanvasId);
               break;
             case 'update_shape':
-              result = await updateShapeTool(functionArgs, userId);
+              result = await updateShapeTool(functionArgs, userId, targetCanvasId);
               break;
             case 'move_shape':
-              result = await moveShapeTool(functionArgs, userId);
+              result = await moveShapeTool(functionArgs, userId, targetCanvasId);
               break;
             case 'delete_shape':
-              result = await deleteShapeTool(functionArgs, userId);
+              result = await deleteShapeTool(functionArgs, userId, targetCanvasId);
               break;
             case 'layout_arrange':
-              result = await layoutArrangeTool(functionArgs, userId);
+              result = await layoutArrangeTool(functionArgs, userId, targetCanvasId);
               break;
             case 'query_canvas':
-              result = await queryCanvasTool(functionArgs);
+              result = await queryCanvasTool(functionArgs, targetCanvasId);
               break;
             case 'create_from_template':
-              result = await createFromTemplateTool(functionArgs, userId);
+              result = await createFromTemplateTool(functionArgs, userId, targetCanvasId);
               break;
             case 'undo_ai_operation':
-              result = await undoAIOperationTool(functionArgs, userId);
+              result = await undoAIOperationTool(functionArgs, userId, targetCanvasId);
               break;
             case 'bulk_create':
-              result = await bulkCreateTool(functionArgs, userId);
+              result = await bulkCreateTool(functionArgs, userId, targetCanvasId);
               break;
             case 'bulk_update':
-              result = await bulkUpdateTool(functionArgs, userId);
+              result = await bulkUpdateTool(functionArgs, userId, targetCanvasId);
               break;
             default:
               result = `Unknown function: ${functionName}`;
