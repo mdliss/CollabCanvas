@@ -145,13 +145,34 @@ async function createShapeTool(params: any, userId: string): Promise<string> {
 
   const maxZ = await getMaxZIndex();
 
+  /**
+   * LARGE Canvas-Scale Default Dimensions for AI-Created Shapes
+   * 
+   * Philosophy:
+   *   - Canvas is 30,000×30,000px (MASSIVE coordinate space)
+   *   - Shapes must be 1500×1000px to be CLEARLY visible and immediately usable
+   *   - OLD: 100px shapes were microscopic dots (0.33% of canvas)
+   *   - NEW: 1500px shapes are PROMINENT and professional (5% of canvas)
+   * 
+   * Dimension Defaults:
+   *   - Text: 1800×200px box with 120px font (LARGE canvas-scale readability)
+   *   - Geometric shapes: 1500×1000px (15× larger than old dimensions)
+   *   - Matches DEFAULT_SHAPE_DIMENSIONS configuration in frontend
+   * 
+   * Rationale:
+   *   - AI-created shapes should match user-created shapes
+   *   - IMMEDIATELY visible without any zoom required
+   *   - Professional appearance consistent with modern canvas tools
+   *   - 15× size increase ensures shapes are never mistaken for dots
+   */
   const shape: any = {
     id: shapeId,
     type: validated.type,
     x: validated.x,
     y: validated.y,
-    width: validated.width || (validated.type === 'text' ? 200 : 100),
-    height: validated.height || (validated.type === 'text' ? 30 : 100),
+    // LARGE canvas-scale dimensions (1500×1000px for shapes, 1800×200px for text)
+    width: validated.width || (validated.type === 'text' ? 1800 : 1500),   // OLD: 100px (tiny)
+    height: validated.height || (validated.type === 'text' ? 200 : 1000),  // OLD: 100px (tiny)
     fill: validated.fill || (validated.type === 'text' ? '#000000' : '#cccccc'),
     zIndex: maxZ + 1,
     createdBy: userId,
@@ -165,7 +186,8 @@ async function createShapeTool(params: any, userId: string): Promise<string> {
 
   if (validated.type === 'text') {
     shape.text = sanitizeText(validated.text || 'Text');
-    shape.fontSize = validated.fontSize || 24;
+    // LARGE canvas-scale font size (120px for excellent readability at any zoom)
+    shape.fontSize = validated.fontSize || 120;  // OLD: 24px (web-scale, microscopic)
   }
 
   await rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shapeId}`).set(shape);

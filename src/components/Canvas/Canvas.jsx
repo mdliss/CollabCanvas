@@ -150,7 +150,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 // ACTIVE: RTDB-based shape storage (current implementation)
 import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape, unlockShape, unlockShapeOptimistic, bringToFront, sendToBack, bringForward, sendBackward } from "../../services/canvasRTDB";
-import { CANVAS_WIDTH, CANVAS_HEIGHT, LOCK_TTL_MS } from "./constants";
+import { CANVAS_WIDTH, CANVAS_HEIGHT, LOCK_TTL_MS, DEFAULT_SHAPE_DIMENSIONS } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
 import ShapeToolbar from "./ShapeToolbar";
 import DebugNote from "./DebugNote";
@@ -803,65 +803,95 @@ export default function Canvas() {
     };
   }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes, getCenteredPosition, stageScale]);
 
+  /**
+   * Create shape with canvas-appropriate dimensions
+   * 
+   * Uses DEFAULT_SHAPE_DIMENSIONS configuration for all shape types.
+   * Shapes are positioned centered on viewport center point, accounting
+   * for their dimensions to ensure proper visual centering.
+   * 
+   * Dimension Philosophy:
+   *   - All shapes use centralized dimension configuration
+   *   - Dimensions are canvas-scale (400-600px) not web-scale (50-100px)
+   *   - Text uses 72px font for readability at canvas zoom levels
+   *   - Shapes immediately visible and usable without resizing
+   * 
+   * Positioning:
+   *   - Calculates viewport center in canvas coordinates
+   *   - Offsets shape by half its dimensions for visual centering
+   *   - Accounts for zoom level to position at correct canvas coordinates
+   * 
+   * @param {string} type - Shape type to create (rectangle, circle, text, etc.)
+   * 
+   * @example
+   * // Creates 500×310px rectangle centered in viewport
+   * handleAddShape('rectangle');
+   * 
+   * // Creates text with 72px font, 600px width
+   * handleAddShape('text');
+   */
   const handleAddShape = async (type) => {
+    // Calculate viewport center in canvas coordinates (accounting for zoom and pan)
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
     const centerY = (-stagePos.y + (window.innerHeight - 50) / 2) / stageScale;
     
+    console.log(`[AddShape] Creating ${type} at viewport center (${centerX.toFixed(0)}, ${centerY.toFixed(0)}) with zoom ${stageScale}`);
+    
+    // Get dimensions from centralized configuration
+    const dimensions = DEFAULT_SHAPE_DIMENSIONS[type] || DEFAULT_SHAPE_DIMENSIONS.rectangle;
+    
+    // Base shape data with type and fill
     let shapeData = {
       id: `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type,
-      fill: '#cccccc',
-      x: centerX,
-      y: centerY
+      fill: type === 'text' ? '#000000' : '#cccccc',  // Text black, others gray
+      ...dimensions  // Spread all dimension properties (width, height, fontSize, etc.)
     };
 
+    // Type-specific positioning to center shape visually
+    // Each type calculates offset based on its dimensions for proper centering
     switch (type) {
       case 'circle':
-        // Set diameter as width/height (radius = 50)
-        shapeData.width = 100;
-        shapeData.height = 100;
-        // NO CLAMPING - place at cursor position
-        shapeData.x = centerX;
-        shapeData.y = centerY;
+      case 'ellipse':
+        // Center circles/ellipses by offsetting half their diameter
+        shapeData.x = centerX - (dimensions.width / 2);
+        shapeData.y = centerY - (dimensions.height / 2);
+        console.log(`[AddShape] ${type}: ${dimensions.width}×${dimensions.height}px at (${shapeData.x.toFixed(0)}, ${shapeData.y.toFixed(0)})`);
         break;
+        
       case 'line':
-        shapeData.width = 200;
-        shapeData.height = 0;
-        // NO CLAMPING - place at cursor position
-        shapeData.x = centerX - 100;
+        // Lines extend from center point horizontally
+        shapeData.x = centerX - (dimensions.width / 2);
         shapeData.y = centerY;
+        shapeData.strokeWidth = dimensions.strokeWidth || 4;  // Ensure visible stroke
+        console.log(`[AddShape] line: ${dimensions.width}px length, ${shapeData.strokeWidth}px stroke at (${shapeData.x.toFixed(0)}, ${shapeData.y.toFixed(0)})`);
         break;
+        
       case 'text':
+        // Text centered with initial content
         shapeData.text = 'Text';
-        shapeData.fontSize = 24;
-        shapeData.fill = '#000000';
-        shapeData.width = 200;
-        shapeData.height = 30;
-        // NO CLAMPING - place at cursor position
-        shapeData.x = centerX - 100;
-        shapeData.y = centerY - 15;
+        shapeData.x = centerX - (dimensions.width / 2);
+        shapeData.y = centerY - (dimensions.height / 2);
+        console.log(`[AddShape] text: ${dimensions.fontSize}px font, ${dimensions.width}×${dimensions.height}px box at (${shapeData.x.toFixed(0)}, ${shapeData.y.toFixed(0)})`);
         break;
+        
       case 'triangle':
-        shapeData.width = 100;
-        shapeData.height = 100;
-        // NO CLAMPING - place at cursor position
-        shapeData.x = centerX;
-        shapeData.y = centerY;
-        break;
       case 'star':
-        shapeData.width = 80;
-        shapeData.height = 80;
-        // NO CLAMPING - place at cursor position
-        shapeData.x = centerX;
-        shapeData.y = centerY;
+      case 'diamond':
+      case 'hexagon':
+      case 'pentagon':
+        // Centered polygons - offset by half dimensions
+        shapeData.x = centerX - (dimensions.width / 2);
+        shapeData.y = centerY - (dimensions.height / 2);
+        console.log(`[AddShape] ${type}: ${dimensions.width}×${dimensions.height}px at (${shapeData.x.toFixed(0)}, ${shapeData.y.toFixed(0)})`);
         break;
+        
       case 'rectangle':
       default:
-        shapeData.width = 100;
-        shapeData.height = 100;
-        // NO CLAMPING - place at cursor position
-        shapeData.x = centerX - 50;
-        shapeData.y = centerY - 50;
+        // Rectangle centered by offsetting half dimensions
+        shapeData.x = centerX - (dimensions.width / 2);
+        shapeData.y = centerY - (dimensions.height / 2);
+        console.log(`[AddShape] rectangle: ${dimensions.width}×${dimensions.height}px at (${shapeData.x.toFixed(0)}, ${shapeData.y.toFixed(0)})`);
         break;
     }
     

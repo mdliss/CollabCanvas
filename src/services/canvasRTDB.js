@@ -175,15 +175,30 @@ export const createShape = async (canvasId, shapeData, user) => {
   const maxZIndex = Object.values(currentShapes).reduce((max, s) => Math.max(max, s.zIndex || 0), 0);
   const zIndex = shapeData.zIndex !== undefined ? shapeData.zIndex : maxZIndex + 1;
   
-  // Build the new shape
+  /**
+   * Build complete shape object with LARGE canvas-appropriate fallback dimensions
+   * 
+   * Fallback Dimension Philosophy:
+   *   - If shape data includes dimensions, use those (explicit intent)
+   *   - If missing, provide LARGE canvas-scale defaults (1500x1000px for rectangle)
+   *   - These fallbacks match DEFAULT_SHAPE_DIMENSIONS for consistency
+   *   - Old 100x100px defaults were microscopic dots on 30000px canvas
+   * 
+   * Why 1500x1000px Rectangle Fallback:
+   *   - Matches DEFAULT_SHAPE_DIMENSIONS.rectangle configuration
+   *   - Provides 5% of canvas width (CLEARLY visible and immediately usable)
+   *   - 15× larger than old 100px dimensions
+   *   - Professional appearance matching modern canvas tools
+   */
   const newShape = {
     ...shapeData,
     id: shapeId,
     type: shapeData.type || 'rectangle',
     x: shapeData.x !== undefined ? shapeData.x : 200,
     y: shapeData.y !== undefined ? shapeData.y : 200,
-    width: shapeData.width || 100,
-    height: shapeData.height || 100,
+    // LARGE canvas-scale fallback dimensions (not web-scale)
+    width: shapeData.width || 1500,   // OLD: 100px (microscopic)
+    height: shapeData.height || 1000, // OLD: 100px (microscopic)
     zIndex: zIndex,
     createdBy: user?.uid || 'anonymous',
     createdAt: Date.now(),
