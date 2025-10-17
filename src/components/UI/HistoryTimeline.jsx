@@ -79,13 +79,31 @@ export default function HistoryTimeline() {
     setShowClearConfirmModal(false);
   };
 
+  // Escape key handler to close timeline
+  useEffect(() => {
+    if (!isExpanded) return;
+    
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        setIsClosing(true);
+        setTimeout(() => {
+          setIsExpanded(false);
+          setIsClosing(false);
+        }, 250);
+      }
+    };
+    
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [isExpanded]);
+
   const styles = {
     container: {
       position: 'fixed',
       bottom: '16px',
       left: '16px',
       zIndex: 9999,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: "'Roboto Mono', monospace",
       transformOrigin: 'bottom left'
     },
     collapsed: {
