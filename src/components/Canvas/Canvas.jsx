@@ -189,6 +189,7 @@ export default function Canvas() {
   const { user } = useAuth();
   const [shapes, setShapes] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [lastError, setLastError] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -1251,6 +1252,12 @@ export default function Canvas() {
    */
   const handleShapeSelect = async (shapeId, isShiftKey) => {
     if (!user?.uid) return;
+    
+    // Close AI chat when clicking a shape
+    if (isAIChatOpen) {
+      setIsAIChatOpen(false);
+      console.log('[Canvas] Closed AI chat via shape click');
+    }
     
     const selectStartTime = performance.now();
     console.log(`[Selection] 🎯 Selection initiated for ${shapeId.slice(0, 8)}`, {
@@ -2401,6 +2408,12 @@ export default function Canvas() {
     }
     
     if (e.target === e.target.getStage() && !selectionBox && !selectionStartRef.current) {
+      // Close AI chat when clicking canvas background
+      if (isAIChatOpen) {
+        setIsAIChatOpen(false);
+        console.log('[Canvas] Closed AI chat via canvas click');
+      }
+      
       if (selectedIds.length > 0) {
         const deselectStartTime = performance.now();
         console.log(`[Deselection] 🎯 Deselecting ${selectedIds.length} shapes`);
@@ -3025,8 +3038,17 @@ export default function Canvas() {
         </svg>
       </button>
 
-      {/* AI Canvas Assistant */}
-      <AICanvas />
+      {/* AI Canvas Assistant with Canvas Context
+          Controlled open state for canvas click-to-close */}
+      <AICanvas 
+        selectedShapeIds={selectedIds}
+        shapes={shapes}
+        stagePos={stagePos}
+        stageScale={stageScale}
+        stageRef={stageRef}
+        isOpen={isAIChatOpen}
+        onOpenChange={setIsAIChatOpen}
+      />
     </div>
   );
 }
