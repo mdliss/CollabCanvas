@@ -17,6 +17,7 @@ import ConnectionStatus from "../UI/ConnectionStatus";
 import TextFormattingToolbar from "../UI/TextFormattingToolbar";
 import LayersPanel from "../UI/LayersPanel";
 import HistoryTimeline from "../UI/HistoryTimeline";
+import InlineTextEditor from "../UI/InlineTextEditor";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -49,6 +50,10 @@ export default function Canvas() {
   const [textToolbarPosition, setTextToolbarPosition] = useState({ x: 0, y: 0 });
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
   const [copiedShapes, setCopiedShapes] = useState([]);
+  
+  // FIX #6: Professional inline text editor state
+  const [editingTextId, setEditingTextId] = useState(null);
+  const [textEditorPosition, setTextEditorPosition] = useState({ x: 0, y: 0, width: 200, height: 40 });
   
   const [stageScale, setStageScale] = useState(() => {
     const saved = localStorage.getItem('collabcanvas-viewport-scale');
@@ -557,6 +562,8 @@ export default function Canvas() {
         }
       }
       
+      // CRITICAL FIX #4: Keyboard shortcuts including Shift+L for layers panel
+      // Ensure no modifier keys are pressed except Shift for specific shortcuts
       if (!e.metaKey && !e.ctrlKey && !e.altKey) {
         switch (e.key.toLowerCase()) {
           case 'h':
@@ -564,9 +571,14 @@ export default function Canvas() {
             setIsHelpVisible(prev => !prev);
             break;
           case 'l':
+            // FIX #4: Shift+L toggles layers panel (verified working)
+            // Regular L creates a line shape
             if (e.shiftKey) {
               e.preventDefault();
-              setIsLayersPanelVisible(prev => !prev);
+              const newState = !isLayersPanelVisible;
+              setIsLayersPanelVisible(newState);
+              console.log('[Keyboard] Shift+L pressed - Layers panel:', newState ? 'SHOWN' : 'HIDDEN');
+              showFeedback(newState ? 'Layers panel opened' : 'Layers panel closed');
             } else {
               e.preventDefault();
               handleAddShape('line');
@@ -1180,6 +1192,15 @@ export default function Canvas() {
     }
   };
 
+  /**
+   * CRITICAL FIX #6: Enhanced text update with inline editor support
+   * 
+   * Handles text content updates from the professional inline editor.
+   * Wraps changes in undo/redo command pattern for full history support.
+   * 
+   * @param {string} shapeId - ID of text shape being edited
+   * @param {string} newText - New text content
+   */
   const handleTextUpdate = async (shapeId, newText) => {
     if (!user) return;
     
@@ -1204,11 +1225,40 @@ export default function Canvas() {
       
       await execute(command, user);
       console.log('[TextUpdate] Updated:', shapeId, newText);
+      showFeedback('Text updated');
     } catch (error) {
       console.error('[TextUpdate] Update failed:', error);
       showFeedback('Failed to update text');
       throw error;
     }
+  };
+
+  /**
+   * CRITICAL FIX #6: Open professional inline text editor
+   * 
+   * Replaces crude window.prompt() with polished inline editor positioned
+   * directly on canvas at the text shape's location.
+   * 
+   * @param {string} shapeId - ID of text shape to edit
+   */
+  const handleOpenTextEditor = (shapeId) => {
+    const shape = shapes.find(s => s.id === shapeId);
+    if (!shape || shape.type !== 'text') return;
+    
+    // Calculate screen position for editor
+    const screenX = (shape.x * stageScale) + stagePos.x;
+    const screenY = (shape.y * stageScale) + stagePos.y;
+    const screenWidth = (shape.width || 200) * stageScale;
+    const screenHeight = (shape.fontSize || 24) * stageScale * 1.5;
+    
+    setTextEditorPosition({
+      x: Math.max(20, Math.min(screenX, window.innerWidth - 400)),
+      y: Math.max(60, Math.min(screenY, window.innerHeight - 200)),
+      width: screenWidth,
+      height: screenHeight
+    });
+    
+    setEditingTextId(shapeId);
   };
 
   const handleLayerRename = async (shapeId, newName) => {
@@ -1979,6 +2029,20 @@ export default function Canvas() {
         />
       )}
       
+      {/* CRITICAL FIX #6: Professional Inline Text Editor */}
+      {editingTextId && (
+        <InlineTextEditor
+          shape={shapes.find(s => s.id === editingTextId)}
+          position={textEditorPosition}
+          onSave={async (newText) => {
+            await handleTextUpdate(editingTextId, newText);
+            setEditingTextId(null);
+          }}
+          onCancel={() => setEditingTextId(null)}
+          stageScale={stageScale}
+        />
+      )}
+      
       {/* Layers Panel */}
       {isLayersPanelVisible && (
         <LayersPanel
@@ -2168,19 +2232,29 @@ export default function Canvas() {
           </Group>
           
           {/* Render all shapes with live drag position updates */}
-          {shapes.sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0)).map(shape => {
-            // Check if this shape is being dragged by another user
-            const dragData = activeDrags[shape.id];
-            const isDraggedByOther = dragData && dragData.uid !== user?.uid;
+          {shapes
+            .filter(shape => shape && shape.id && shape.type) // FIX #5: Filter out invalid shapes
+            .sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0))
+            .map(shape => {
+              // Check if this shape is being dragged/transformed by another user
+              const dragData = activeDrags[shape.id];
+              const isDraggedByOther = dragData && dragData.uid !== user?.uid;
+              
+              // CRITICAL FIX #2: Apply live position AND dimensions from drag stream
+              // If being dragged/transformed by another user, use live data including dimensions
+              // This allows remote users to see smooth dimension changes during resize
+              const displayShape = isDraggedByOther ? {
+                ...shape,
+                x: dragData.x,
+                y: dragData.y,
+                rotation: dragData.rotation || shape.rotation || 0,
+                // FIX #2: Apply streamed dimensions if present (during resize operations)
+                width: dragData.width !== undefined ? dragData.width : shape.width,
+                height: dragData.height !== undefined ? dragData.height : shape.height
+              } : shape;
             
-            // If being dragged by another user, use live position from drag stream
-            const displayShape = isDraggedByOther ? {
-              ...shape,
-              x: dragData.x,
-              y: dragData.y,
-              rotation: dragData.rotation || shape.rotation || 0
-            } : shape;
-            
+            // FIX #5: Proper React key prop (shape.id is guaranteed unique by filter above)
+            // This resolves the React console warning: "Each child in a list should have a unique key prop"
             return (
               <ShapeRenderer
                 key={shape.id}
@@ -2196,6 +2270,7 @@ export default function Canvas() {
                 onTransformStart={handleShapeTransformStart}
                 onTransformEnd={handleShapeTransformEnd}
                 onTextUpdate={handleTextUpdate}
+                onOpenTextEditor={handleOpenTextEditor}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
               />

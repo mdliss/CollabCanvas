@@ -7,38 +7,59 @@ const BASE = 'drags/global-canvas-v1';
 const lastBroadcastState = new Map();
 
 /**
- * Stream drag position with delta compression
- * Only sends properties that changed to reduce bandwidth
+ * CRITICAL FIX #2: Enhanced drag stream with dimension broadcasting
+ * 
+ * Streams complete transformation state with delta compression to reduce bandwidth.
+ * Now includes width and height dimensions for real-time resize visibility.
+ * 
+ * This fix addresses BUG #2: "Resize Operations Not Visible to Remote Users"
+ * Remote users now see smooth dimension changes at 100Hz during active resize operations.
+ * 
  * @param {string} shapeId - Shape ID
  * @param {string} uid - User ID
  * @param {string} displayName - User display name
  * @param {number} x - X position
  * @param {number} y - Y position
  * @param {number} rotation - Rotation in degrees
+ * @param {number} [width] - Optional width dimension (for resize operations)
+ * @param {number} [height] - Optional height dimension (for resize operations)
+ * 
+ * @example
+ * // During drag (position only)
+ * streamDragPosition(shapeId, uid, name, 100, 200, 0);
+ * 
+ * @example
+ * // During resize (position + dimensions)
+ * streamDragPosition(shapeId, uid, name, 100, 200, 0, 250, 150);
  */
-export const streamDragPosition = async (shapeId, uid, displayName, x, y, rotation = 0) => {
+export const streamDragPosition = async (shapeId, uid, displayName, x, y, rotation = 0, width = null, height = null) => {
   if (!shapeId || !uid) return;
   
   const lastState = lastBroadcastState.get(shapeId);
   const currentState = {
     x: Math.round(x * 100) / 100, // Round to 2 decimal places
     y: Math.round(y * 100) / 100,
-    rotation: Math.round(rotation * 100) / 100
+    rotation: Math.round(rotation * 100) / 100,
+    // FIX #2: Include dimensions if provided (for transform operations)
+    width: width !== null ? Math.round(width * 100) / 100 : null,
+    height: height !== null ? Math.round(height * 100) / 100 : null
   };
 
-  // Check if any coordinate changed
+  // Check if any property changed
   const hasChanges = !lastState || 
     currentState.x !== lastState.x ||
     currentState.y !== lastState.y ||
-    currentState.rotation !== lastState.rotation;
+    currentState.rotation !== lastState.rotation ||
+    currentState.width !== lastState.width ||
+    currentState.height !== lastState.height;
 
   // Only broadcast if something actually changed
   if (hasChanges) {
     // LATENCY MEASUREMENT: Record send timestamp for measuring round-trip time
     const sendTimestamp = performance.now();
     
-    // CRITICAL FIX: Always send ALL coordinates, never partial deltas
-    // This prevents missing x/y/rotation causing shapes to jump
+    // CRITICAL FIX #2: Always send ALL properties, including dimensions
+    // This allows remote users to see dimension changes in real-time
     const dragData = {
       uid,
       displayName,
@@ -48,6 +69,15 @@ export const streamDragPosition = async (shapeId, uid, displayName, x, y, rotati
       y: currentState.y,
       rotation: currentState.rotation
     };
+    
+    // FIX #2: Include dimensions if provided (during resize/transform)
+    // Remote users will receive these and update their local rendering
+    if (currentState.width !== null) {
+      dragData.width = currentState.width;
+    }
+    if (currentState.height !== null) {
+      dragData.height = currentState.height;
+    }
     
     const dragRef = ref(rtdb, `${BASE}/${shapeId}`);
     await set(dragRef, dragData);

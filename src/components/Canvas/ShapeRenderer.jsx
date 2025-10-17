@@ -8,6 +8,17 @@ const CANVAS_ID = "global-canvas-v1";
 /**
  * ShapeRenderer - renders different shape types with transform support
  */
+/**
+ * ShapeRenderer - Renders different shape types with transform support
+ * 
+ * CRITICAL FIXES APPLIED:
+ * - FIX #1: Ellipse support with independent width/height dimensions
+ * - FIX #2: Real-time dimension streaming during resize operations
+ * - FIX #6: Professional inline text editor integration
+ * 
+ * @param {Object} props
+ * @param {Function} props.onOpenTextEditor - NEW: Opens inline text editor (FIX #6)
+ */
 export default function ShapeRenderer({ 
   shape, 
   isSelected,
@@ -21,6 +32,7 @@ export default function ShapeRenderer({
   onTransformStart,
   onTransformEnd,
   onTextUpdate,
+  onOpenTextEditor, // FIX #6: New prop for inline text editing
   isBeingDraggedByOther = false
 }) {
   const shapeRef = useRef(null);
@@ -92,8 +104,39 @@ export default function ShapeRenderer({
     
     // Apply dimensions based on shape type
     if (shape.type === 'circle') {
-      const radius = (shape.width || 100) / 2;
-      node.radius(radius);
+      // CRITICAL FIX #1: Support ellipses with independent width/height
+      // Konva Circle uses radius, but we store width/height for ellipse support
+      const width = shape.width || 100;
+      const height = shape.height || 100;
+      
+      // Check if this is an ellipse (different width/height)
+      const isEllipse = Math.abs(width - height) > 1;
+      
+      if (isEllipse) {
+        // For ellipses, use the smaller dimension as base radius
+        // Then scale to achieve ellipse effect
+        const baseRadius = Math.min(width, height) / 2;
+        node.radius(baseRadius);
+        
+        // Apply scale to achieve ellipse effect
+        // This is done AFTER setting radius and will be reset to 1.0 below
+        // but the visual dimensions come from width/height
+        node.scaleX(width / (baseRadius * 2));
+        node.scaleY(height / (baseRadius * 2));
+        
+        console.log('[PropSync] Ellipse dimensions applied:', {
+          width,
+          height,
+          baseRadius,
+          scaleX: width / (baseRadius * 2),
+          scaleY: height / (baseRadius * 2)
+        });
+      } else {
+        // Perfect circle - use width as diameter
+        const radius = width / 2;
+        node.radius(radius);
+        // Scales will be reset to 1.0 below for circles
+      }
     } else if (shape.type === 'star') {
       const size = shape.width || 80;
       node.innerRadius(size * 0.25);
@@ -104,10 +147,13 @@ export default function ShapeRenderer({
       node.height(shape.height || 100);
     }
     
-    // CRITICAL: Ensure scale is always 1.0
+    // CRITICAL: For non-ellipse shapes, ensure scale is always 1.0
     // This prevents compound scaling from previous transforms
-    node.scaleX(1);
-    node.scaleY(1);
+    // For ellipses, we intentionally keep the scale to achieve the aspect ratio
+    if (shape.type !== 'circle' || Math.abs((shape.width || 100) - (shape.height || 100)) < 1) {
+      node.scaleX(1);
+      node.scaleY(1);
+    }
     
     // Request re-render
     node.getLayer()?.batchDraw();
@@ -230,7 +276,24 @@ export default function ShapeRenderer({
     }, 100);
   };
 
-  // CRITICAL FIX: Completely rewritten transform end handler
+  /**
+   * CRITICAL FIX #1: Transform end handler with ellipse support
+   * 
+   * This handler persists shape transformations to RTDB after user completes
+   * a resize/rotate operation. Key fixes:
+   * 
+   * 1. ELLIPSE SUPPORT: Circles now support independent width/height dimensions
+   *    by calculating separate X and Y scales instead of averaging them.
+   *    This allows users to create ovals and ellipses with any aspect ratio.
+   * 
+   * 2. DIMENSION STREAMING: All dimension properties (width, height) are captured
+   *    and will be streamed to remote users during active transforms.
+   * 
+   * 3. CHECKPOINT ISOLATION: Stops checkpoint interval to prevent interference
+   *    during the final database write operation.
+   * 
+   * @fires onTransformEnd - Writes final shape state to RTDB
+   */
   const handleTransformEnd = async () => {
     console.log('🎯 [Transform] Transform ending for shape:', shape.id);
     
@@ -259,41 +322,60 @@ export default function ShapeRenderer({
     let newAttrs;
     
     try {
-      // Handle circles specially - they use radius, not width/height
+      // CRITICAL FIX #1: Handle circles with INDEPENDENT width/height for ellipse support
+      // Previous bug: averaged scaleX and scaleY, forcing 1:1 aspect ratio
+      // New behavior: allows ellipses with any aspect ratio
       if (shape.type === 'circle') {
         const scaleX = node.scaleX();
         const scaleY = node.scaleY();
-        const avgScale = (scaleX + scaleY) / 2;
         
-        const baseRadius = (shape.width || 100) / 2;
-        const newRadius = baseRadius * avgScale;
-        const newDiameter = newRadius * 2;
+        // FIX: Calculate independent dimensions instead of averaging scales
+        // This is the KEY fix for BUG #1: Circle Resize Reverts to Perfect Circle
+        const baseWidth = shape.width || 100;  // Original diameter (width)
+        const baseHeight = shape.height || 100; // Original diameter (height)
         
-        if (!isFinite(newRadius) || newRadius <= 0 || !isFinite(newDiameter) || newDiameter <= 0) {
-          console.error('[Circle] Invalid radius calculated:', {
-            baseRadius, avgScale, newRadius, newDiameter
+        const newWidth = Math.max(10, baseWidth * scaleX);
+        const newHeight = Math.max(10, baseHeight * scaleY);
+        
+        // Calculate radius for Konva rendering (uses average for circular shapes)
+        // But we persist independent width/height to support ellipses
+        const radiusX = newWidth / 2;
+        const radiusY = newHeight / 2;
+        
+        if (!isFinite(newWidth) || newWidth <= 0 || !isFinite(newHeight) || newHeight <= 0) {
+          console.error('[Circle] Invalid dimensions calculated:', {
+            baseWidth, baseHeight, scaleX, scaleY, newWidth, newHeight
           });
           transformInProgressRef.current = false;
           return;
         }
         
-        console.log('[Circle] Transform complete:', {
-          baseRadius,
-          scale: avgScale,
-          newRadius,
-          newDiameter
+        console.log('[Circle/Ellipse] Transform complete:', {
+          baseWidth,
+          baseHeight,
+          scaleX,
+          scaleY,
+          newWidth,
+          newHeight,
+          aspectRatio: (newWidth / newHeight).toFixed(2),
+          isEllipse: Math.abs(newWidth - newHeight) > 1
         });
         
-        // CRITICAL: Reset scale BEFORE applying new radius
+        // CRITICAL: Reset scale BEFORE applying new dimensions
         node.scaleX(1);
         node.scaleY(1);
-        node.radius(newRadius);
         
+        // Update Konva node with average radius for rendering
+        // But persist both width and height for ellipse support
+        node.radius((radiusX + radiusY) / 2);
+        
+        // FIX: Persist BOTH width and height independently
+        // This allows circles to become ellipses and maintain their aspect ratio
         newAttrs = {
           x: node.x(),
           y: node.y(),
-          width: newDiameter,
-          height: newDiameter,
+          width: newWidth,   // Independent width dimension
+          height: newHeight, // Independent height dimension
           rotation: node.rotation()
         };
       } else {
@@ -354,7 +436,23 @@ export default function ShapeRenderer({
     }
   };
 
-  // CRITICAL FIX: Enhanced transform start handler
+  /**
+   * CRITICAL FIX #2: Transform start handler with real-time dimension streaming
+   * 
+   * Enhanced transform start handler that initiates lock acquisition and begins
+   * streaming transformation state to remote users at 100Hz frequency.
+   * 
+   * Key enhancements:
+   * 1. Acquires exclusive lock before allowing transformation
+   * 2. Sets transform flag to prevent prop sync interference
+   * 3. DIMENSION STREAMING: Now streams width, height during active resize (fixes BUG #2)
+   * 4. Disables checkpoint system during transform to prevent write conflicts
+   * 
+   * Note: We enhance the drag stream to include dimensions. The streamDragPosition
+   * function will be extended to handle dimension data in dragStream.js
+   * 
+   * @returns {boolean} True if transform started successfully, false if blocked by lock
+   */
   const handleTransformStart = async () => {
     console.log('🎯 [Transform] Transform starting for shape:', shape.id);
     
@@ -377,17 +475,34 @@ export default function ShapeRenderer({
       onTransformStart(shape.id);
     }
     
-    // Start streaming transform updates at ~100Hz
+    // CRITICAL FIX #2: Stream COMPLETE transformation state at ~100Hz
+    // This includes position AND dimensions so remote users see real-time resize
+    // Previous bug: only streamed x, y, rotation - dimensions were invisible until complete
     transformStreamInterval.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUserId) {
+        // Calculate current dimensions including scale
+        let width, height;
+        if (shape.type === 'circle') {
+          const baseRadius = node.radius();
+          width = baseRadius * 2 * node.scaleX();
+          height = baseRadius * 2 * node.scaleY();
+        } else {
+          width = node.width() * node.scaleX();
+          height = node.height() * node.scaleY();
+        }
+        
+        // Stream complete transform state including dimensions
+        // streamDragPosition is extended to accept width/height parameters
         streamDragPosition(
           shape.id,
           currentUserId,
           currentUserName || 'User',
           node.x(),
           node.y(),
-          node.rotation()
+          node.rotation(),
+          width,   // NEW: Stream width dimension
+          height   // NEW: Stream height dimension
         );
       }
     }, 10);
@@ -395,7 +510,7 @@ export default function ShapeRenderer({
     // CRITICAL FIX: NO checkpoint interval during transform
     // The checkpoint system was writing dimensions to RTDB every 500ms,
     // which caused prop updates that interfered with the active transform
-    console.log('✅ [Transform] Transform started - checkpoints DISABLED');
+    console.log('✅ [Transform] Transform started - checkpoints DISABLED, dimension streaming ENABLED');
     
     return true;
   };
@@ -504,13 +619,20 @@ export default function ShapeRenderer({
                 return;
               }
               
-              const newText = window.prompt('Edit text:', shape.text || 'Text');
-              if (newText !== null && newText.trim() !== '' && newText !== shape.text) {
-                try {
-                  await onTextUpdate(shape.id, newText);
-                } catch (error) {
-                  console.error('[Text Edit] Update failed:', error);
-                  alert('Failed to update text: ' + (error.message || 'Unknown error'));
+              // CRITICAL FIX #6: Use professional inline text editor instead of window.prompt()
+              // This provides a Figma-quality editing experience with smooth transitions
+              if (onOpenTextEditor) {
+                onOpenTextEditor(shape.id);
+              } else {
+                // Fallback to prompt if callback not provided (backward compatibility)
+                const newText = window.prompt('Edit text:', shape.text || 'Text');
+                if (newText !== null && newText.trim() !== '' && newText !== shape.text) {
+                  try {
+                    await onTextUpdate(shape.id, newText);
+                  } catch (error) {
+                    console.error('[Text Edit] Update failed:', error);
+                    alert('Failed to update text: ' + (error.message || 'Unknown error'));
+                  }
                 }
               }
             }}
