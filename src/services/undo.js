@@ -311,6 +311,43 @@ class UndoManager {
   }
 
   /**
+   * Log AI Action for History Display
+   * 
+   * Adds AI operations to history timeline without undo capability.
+   * Creates a placeholder command that appears in history but cannot be undone
+   * (AI shapes are created directly in RTDB, not through command pattern).
+   * 
+   * @param {string} description - Action description (e.g., "AI: Created 400 rectangles")
+   * @param {Object} user - User object for metadata
+   */
+  logAIAction(description, user = null) {
+    // Create a simple placeholder command for history display
+    const aiPlaceholder = {
+      getDescription: () => description,
+      execute: async () => {}, // No-op (already executed by AI)
+      undo: async () => {
+        console.warn('[UndoManager] AI actions cannot be undone through history system');
+      },
+      redo: async () => {},
+      metadata: {
+        timestamp: Date.now(),
+        user,
+        isAIAction: true
+      }
+    };
+    
+    this.undoStack.push(aiPlaceholder);
+    this.redoStack = []; // Clear redo stack
+    
+    if (this.undoStack.length > this.maxHistorySize) {
+      this.undoStack.shift();
+    }
+    
+    this.notifyListeners();
+    console.log('[UndoManager] AI action logged in history:', description);
+  }
+
+  /**
    * Get the full history with metadata
    */
   getFullHistory() {
@@ -324,7 +361,8 @@ class UndoManager {
         timestamp: cmd.metadata?.timestamp || Date.now(),
         user: cmd.metadata?.user,
         status: 'done',
-        isCurrent: idx === currentIndex
+        isCurrent: idx === currentIndex,
+        isAI: cmd.metadata?.isAIAction || false
       })),
       ...this.redoStack.slice().reverse().map((cmd, idx) => ({
         id: `redo-${idx}`,
@@ -333,7 +371,8 @@ class UndoManager {
         timestamp: cmd.metadata?.timestamp || Date.now(),
         user: cmd.metadata?.user,
         status: 'undone',
-        isCurrent: false
+        isCurrent: false,
+        isAI: cmd.metadata?.isAIAction || false
       }))
     ];
   }

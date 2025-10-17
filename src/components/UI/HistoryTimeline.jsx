@@ -149,7 +149,8 @@ export default function HistoryTimeline() {
       gap: '4px',
       background: '#f9fafb',
       border: '1px solid rgba(0, 0, 0, 0.04)',
-      animation: `slideInFromTop 0.3s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.03}s backwards`
+      animation: `slideInFromTop 0.3s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.03}s backwards`,
+      position: 'relative' // For AI icon positioning
     }),
     historyItemCurrent: {
       background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
@@ -324,32 +325,59 @@ export default function HistoryTimeline() {
                   }
                 }
 
+                // Check if this is an AI action
+                const isAIAction = item.isAI || item.description?.startsWith('AI:');
+
                 return (
                   <div
                     key={idx}
                     style={{
                       ...styles.historyItem(idx),
-                      ...(isCurrent ? styles.historyItemCurrent : {})
+                      ...(isCurrent ? styles.historyItemCurrent : {}),
+                      ...(isAIAction ? {
+                        background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+                        borderLeft: '3px solid #8b5cf6'
+                      } : {})
                     }}
                     onClick={() => handleHistoryItemClick(item)}
                     onMouseOver={(e) => {
                       if (!isCurrent) {
-                        e.currentTarget.style.background = '#f3f4f6';
+                        e.currentTarget.style.background = isAIAction 
+                          ? 'linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%)'
+                          : '#f3f4f6';
                         e.currentTarget.style.transform = 'translateX(4px)';
                       }
                     }}
                     onMouseOut={(e) => {
                       if (!isCurrent) {
-                        e.currentTarget.style.background = '#f9fafb';
+                        e.currentTarget.style.background = isAIAction
+                          ? 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)'
+                          : '#f9fafb';
                         e.currentTarget.style.transform = 'translateX(0)';
                       }
                     }}
-                    title={isCurrent ? 'Current state' : `Click to revert to this point`}
+                    title={isAIAction 
+                      ? 'AI-generated action (cannot be undone via history)'
+                      : (isCurrent ? 'Current state' : `Click to revert to this point`)}
                   >
+                    {/* AI indicator icon */}
+                    {isAIAction && (
+                      <div style={{
+                        position: 'absolute',
+                        left: '6px',
+                        top: '50%',
+                        transform: 'translateY(-50%)',
+                        fontSize: '14px'
+                      }}>
+                        ✨
+                      </div>
+                    )}
+                    
                     <div 
                       style={{
                         ...styles.bullet,
-                        ...(item.status === 'done' ? styles.bulletDone : styles.bulletUndone)
+                        ...(item.status === 'done' ? styles.bulletDone : styles.bulletUndone),
+                        marginLeft: isAIAction ? '18px' : '0' // Offset for AI icon
                       }}
                     />
                     <div style={styles.itemContent}>

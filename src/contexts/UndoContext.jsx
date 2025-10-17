@@ -47,6 +47,10 @@ export function UndoProvider({ children }) {
     return undoManager.getFullHistory();
   }, []);
 
+  const logAIAction = useCallback((description, user = null) => {
+    undoManager.logAIAction(description, user);
+  }, []);
+
   const value = {
     ...state,
     execute,
@@ -57,6 +61,7 @@ export function UndoProvider({ children }) {
     startBatch,
     endBatch,
     getFullHistory,
+    logAIAction,
     getStackSizes: () => undoManager.getStackSizes()
   };
 
