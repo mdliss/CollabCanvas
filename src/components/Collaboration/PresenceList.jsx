@@ -5,8 +5,9 @@ import { getUserProfile } from '../../services/userProfile';
 /**
  * PresenceList - Shows all online users with avatars
  * Click on a user to see their profile popup
+ * Shows crown next to canvas owner
  */
-export default function PresenceList({ users }) {
+export default function PresenceList({ users, canvasOwnerId = null }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -125,8 +126,11 @@ export default function PresenceList({ users }) {
                   color={user.color}
                   size="sm"
                 />
-                <span style={{ color: "#555", fontSize: "13px", flex: 1 }}>
+                <span style={{ color: "#555", fontSize: "13px", flex: 1, display: "flex", alignItems: "center", gap: "4px" }}>
                   {user.displayName}
+                  {canvasOwnerId && user.uid === canvasOwnerId && (
+                    <span style={{ fontSize: "11px", opacity: 0.7 }} title="Canvas Owner">♔</span>
+                  )}
                 </span>
                 <div 
                   style={{ 

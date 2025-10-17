@@ -159,7 +159,7 @@ import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
 import ColorPalette from "./ColorPalette";
-import PerformanceMonitor, { PerformanceToggleButton } from "../UI/PerformanceMonitor";
+import PerformanceMonitor from "../UI/PerformanceMonitor";
 import HelpMenu from "../UI/HelpMenu";
 import ConnectionStatus from "../UI/ConnectionStatus";
 import TextFormattingToolbar from "../UI/TextFormattingToolbar";
@@ -177,11 +177,12 @@ import { watchSelections, setSelection, clearSelection } from "../../services/se
 import { stopDragStream } from "../../services/dragStream";
 import { generateUserColor } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
-import { ref, remove, onValue } from "firebase/database";
+import { ref, remove, onValue, get } from "firebase/database";
 import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 import AICanvas from "../AI/AICanvas";
 import { checkCanvasAccess } from "../../services/sharing";
+import { createEditRequest } from "../../services/notifications";
 
 const GRID_SIZE = 50;
 const GRID_COLOR = "#e0e0e0";
@@ -195,6 +196,8 @@ export default function Canvas() {
   const CANVAS_ID = canvasId || "global-canvas-v1";
   const [shapes, setShapes] = useState([]);
   const [canvasAccess, setCanvasAccess] = useState({ hasAccess: true, role: 'owner', loading: true });
+  const [canvasOwnerId, setCanvasOwnerId] = useState(null);
+  const [canvasName, setCanvasName] = useState('Canvas');
   
   // Permission flags - Must be defined early for use in useEffect dependencies
   const isViewer = canvasAccess.role === 'viewer';
@@ -300,7 +303,7 @@ export default function Canvas() {
     };
   }, [CANVAS_ID]);
 
-  // Check canvas access permissions
+  // Check canvas access permissions and get owner ID
   useEffect(() => {
     if (!user || !CANVAS_ID) return;
 
@@ -314,6 +317,17 @@ export default function Canvas() {
         if (!access.hasAccess) {
           console.warn('[Canvas] No access to canvas:', CANVAS_ID);
           navigate('/');
+          return;
+        }
+        
+        // Fetch canvas owner ID and name from metadata
+        const metadataRef = ref(rtdb, `canvas/${CANVAS_ID}/metadata`);
+        const metadataSnapshot = await get(metadataRef);
+        if (metadataSnapshot.exists()) {
+          const metadata = metadataSnapshot.val();
+          setCanvasOwnerId(metadata.createdBy || null);
+          setCanvasName(metadata.projectName || 'Canvas');
+          console.log('[Canvas] Canvas owner:', metadata.createdBy, 'Name:', metadata.projectName);
         }
       } catch (error) {
         console.error('[Canvas] Access check failed:', error);
@@ -323,6 +337,36 @@ export default function Canvas() {
 
     checkAccess();
   }, [user, CANVAS_ID, navigate]);
+  
+  // Watch for permission changes (SEPARATE effect to avoid re-subscription)
+  useEffect(() => {
+    if (!user?.email || !CANVAS_ID || canvasAccess.role === 'owner') return;
+    
+    const emailKey = user.email.replace(/[@.]/g, '_');
+    const collaboratorRef = ref(rtdb, `canvas/${CANVAS_ID}/collaborators/${emailKey}`);
+    let initialRole = canvasAccess.role; // Capture initial role
+    
+    console.log('[Canvas] Setting up permission watcher for viewer/editor');
+    
+    const unsubscribe = onValue(collaboratorRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const collabData = snapshot.val();
+        const newRole = collabData.role;
+        
+        // Only reload if role changed from viewer to editor
+        if (initialRole === 'viewer' && newRole === 'editor') {
+          console.log('[Canvas] 🔄 Permission upgraded: viewer → editor');
+          showFeedback('Access upgraded to editor! Reloading...');
+          
+          setTimeout(() => {
+            window.location.reload();
+          }, 1000);
+        }
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [user, CANVAS_ID]); // Don't include canvasAccess.role in deps!
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -2789,7 +2833,20 @@ export default function Canvas() {
             }}
             onMouseEnter={(e) => e.target.style.background = '#78350f'}
             onMouseLeave={(e) => e.target.style.background = '#92400e'}
-            onClick={() => alert('Contact the canvas owner to request edit access.')}
+            onClick={async () => {
+              if (!canvasOwnerId || !user) {
+                showFeedback('Unable to send request');
+                return;
+              }
+              
+              try {
+                await createEditRequest(CANVAS_ID, canvasName, canvasOwnerId, user);
+                showFeedback('Edit request sent to canvas owner');
+              } catch (error) {
+                console.error('[Canvas] Failed to create edit request:', error);
+                showFeedback('Failed to send request');
+              }
+            }}
           >
             Request Edit Access
           </button>
@@ -2832,9 +2889,15 @@ export default function Canvas() {
         <span>Projects</span>
       </button>
       
+      {/* Performance Monitor - Upper right, left of presence list */}
+      <PerformanceMonitor 
+        isVisible={isVisible} 
+        onToggle={toggleVisibility} 
+        position="top-right" 
+        hasPresence={onlineUsers.length > 0}
+      />
+      
       <ConnectionStatus />
-      <PerformanceMonitor isVisible={isVisible} onToggle={toggleVisibility} />
-      <PerformanceToggleButton onClick={toggleVisibility} isVisible={isVisible} />
       <HelpMenu isVisible={isHelpVisible} onClose={() => setIsHelpVisible(false)} />
       
       {/* Text Formatting Toolbar */}
@@ -2956,7 +3019,7 @@ export default function Canvas() {
         presenceCount={onlineUsers.length}
         cursorCount={Object.keys(cursors).length}
       />
-      <PresenceList users={onlineUsers} />
+      <PresenceList users={onlineUsers} canvasOwnerId={canvasOwnerId} />
       {/* Toolbar - Hidden for viewers */}
       {canEdit && (
         <ShapeToolbar 

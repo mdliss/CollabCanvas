@@ -291,7 +291,6 @@ export default function HistoryTimeline() {
           }}
         >
           <div style={styles.title}>
-            <span>📜</span>
             <span>History</span>
             {totalOperations > 0 && (
               <span style={styles.count}>{totalOperations}</span>

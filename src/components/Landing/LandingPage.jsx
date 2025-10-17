@@ -27,6 +27,7 @@ import SubscriptionModal from './SubscriptionModal';
 import RenameModal from './RenameModal';
 import CouponModal from './CouponModal';
 import ShareModal from './ShareModal';
+import NotificationBell from './NotificationBell';
 
 export default function LandingPage() {
   const { user, logout } = useAuth();
@@ -48,6 +49,12 @@ export default function LandingPage() {
 
     const loadData = async () => {
       try {
+        console.log('[LandingPage] Loading data for user:', {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName
+        });
+        
         // Load subscription status
         const sub = await getUserSubscription(user.uid);
         setSubscription(sub);
@@ -56,15 +63,33 @@ export default function LandingPage() {
         const owned = await listProjects(user.uid);
         setOwnedProjects(owned);
         
-        // Load shared canvases
-        const shared = await listSharedCanvases(user.email);
-        setSharedProjects(shared);
+        // Load shared canvases - CRITICAL: Get email from multiple sources
+        const userEmail = user.email || 
+                         user.providerData?.[0]?.email || 
+                         (user.reloadUserInfo && user.reloadUserInfo.email);
+        
+        console.log('[LandingPage] User email sources:', {
+          'user.email': user.email,
+          'providerData[0].email': user.providerData?.[0]?.email,
+          'final': userEmail
+        });
+        
+        console.log('[LandingPage] Calling listSharedCanvases with email:', userEmail);
+        
+        if (userEmail) {
+          const shared = await listSharedCanvases(userEmail);
+          setSharedProjects(shared);
+        } else {
+          console.error('[LandingPage] No email found for user!', user);
+          setSharedProjects([]);
+        }
         
         setLoading(false);
         
         console.log('[LandingPage] Loaded:', {
           owned: owned.length,
-          shared: shared.length
+          shared: shared.length,
+          email: userEmail
         });
         
       } catch (error) {
@@ -193,6 +218,18 @@ export default function LandingPage() {
         </div>
         
         <div style={styles.headerRight}>
+          {/* Notification Bell */}
+          <NotificationBell onApprove={() => {
+            // Reload projects when request approved
+            const loadData = async () => {
+              const owned = await listProjects(user.uid);
+              setOwnedProjects(owned);
+              const shared = await listSharedCanvases(user.email);
+              setSharedProjects(shared);
+            };
+            loadData();
+          }} />
+          
           {subscription.isPremium ? (
             <div style={styles.premiumBadge}>
               {subscription.tier === 'lifetime' ? 'Lifetime Premium' : 'Premium'}

@@ -45,13 +45,11 @@ export function PerformanceToggleButton({ onClick, isVisible }) {
   );
 }
 
-export default function PerformanceMonitor({ isVisible, onToggle }) {
+export default function PerformanceMonitor({ isVisible, onToggle, position = 'top-right', hasPresence = false }) {
   const { metrics } = usePerformance();
 
-  // Keyboard shortcut: Backtick (`) key only
+  // Keyboard shortcut: Backtick (`) key only (button removed)
   useEffect(() => {
-    console.log('[PerformanceMonitor] Keyboard listener mounted');
-    
     const handleKeyDown = (e) => {
       // Don't intercept if user is typing in an input field
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
@@ -62,7 +60,6 @@ export default function PerformanceMonitor({ isVisible, onToggle }) {
       if (e.key === '`' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
         e.preventDefault();
         e.stopPropagation();
-        console.log('[PerformanceMonitor] Performance monitor toggled!');
         onToggle();
       }
     };
@@ -70,7 +67,6 @@ export default function PerformanceMonitor({ isVisible, onToggle }) {
     window.addEventListener('keydown', handleKeyDown);
     
     return () => {
-      console.log('[PerformanceMonitor] Keyboard listener unmounted');
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onToggle]);
@@ -90,22 +86,27 @@ export default function PerformanceMonitor({ isVisible, onToggle }) {
     return '#ef4444';
   };
 
+  // Calculate right position: leave space for presence list if it's shown
+  const rightPosition = position === 'top-right' && hasPresence ? '310px' : '10px';
+
   const styles = {
     container: {
       position: 'fixed',
       top: '10px',
-      right: '10px',
+      left: position === 'top-left' ? '20px' : 'auto',
+      right: position === 'top-left' ? 'auto' : rightPosition,
       backgroundColor: 'rgba(0, 0, 0, 0.85)',
       color: '#fff',
       padding: '12px 16px',
       borderRadius: '8px',
-      fontFamily: 'monospace',
-      fontSize: '12px',
-      zIndex: 10000,
-      minWidth: '280px',
+      fontFamily: "'Roboto Mono', monospace",
+      fontSize: '11px',
+      zIndex: 9997,
+      minWidth: '260px',
       backdropFilter: 'blur(4px)',
       border: '1px solid rgba(255, 255, 255, 0.1)',
-      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)'
+      boxShadow: '0 4px 6px rgba(0, 0, 0, 0.3)',
+      transition: 'right 0.3s ease'
     },
     title: {
       fontSize: '13px',
