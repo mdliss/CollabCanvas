@@ -186,7 +186,17 @@ export default function ShapeRenderer({
       const starScaleY = radiusY / baseRadius;
       node.scaleX(starScaleX);
       node.scaleY(starScaleY);
-    } else if (shape.type !== 'line') {
+    } else if (shape.type === 'line') {
+      console.log(`[PropSync] ➖ Line dimension sync:`, {
+        width: shape.width || 100,
+        height: shape.height || 0
+      });
+      
+      // Lines use points instead of width/height
+      node.points([0, 0, shape.width || 100, shape.height || 0]);
+      node.scaleX(1);
+      node.scaleY(1);
+    } else {
       console.log(`[PropSync] 📐 Standard shape (${shape.type}) dimension sync:`, {
         width: shape.width || 100,
         height: shape.height || 100
@@ -208,7 +218,8 @@ export default function ShapeRenderer({
       height: node.height ? node.height() : 'N/A',
       radius: shape.type === 'circle' ? node.radius() : 'N/A',
       innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
-      outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+      outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A',
+      points: shape.type === 'line' ? node.points() : 'N/A'
     });
     
     // Request re-render
@@ -373,7 +384,8 @@ export default function ShapeRenderer({
         height: node.height ? node.height() : 'N/A',
         radius: shape.type === 'circle' ? node.radius() : 'N/A',
         innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
-        outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+        outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A',
+        points: shape.type === 'line' ? node.points() : 'N/A'
       });
     }
     
@@ -511,7 +523,8 @@ export default function ShapeRenderer({
           height: node.height ? node.height() : 'N/A',
           radius: shape.type === 'circle' ? node.radius() : 'N/A',
           innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
-          outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+          outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A',
+          points: shape.type === 'line' ? node.points() : 'N/A'
         }
       });
       
@@ -545,8 +558,11 @@ export default function ShapeRenderer({
       } else {
         const baseWidth = shape.width || 100;
         const baseHeight = shape.height || 100;
-        newWidth = Math.max(10, baseWidth * scaleX);
-        newHeight = Math.max(10, baseHeight * scaleY);
+        // For lines, allow 0 dimensions (horizontal/vertical lines)
+        // For other shapes, enforce minimum of 10px
+        const minSize = shape.type === 'line' ? 0 : 10;
+        newWidth = Math.max(minSize, baseWidth * scaleX);
+        newHeight = Math.max(minSize, baseHeight * scaleY);
         
         console.log(`[Transform] 📐 Standard shape dimension calculation:`, {
           type: shape.type,
@@ -555,7 +571,8 @@ export default function ShapeRenderer({
           scaleX: scaleX.toFixed(3),
           scaleY: scaleY.toFixed(3),
           newWidth: newWidth.toFixed(1),
-          newHeight: newHeight.toFixed(1)
+          newHeight: newHeight.toFixed(1),
+          minSize
         });
       }
       
@@ -576,13 +593,15 @@ export default function ShapeRenderer({
         }
       }
       
-      // Validate dimensions
-      if (!isFinite(newWidth) || newWidth <= 0 || !isFinite(newHeight) || newHeight <= 0) {
+      // Validate dimensions (allow 0 for lines)
+      const minDimension = shape.type === 'line' ? 0 : 10;
+      if (!isFinite(newWidth) || newWidth < minDimension || !isFinite(newHeight) || newHeight < minDimension) {
         console.error('[Transform] ❌ Invalid dimensions calculated:', {
           newWidth,
           newHeight,
           scaleX,
-          scaleY
+          scaleY,
+          minDimension
         });
         transformInProgressRef.current = false;
         return;
@@ -612,7 +631,11 @@ export default function ShapeRenderer({
         
         node.scaleX(radiusX / newBaseRadius);
         node.scaleY(radiusY / newBaseRadius);
-      } else if (shape.type !== 'line') {
+      } else if (shape.type === 'line') {
+        // Lines use points instead of width/height on the Konva node
+        console.log(`[Transform] ➖ Line: updating points with width=${newWidth.toFixed(1)}, height=${newHeight.toFixed(1)}`);
+        node.points([0, 0, newWidth, newHeight]);
+      } else {
         console.log(`[Transform] 📐 ${shape.type}: setting width=${newWidth.toFixed(1)}, height=${newHeight.toFixed(1)}`);
         node.width(newWidth);
         node.height(newHeight);

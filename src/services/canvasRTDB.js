@@ -35,14 +35,18 @@ const validateShapeData = (shapeData) => {
   // Validate dimensions
   if (shapeData.width !== undefined) {
     const width = Number(shapeData.width);
-    if (!Number.isFinite(width) || width < 1 || width > 100000) {
+    // Allow width = 0 for lines (vertical lines have width = 0)
+    const minWidth = shapeData.type === 'line' ? 0 : 1;
+    if (!Number.isFinite(width) || width < minWidth || width > 100000) {
       throw new Error(`Invalid width: ${shapeData.width}`);
     }
   }
 
   if (shapeData.height !== undefined) {
     const height = Number(shapeData.height);
-    if (!Number.isFinite(height) || height < 1 || height > 100000) {
+    // Allow height = 0 for lines (horizontal lines have height = 0)
+    const minHeight = shapeData.type === 'line' ? 0 : 1;
+    if (!Number.isFinite(height) || height < minHeight || height > 100000) {
       throw new Error(`Invalid height: ${shapeData.height}`);
     }
   }
