@@ -445,7 +445,7 @@ export default function LandingPage() {
       {showSubscriptionModal && (
         <SubscriptionModal
           onClose={() => setShowSubscriptionModal(false)}
-          currentProjectCount={projects.length}
+          currentProjectCount={ownedProjects.length}
         />
       )}
       

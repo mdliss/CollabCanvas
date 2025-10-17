@@ -388,7 +388,7 @@ export default function LayersPanel({
       flexDirection: 'column',
       boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12), -2px 0 8px rgba(0, 0, 0, 0.08)',
       zIndex: 10000,
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+      fontFamily: "'Roboto Mono', monospace",
       animation: 'slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     header: {
@@ -470,14 +470,14 @@ export default function LayersPanel({
     batchButton: {
       padding: '8px 12px',
       fontSize: '12px',
-      fontWeight: '600',
+      fontWeight: '500',
       border: 'none',
       borderRadius: '8px',
       cursor: 'pointer',
-      transition: 'all 0.2s',
+      transition: 'all 0.2s ease',
       color: '#ffffff',
-      backgroundColor: '#4f46e5',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+      backgroundColor: '#2c2e33',
+      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -672,8 +672,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onBringToFront)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
           >
             <span>⇈</span> To Front
           </button>
@@ -684,8 +684,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onBringForward)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
           >
             <span>⇑</span> Forward
           </button>
@@ -696,8 +696,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onSendBackward)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
           >
             <span>⇓</span> Backward
           </button>
@@ -708,8 +708,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onSendToBack)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#4338ca')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#4f46e5')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
           >
             <span>⇊</span> To Back
           </button>

@@ -353,15 +353,15 @@ export default function HistoryTimeline() {
                       ...styles.historyItem(idx),
                       ...(isCurrent ? styles.historyItemCurrent : {}),
                       ...(isAIAction ? {
-                        background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
-                        borderLeft: '3px solid #8b5cf6'
+                        background: '#fafafa',
+                        borderLeft: '3px solid #2c2e33'
                       } : {})
                     }}
                     onClick={() => handleHistoryItemClick(item)}
                     onMouseOver={(e) => {
                       if (!isCurrent) {
                         e.currentTarget.style.background = isAIAction 
-                          ? 'linear-gradient(135deg, #ddd6fe 0%, #c4b5fd 100%)'
+                          ? '#f3f4f6'
                           : '#f3f4f6';
                         e.currentTarget.style.transform = 'translateX(4px)';
                       }
@@ -369,33 +369,21 @@ export default function HistoryTimeline() {
                     onMouseOut={(e) => {
                       if (!isCurrent) {
                         e.currentTarget.style.background = isAIAction
-                          ? 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)'
+                          ? '#fafafa'
                           : '#f9fafb';
                         e.currentTarget.style.transform = 'translateX(0)';
                       }
                     }}
                     title={isAIAction 
-                      ? 'AI-generated action (cannot be undone via history)'
+                      ? 'AI-generated action'
                       : (isCurrent ? 'Current state' : `Click to revert to this point`)}
                   >
-                    {/* AI indicator icon */}
-                    {isAIAction && (
-                      <div style={{
-                        position: 'absolute',
-                        left: '6px',
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        fontSize: '14px'
-                      }}>
-                        ✨
-                      </div>
-                    )}
+                    {/* AI indicator - removed emoji, using dark left border instead */}
                     
                     <div 
                       style={{
                         ...styles.bullet,
-                        ...(item.status === 'done' ? styles.bulletDone : styles.bulletUndone),
-                        marginLeft: isAIAction ? '18px' : '0' // Offset for AI icon
+                        ...(item.status === 'done' ? styles.bulletDone : styles.bulletUndone)
                       }}
                     />
                     <div style={styles.itemContent}>
