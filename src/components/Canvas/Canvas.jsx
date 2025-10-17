@@ -2889,12 +2889,21 @@ export default function Canvas() {
             );
           })}
 
-          {/* Render selection badges (for selections and locks) */}
+          {/* Render selection badges (for selections and locks) 
+              HIDE DURING DRAG: Badge only shows when shape is stationary
+              This prevents visual clutter during active drag operations */}
           {shapes.map(shape => {
             const selection = selections[shape.id];
             const isLockedByOther = shape.isLocked && shape.lockedBy && shape.lockedBy !== user?.uid;
             
-            // Show badge if selected OR locked by someone else
+            // CRITICAL: Hide badge if shape is being actively dragged by anyone
+            // This keeps the canvas clean during drag operations
+            const isBeingDragged = activeDrags[shape.id];
+            if (isBeingDragged) {
+              return null; // Hide badge during drag - cleaner UX
+            }
+            
+            // Show badge if selected OR locked by someone else (and NOT being dragged)
             if (selection || isLockedByOther) {
               // For locks, we need to get the user's display name from online users
               let badgeName = selection?.name;
@@ -2919,10 +2928,20 @@ export default function Canvas() {
             return null;
           })}
 
-          {/* Render remote user cursors */}
-          {Object.entries(cursors).map(([uid, cursor]) => (
-            <Cursor key={uid} cursor={cursor} />
-          ))}
+          {/* Render remote user cursors 
+              HIDE DURING DRAG: Cursor hidden when user is actively dragging
+              This prevents visual lag/delay artifacts during drag operations */}
+          {Object.entries(cursors).map(([uid, cursor]) => {
+            // CRITICAL: Hide cursor if this user is actively dragging any shape
+            // Cursor position updates can lag during drag, creating poor visual experience
+            const isUserDragging = Object.values(activeDrags).some(drag => drag.uid === uid);
+            
+            if (isUserDragging) {
+              return null; // Hide cursor during drag - prevents lag artifacts
+            }
+            
+            return <Cursor key={uid} cursor={cursor} />;
+          })}
 
           {/* Render marquee selection box */}
           {selectionBox && (
