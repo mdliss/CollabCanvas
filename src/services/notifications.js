@@ -114,7 +114,21 @@ export const approveEditRequest = async (ownerId, request) => {
     approvedAt: Date.now()
   });
   
+  // Send notification to requester that access was granted
+  const requesterNotificationId = `notif_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requesterNotificationRef = ref(rtdb, `notifications/${request.requesterId}/messages/${requesterNotificationId}`);
+  await set(requesterNotificationRef, {
+    id: requesterNotificationId,
+    type: 'access_granted',
+    canvasId: request.canvasId,
+    canvasName: request.canvasName,
+    message: `You have been granted edit access to "${request.canvasName}"`,
+    createdAt: Date.now(),
+    read: false
+  });
+  
   console.log('[Notifications] Edit request approved:', request.id);
+  console.log('[Notifications] Notification sent to requester:', request.requesterId);
 };
 
 /**
@@ -144,5 +158,79 @@ export const deleteRequest = async (ownerId, requestId) => {
   await remove(requestRef);
   
   console.log('[Notifications] Request deleted:', requestId);
+};
+
+/**
+ * Check if user has already requested edit access for a canvas
+ * 
+ * @param {string} ownerId - Canvas owner's user ID
+ * @param {string} canvasId - Canvas ID
+ * @param {string} requesterId - User requesting access
+ * @returns {Promise<boolean>} True if pending request exists
+ */
+export const hasPendingRequest = async (ownerId, canvasId, requesterId) => {
+  const requestsRef = ref(rtdb, `notifications/${ownerId}/requests`);
+  const snapshot = await get(requestsRef);
+  
+  if (!snapshot.exists()) {
+    return false;
+  }
+  
+  const requestsMap = snapshot.val();
+  const pendingRequests = Object.values(requestsMap).filter(
+    r => r.status === 'pending' && 
+         r.canvasId === canvasId && 
+         r.requesterId === requesterId
+  );
+  
+  return pendingRequests.length > 0;
+};
+
+/**
+ * Subscribe to notification messages for a user
+ * 
+ * @param {string} userId - User ID to watch messages for
+ * @param {Function} callback - Called with array of unread messages
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToMessages = (userId, callback) => {
+  const messagesRef = ref(rtdb, `notifications/${userId}/messages`);
+  
+  return onValue(messagesRef, (snapshot) => {
+    const messagesMap = snapshot.val() || {};
+    const unreadMessages = Object.values(messagesMap)
+      .filter(m => !m.read)
+      .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    callback(unreadMessages);
+  });
+};
+
+/**
+ * Mark a notification message as read
+ * 
+ * @param {string} userId - User ID
+ * @param {string} messageId - Message ID
+ */
+export const markMessageAsRead = async (userId, messageId) => {
+  const messageRef = ref(rtdb, `notifications/${userId}/messages/${messageId}`);
+  await update(messageRef, {
+    read: true,
+    readAt: Date.now()
+  });
+  
+  console.log('[Notifications] Message marked as read:', messageId);
+};
+
+/**
+ * Delete a notification message
+ * 
+ * @param {string} userId - User ID
+ * @param {string} messageId - Message ID
+ */
+export const deleteMessage = async (userId, messageId) => {
+  const messageRef = ref(rtdb, `notifications/${userId}/messages/${messageId}`);
+  await remove(messageRef);
+  
+  console.log('[Notifications] Message deleted:', messageId);
 };
 

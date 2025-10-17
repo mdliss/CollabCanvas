@@ -182,7 +182,7 @@ import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 import AICanvas from "../AI/AICanvas";
 import { checkCanvasAccess } from "../../services/sharing";
-import { createEditRequest } from "../../services/notifications";
+import { createEditRequest, hasPendingRequest, subscribeToMessages, markMessageAsRead } from "../../services/notifications";
 
 const GRID_SIZE = 50;
 const GRID_COLOR = "#e0e0e0";
@@ -198,6 +198,7 @@ export default function Canvas() {
   const [canvasAccess, setCanvasAccess] = useState({ hasAccess: true, role: 'owner', loading: true });
   const [canvasOwnerId, setCanvasOwnerId] = useState(null);
   const [canvasName, setCanvasName] = useState('Canvas');
+  const [hasRequestedAccess, setHasRequestedAccess] = useState(false);
   
   // Permission flags - Must be defined early for use in useEffect dependencies
   const isViewer = canvasAccess.role === 'viewer';
@@ -344,7 +345,8 @@ export default function Canvas() {
     
     const emailKey = user.email.replace(/[@.]/g, '_');
     const collaboratorRef = ref(rtdb, `canvas/${CANVAS_ID}/collaborators/${emailKey}`);
-    let initialRole = canvasAccess.role; // Capture initial role
+    let initialRole = null;
+    let isFirstLoad = true;
     
     console.log('[Canvas] Setting up permission watcher for viewer/editor');
     
@@ -352,6 +354,14 @@ export default function Canvas() {
       if (snapshot.exists()) {
         const collabData = snapshot.val();
         const newRole = collabData.role;
+        
+        // Capture the initial role on first load
+        if (isFirstLoad) {
+          initialRole = newRole;
+          isFirstLoad = false;
+          console.log('[Canvas] Initial role captured:', initialRole);
+          return;
+        }
         
         // Only reload if role changed from viewer to editor
         if (initialRole === 'viewer' && newRole === 'editor') {
@@ -362,11 +372,65 @@ export default function Canvas() {
             window.location.reload();
           }, 1000);
         }
+        
+        // Update initial role for future comparisons
+        initialRole = newRole;
       }
     });
     
     return () => unsubscribe();
   }, [user, CANVAS_ID]); // Don't include canvasAccess.role in deps!
+
+  // Listen for notification messages (access granted, etc.)
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    console.log('[Canvas] Setting up notification message listener');
+    
+    const unsubscribe = subscribeToMessages(user.uid, (messages) => {
+      // Check for access granted message for current canvas
+      const accessGrantedMessage = messages.find(
+        m => m.type === 'access_granted' && m.canvasId === CANVAS_ID
+      );
+      
+      if (accessGrantedMessage) {
+        console.log('[Canvas] 🎉 Access granted notification received:', accessGrantedMessage);
+        
+        // Show the message to the user
+        showFeedback(accessGrantedMessage.message);
+        
+        // Mark as read
+        markMessageAsRead(user.uid, accessGrantedMessage.id).catch(err => 
+          console.error('[Canvas] Failed to mark message as read:', err)
+        );
+        
+        // Reload page after a short delay to show the editor interface
+        console.log('[Canvas] 🔄 Reloading page to show editor interface...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000); // 2 second delay to let user see the message
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [user, CANVAS_ID]);
+
+  // Check for existing edit request (prevent duplicates)
+  useEffect(() => {
+    if (!isViewer || !canvasOwnerId || !user?.uid) return;
+    
+    const checkExistingRequest = async () => {
+      try {
+        const hasPending = await hasPendingRequest(canvasOwnerId, CANVAS_ID, user.uid);
+        setHasRequestedAccess(hasPending);
+        console.log('[Canvas] Existing edit request check:', hasPending);
+      } catch (error) {
+        console.error('[Canvas] Failed to check existing request:', error);
+      }
+    };
+    
+    checkExistingRequest();
+  }, [isViewer, canvasOwnerId, user, CANVAS_ID]);
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -2820,27 +2884,51 @@ export default function Canvas() {
           <span>View-Only Mode</span>
           <span style={{ opacity: 0.6 }}>•</span>
           <button
+            disabled={hasRequestedAccess}
             style={{
-              background: '#92400e',
+              background: hasRequestedAccess ? '#d1d5db' : '#92400e',
               color: '#ffffff',
               border: 'none',
               padding: '6px 14px',
               borderRadius: '6px',
               fontSize: '12px',
               fontWeight: '500',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
+              cursor: hasRequestedAccess ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease',
+              opacity: hasRequestedAccess ? 0.7 : 1
             }}
-            onMouseEnter={(e) => e.target.style.background = '#78350f'}
-            onMouseLeave={(e) => e.target.style.background = '#92400e'}
+            onMouseEnter={(e) => {
+              if (!hasRequestedAccess) {
+                e.target.style.background = '#78350f';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!hasRequestedAccess) {
+                e.target.style.background = '#92400e';
+              }
+            }}
             onClick={async () => {
+              if (hasRequestedAccess) {
+                showFeedback('Edit access already requested');
+                return;
+              }
+              
               if (!canvasOwnerId || !user) {
                 showFeedback('Unable to send request');
                 return;
               }
               
               try {
+                // Check again before creating (in case of race condition)
+                const hasPending = await hasPendingRequest(canvasOwnerId, CANVAS_ID, user.uid);
+                if (hasPending) {
+                  setHasRequestedAccess(true);
+                  showFeedback('Edit access already requested');
+                  return;
+                }
+                
                 await createEditRequest(CANVAS_ID, canvasName, canvasOwnerId, user);
+                setHasRequestedAccess(true);
                 showFeedback('Edit request sent to canvas owner');
               } catch (error) {
                 console.error('[Canvas] Failed to create edit request:', error);
@@ -2848,7 +2936,7 @@ export default function Canvas() {
               }
             }}
           >
-            Request Edit Access
+            {hasRequestedAccess ? 'Already Requested Edit Access' : 'Request Edit Access'}
           </button>
         </div>
       )}
