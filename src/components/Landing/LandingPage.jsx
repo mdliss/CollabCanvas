@@ -24,6 +24,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { subscribeToProjects, createProject, deleteProject, updateProject, getUserSubscription } from '../../services/projects';
 import SubscriptionModal from './SubscriptionModal';
+import RenameModal from './RenameModal';
+import CouponModal from './CouponModal';
 
 export default function LandingPage() {
   const { user, logout } = useAuth();
@@ -32,6 +34,8 @@ export default function LandingPage() {
   const [subscription, setSubscription] = useState({ isPremium: false, tier: 'free' });
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+  const [showCouponModal, setShowCouponModal] = useState(false);
+  const [renamingProject, setRenamingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
 
   // Load projects and subscription status
@@ -117,6 +121,29 @@ export default function LandingPage() {
     }
   };
 
+  const handleRename = async (project, e) => {
+    e.stopPropagation();
+    setRenamingProject(project);
+  };
+
+  const handleSaveRename = async (newName) => {
+    if (!renamingProject) return;
+    
+    try {
+      await updateProject(user.uid, renamingProject.id, { name: newName });
+      setRenamingProject(null);
+    } catch (error) {
+      console.error('[LandingPage] Failed to rename project:', error);
+      alert('Failed to rename project');
+    }
+  };
+
+  const handleCouponSuccess = async () => {
+    // Reload subscription status
+    const sub = await getUserSubscription(user.uid);
+    setSubscription(sub);
+  };
+
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -144,21 +171,38 @@ export default function LandingPage() {
         <div style={styles.headerRight}>
           {subscription.isPremium ? (
             <div style={styles.premiumBadge}>
-              Premium
+              {subscription.tier === 'lifetime' ? 'Lifetime Premium' : 'Premium'}
             </div>
           ) : (
-            <button
-              onClick={() => setShowSubscriptionModal(true)}
-              style={styles.upgradeButton}
-              onMouseEnter={(e) => {
-                e.target.style.background = '#1a1c1f';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = '#2c2e33';
-              }}
-            >
-              Upgrade to Premium
-            </button>
+            <>
+              <button
+                onClick={() => setShowCouponModal(true)}
+                style={styles.couponButton}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#fafafa';
+                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#ffffff';
+                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+                }}
+                title="Have a coupon code?"
+              >
+                Coupon
+              </button>
+              <button
+                onClick={() => setShowSubscriptionModal(true)}
+                style={styles.upgradeButton}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#1a1c1f';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#2c2e33';
+                }}
+              >
+                Upgrade to Premium
+              </button>
+            </>
           )}
           
           <button
@@ -261,6 +305,13 @@ export default function LandingPage() {
                 {project.isStarred ? '★' : '☆'}
               </button>
               <button
+                onClick={(e) => handleRename(project, e)}
+                style={styles.actionButton}
+                title="Rename project"
+              >
+                ✎
+              </button>
+              <button
                 onClick={(e) => handleDeleteProject(project, e)}
                 style={{...styles.actionButton, ...styles.deleteButton}}
                 title="Delete project"
@@ -284,11 +335,26 @@ export default function LandingPage() {
         </div>
       )}
 
-      {/* Subscription Modal */}
+      {/* Modals */}
       {showSubscriptionModal && (
         <SubscriptionModal
           onClose={() => setShowSubscriptionModal(false)}
           currentProjectCount={projects.length}
+        />
+      )}
+      
+      {showCouponModal && (
+        <CouponModal
+          onClose={() => setShowCouponModal(false)}
+          onSuccess={handleCouponSuccess}
+        />
+      )}
+      
+      {renamingProject && (
+        <RenameModal
+          project={renamingProject}
+          onSave={handleSaveRename}
+          onClose={() => setRenamingProject(null)}
         />
       )}
     </div>
@@ -367,6 +433,19 @@ const styles = {
     cursor: 'pointer',
     transition: 'all 0.2s ease',
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+  },
+  
+  couponButton: {
+    background: '#ffffff',
+    color: '#2c2e33',
+    border: '1px solid rgba(0, 0, 0, 0.08)',
+    padding: '8px 18px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    fontWeight: '500',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
   },
   
   logoutButton: {

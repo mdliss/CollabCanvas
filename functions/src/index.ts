@@ -10,6 +10,9 @@ const rtdb = admin.database();
 // Export Stripe functions
 export { createCheckoutSession, createPortalSession, stripeWebhook } from './stripe';
 
+// Export Coupon functions
+export { redeemCoupon } from './coupons';
+
 // Initialize OpenAI
 const openai = new OpenAI({
     apiKey: functions.config().openai?.key || process.env.OPENAI_API_KEY
