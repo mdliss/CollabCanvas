@@ -1,6 +1,172 @@
 /**
- * Undo/Redo Manager
- * Manages command history with undo and redo stacks
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Undo/Redo Manager - Command Pattern with AI Operation Support
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Manages command history with undo and redo stacks, including atomic AI operations.
+ * 
+ * ARCHITECTURE:
+ * - Stack-based undo/redo with Command pattern
+ * - Supports manual operations (drag, create, delete, transform)
+ * - Supports AI operations (bulk creates, templates) with atomic undo
+ * - Batch operations grouped as single undo step
+ * - History Timeline integration via getFullHistory()
+ * 
+ * DATA STRUCTURES:
+ * 
+ * Undo Stack: Array of Command objects (most recent at end)
+ * [
+ *   CreateShapeCommand { shape: {...}, execute(), undo() },
+ *   MoveShapeCommand { oldPos, newPos, execute(), undo() },
+ *   AIOperationCommand { affectedShapeIds: [...], execute(), undo() },  // <-- NEW
+ *   ...
+ * ]
+ * 
+ * Redo Stack: Array of undone Command objects
+ * [
+ *   <undone commands in reverse order>
+ * ]
+ * 
+ * COMMAND TYPES:
+ * 1. CreateShapeCommand - Single shape creation
+ * 2. UpdateShapeCommand - Property changes (color, size, rotation)
+ * 3. DeleteShapeCommand - Single shape deletion
+ * 4. MoveShapeCommand - Position changes
+ * 5. MultiShapeCommand - Batch operations (multiple shapes)
+ * 6. AIOperationCommand - AI operations with shape IDs (NEW)
+ * 
+ * AI OPERATION REGISTRATION:
+ * 
+ * Traditional Flow (Manual Operations):
+ * execute(command, user) → command.execute() → add to undo stack
+ * 
+ * AI Operation Flow:
+ * 1. Cloud Function executes operation (shapes created in RTDB)
+ * 2. Frontend receives operationId and fetches affected shape IDs
+ * 3. Frontend creates AIOperationCommand with shape IDs
+ * 4. registerAIOperation(aiCommand) → add to undo stack (no execute call)
+ * 5. Undo removes all shapes atomically via batched RTDB delete
+ * 
+ * PERFORMANCE:
+ * - Execute: <50ms (single RTDB write)
+ * - Undo: <100ms (single RTDB write)
+ * - Redo: <100ms (single RTDB write)
+ * - AI Undo (500 shapes): <500ms (batched delete)
+ * - AI Redo (500 shapes): <2s (batched create)
+ * - History query: <10ms (in-memory array)
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONSOLE TESTING COMMANDS
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Test 1: Inspect Undo Stack
+ * ──────────────────────────
+ * > window.undoManager.undoStack.map(cmd => cmd.getDescription())
+ * 
+ * Expected Output:
+ * [
+ *   "Created Rectangle at (100, 200)",
+ *   "Moved shape from (100, 200) to (150, 250)",
+ *   "AI: Created 50 rectangles in grid",  // <-- AI operation
+ *   "Changed color to #ff0000"
+ * ]
+ * 
+ * Test 2: Check AI Operation in Stack
+ * ────────────────────────────────────
+ * > const aiOps = window.undoManager.undoStack.filter(cmd => cmd.metadata?.isAI)
+ * > console.log(aiOps.map(cmd => ({
+ *     description: cmd.getDescription(),
+ *     shapeCount: cmd.affectedShapeIds?.length,
+ *     canUndo: typeof cmd.undo === 'function'
+ *   })))
+ * 
+ * Expected Output:
+ * [
+ *   {
+ *     description: "AI: Created 50 rectangles",
+ *     shapeCount: 50,
+ *     canUndo: true
+ *   }
+ * ]
+ * 
+ * Test 3: Verify History Format
+ * ──────────────────────────────
+ * > window.undoManager.getFullHistory()
+ * 
+ * Expected Output:
+ * [
+ *   {
+ *     id: "history-0",
+ *     index: 0,
+ *     description: "Created Rectangle",
+ *     timestamp: 1234567890,
+ *     user: { uid, displayName },
+ *     status: "done",
+ *     isCurrent: false,
+ *     isAI: false
+ *   },
+ *   {
+ *     id: "history-1",
+ *     index: 1,
+ *     description: "AI: Created 50 shapes",
+ *     timestamp: 1234567895,
+ *     user: { uid, displayName },
+ *     status: "done",
+ *     isCurrent: true,   // <-- Most recent
+ *     isAI: true          // <-- AI operation
+ *   }
+ * ]
+ * 
+ * Test 4: Manual Undo Test
+ * ─────────────────────────
+ * > console.log('Before undo:', window.undoManager.getState())
+ * > await window.undoManager.undo()
+ * > console.log('After undo:', window.undoManager.getState())
+ * 
+ * Expected Output:
+ * Before undo: { undoStackSize: 5, redoStackSize: 0, canUndo: true, canRedo: false }
+ * After undo: { undoStackSize: 4, redoStackSize: 1, canUndo: true, canRedo: true }
+ * 
+ * Test 5: Performance Test - AI Undo
+ * ───────────────────────────────────
+ * (After AI creates 500 shapes)
+ * > console.time('ai-undo')
+ * > await window.undoManager.undo()
+ * > console.timeEnd('ai-undo')
+ * 
+ * Expected Output:
+ * ai-undo: 450ms  // <500ms for 500 shapes
+ * 
+ * Test 6: Batch Operation Test
+ * ─────────────────────────────
+ * > window.undoManager.startBatch('Test batch')
+ * > // Perform multiple operations
+ * > await window.undoManager.endBatch()
+ * > window.undoManager.undoStack[window.undoManager.undoStack.length - 1].getDescription()
+ * 
+ * Expected Output:
+ * "Test batch (N changes)"
+ * 
+ * Test 7: Revert to Point Test
+ * ─────────────────────────────
+ * > const history = window.undoManager.getFullHistory()
+ * > console.log('Current index:', history.findIndex(h => h.isCurrent))
+ * > await window.undoManager.revertToPoint(2)  // Revert to index 2
+ * > console.log('New index:', window.undoManager.undoStack.length - 1)
+ * 
+ * Expected Output:
+ * Current index: 5
+ * New index: 2
+ * 
+ * Test 8: Clear History Test
+ * ───────────────────────────
+ * > window.undoManager.clear()
+ * > window.undoManager.getState()
+ * 
+ * Expected Output:
+ * { undoStackSize: 0, redoStackSize: 0, canUndo: false, canRedo: false }
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  */
 
 class UndoManager {
@@ -311,40 +477,92 @@ class UndoManager {
   }
 
   /**
-   * Log AI Action for History Display
+   * Register AI Operation with Undo Capability
    * 
-   * Adds AI operations to history timeline without undo capability.
-   * Creates a placeholder command that appears in history but cannot be undone
-   * (AI shapes are created directly in RTDB, not through command pattern).
+   * Registers AI operations (bulk creates, templates, etc.) as proper commands
+   * that can be undone/redone through standard Ctrl+Z/Ctrl+Y flow.
    * 
-   * @param {string} description - Action description (e.g., "AI: Created 400 rectangles")
-   * @param {Object} user - User object for metadata
+   * Architecture:
+   * - AI Cloud Function executes operation and returns affected shape IDs
+   * - This method creates AIOperationCommand with those shape IDs
+   * - Command is added to undo stack for standard undo/redo flow
+   * - Undo removes all affected shapes atomically (batched RTDB delete)
+   * - Redo recreates shapes from stored data
+   * 
+   * Performance:
+   * - Registration: <10ms (creates command object)
+   * - Undo: <500ms for 500 shapes (batched delete)
+   * - Redo: <2s for 500 shapes (batched create)
+   * 
+   * @param {Object} aiCommand - AIOperationCommand instance with shape IDs and metadata
+   * 
+   * @example
+   * // After AI creates shapes:
+   * const aiCommand = new AIOperationCommand({
+   *   canvasId: 'global-canvas-v1',
+   *   description: 'AI: Created 50 rectangles',
+   *   affectedShapeIds: ['shape_123', 'shape_456', ...],
+   *   shapeData: shapesSnapshot,
+   *   user,
+   *   deleteShapeFn: deleteShape,
+   *   createShapeFn: createShape
+   * });
+   * undoManager.registerAIOperation(aiCommand);
+   */
+  registerAIOperation(aiCommand) {
+    // Add metadata to command
+    if (!aiCommand.metadata) {
+      aiCommand.metadata = {};
+    }
+    aiCommand.metadata.timestamp = Date.now();
+    aiCommand.metadata.isAI = true;
+    
+    // Add to undo stack (operation already executed by Cloud Function)
+    this.undoStack.push(aiCommand);
+    console.log('[UndoManager] AI operation registered:', aiCommand.getDescription(), 
+                'Shapes:', aiCommand.affectedShapeIds.length);
+    
+    // Clear redo stack (new action invalidates redo history)
+    this.redoStack = [];
+    
+    // Limit stack size
+    if (this.undoStack.length > this.maxHistorySize) {
+      this.undoStack.shift();
+    }
+    
+    this.notifyListeners();
+  }
+  
+  /**
+   * Legacy method for backward compatibility
+   * @deprecated Use registerAIOperation() with AIOperationCommand instead
    */
   logAIAction(description, user = null) {
-    // Create a simple placeholder command for history display
+    console.warn('[UndoManager] logAIAction is deprecated. Use registerAIOperation() instead.');
+    
+    // Create a simple placeholder for backward compatibility
     const aiPlaceholder = {
       getDescription: () => description,
-      execute: async () => {}, // No-op (already executed by AI)
+      execute: async () => {},
       undo: async () => {
-        console.warn('[UndoManager] AI actions cannot be undone through history system');
+        console.warn('[UndoManager] Cannot undo: AI operation registered via deprecated logAIAction()');
       },
       redo: async () => {},
       metadata: {
         timestamp: Date.now(),
         user,
-        isAIAction: true
+        isAI: true
       }
     };
     
     this.undoStack.push(aiPlaceholder);
-    this.redoStack = []; // Clear redo stack
+    this.redoStack = [];
     
     if (this.undoStack.length > this.maxHistorySize) {
       this.undoStack.shift();
     }
     
     this.notifyListeners();
-    console.log('[UndoManager] AI action logged in history:', description);
   }
 
   /**

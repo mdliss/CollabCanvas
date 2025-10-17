@@ -121,27 +121,11 @@ const getShapeRef = (canvasId, shapeId) => ref(rtdb, `canvas/${canvasId}/shapes/
 export const subscribeToShapes = (canvasId, callback) => {
   const shapesRef = getShapesRef(canvasId);
   
-  console.log('👂 [canvasRTDB.js] subscribeToShapes() - Setting up RTDB listener');
-  
   const unsubscribe = onValue(shapesRef, (snapshot) => {
-    console.log('🔔 [canvasRTDB.js] RTDB VALUE CHANGED - subscribeToShapes listener fired');
-    console.log('   This happens in ALL clients when ANY client writes to RTDB');
-    
     const shapesMap = snapshot.val() || {};
     // Convert map to array and sort by zIndex
     const shapes = Object.values(shapesMap).sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
-    
-    console.log('📊 [canvasRTDB.js] Parsed shapes from RTDB:', {
-      count: shapes.length,
-      shapeIds: shapes.map(s => s.id)
-    });
-    
-    console.log('📢 [canvasRTDB.js] Calling callback (Canvas.jsx setShapes)');
-    console.log('   This will trigger React re-render with new shape positions');
-    
     callback(shapes);
-    
-    console.log('✅ [canvasRTDB.js] subscribeToShapes callback complete');
   });
   
   return unsubscribe;
@@ -155,8 +139,6 @@ export const subscribeToShapes = (canvasId, callback) => {
  */
 export const createShape = async (canvasId, shapeData, user) => {
   const shapeId = shapeData.id || `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  console.log('[RTDB createShape] Creating shape with ID:', shapeId);
   
   // Validate shape data
   try {
@@ -230,8 +212,6 @@ export const createShape = async (canvasId, shapeData, user) => {
   // Update metadata
   const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
   await set(metadataRef, Date.now());
-  
-  console.log('[RTDB createShape] Shape created successfully:', shapeId);
 };
 
 /**
@@ -242,17 +222,6 @@ export const createShape = async (canvasId, shapeData, user) => {
  * @param {object} user 
  */
 export const updateShape = async (canvasId, shapeId, updates, user) => {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('💾 [canvasRTDB.js] updateShape() - WRITING TO RTDB');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('Parameters:', {
-    canvasId,
-    shapeId,
-    updates,
-    user: user?.displayName || user?.email,
-    timestamp: new Date().toISOString()
-  });
-  
   // Validate update data
   try {
     validateShapeData({ ...updates, type: updates.type || 'rectangle', id: shapeId });
@@ -275,8 +244,6 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
     updateData.text = sanitizeText(updateData.text);
   }
   
-  console.log('📤 [canvasRTDB.js] Data to write to RTDB:', updateData);
-  
   // Handle undefined values (delete them)
   Object.keys(updateData).forEach(key => {
     if (updateData[key] === undefined) {
@@ -284,21 +251,12 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
     }
   });
   
-  console.log('🔄 [canvasRTDB.js] Performing RTDB atomic update...');
-  
   // Atomic update - no conflicts!
   await update(shapeRef, updateData);
-  
-  console.log('✅ [canvasRTDB.js] RTDB write successful!');
-  console.log('📡 [canvasRTDB.js] This will trigger subscribeToShapes() listeners in ALL clients');
   
   // Update metadata
   const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
   await set(metadataRef, Date.now());
-  
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('✅ [canvasRTDB.js] updateShape() COMPLETE');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 };
 
 /**
@@ -308,16 +266,12 @@ export const updateShape = async (canvasId, shapeId, updates, user) => {
  * @param {object} user 
  */
 export const deleteShape = async (canvasId, shapeId, user) => {
-  console.log('[RTDB deleteShape] Deleting shape:', shapeId);
-  
   const shapeRef = getShapeRef(canvasId, shapeId);
   await remove(shapeRef);
   
   // Update metadata
   const metadataRef = ref(rtdb, `canvas/${canvasId}/metadata/lastUpdated`);
   await set(metadataRef, Date.now());
-  
-  console.log('[RTDB deleteShape] Shape deleted successfully:', shapeId);
 };
 
 /**
@@ -558,8 +512,6 @@ export const sendBackward = async (canvasId, shapeId, user) => {
  * Delete all shapes (DANGEROUS - use carefully)
  */
 export const deleteAllShapes = async (canvasId, user) => {
-  console.warn('[RTDB deleteAllShapes] Deleting ALL shapes from canvas:', canvasId);
-  
   const shapesRef = getShapesRef(canvasId);
   await remove(shapesRef);
   

@@ -108,7 +108,6 @@ export const watchCursors = (callback) => {
       }
     }
 
-    console.debug('[cursor] emit size:', Object.keys(out).length);
     callback(out);
   });
 };

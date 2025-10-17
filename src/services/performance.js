@@ -36,15 +36,10 @@ class PerformanceMonitor {
     // Start 60-second reporting interval
     this.reportInterval = setInterval(() => {
       this.sendMetricsToAnalytics();
-      // Also log rubric metrics every 60 seconds
-      this.logRubricMetrics();
     }, 60000);
 
     // Start FPS tracking
     this.trackFPS();
-    
-    // Log rubric metrics on demand (can be called manually)
-    console.log('[PerformanceMonitor] Initialized. Call performanceMonitor.logRubricMetrics() to see compliance metrics.');
   }
 
   // Track operation start (when local action occurs)
@@ -141,21 +136,11 @@ class PerformanceMonitor {
   // RUBRIC REQUIREMENT: Track object sync latency (target < 100ms)
   trackObjectSyncLatency(latency) {
     this.addMetric('objectSyncLatency', latency);
-    
-    // Detect performance degradation
-    if (latency > this.OBJECT_SYNC_THRESHOLD) {
-      console.warn(`[Performance] Object sync latency ${latency.toFixed(1)}ms exceeds threshold ${this.OBJECT_SYNC_THRESHOLD}ms`);
-    }
   }
 
   // RUBRIC REQUIREMENT: Track cursor sync latency (target < 50ms)
   trackCursorSyncLatency(latency) {
     this.addMetric('cursorSyncLatency', latency);
-    
-    // Detect performance degradation
-    if (latency > this.CURSOR_SYNC_THRESHOLD) {
-      console.warn(`[Performance] Cursor sync latency ${latency.toFixed(1)}ms exceeds threshold ${this.CURSOR_SYNC_THRESHOLD}ms`);
-    }
   }
 
   // Get current metrics snapshot
@@ -275,9 +260,8 @@ class PerformanceMonitor {
         network_rtt: Math.round(metrics.networkRTT.avg),
         timestamp: Date.now()
       });
-      console.debug('[PerformanceMonitor] Metrics sent to Analytics');
     } catch (error) {
-      console.debug('[PerformanceMonitor] Failed to send metrics:', error);
+      // Silently fail - analytics not critical
     }
   }
 

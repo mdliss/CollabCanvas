@@ -14,7 +14,8 @@
  * - Context awareness (understands selection, viewport, references)
  * - Conversation memory across sessions
  * - Layout templates for common UI patterns
- * - Undo support for AI operations
+ * - Full Undo/Redo support via Ctrl+Z/Ctrl+Y (NEW - atomic AI operation undo)
+ * - History Timeline integration with purple AI styling (NEW)
  * - Usage tracking and budget enforcement
  * 
  * ARCHITECTURE:
@@ -22,20 +23,191 @@
  * - Backend: Firebase Cloud Function with OpenAI integration
  * - Communication: HTTPS JSON API with auth token
  * - Persistence: RTDB for shapes and conversation history
+ * - Undo Integration: AIOperationCommand pattern for atomic undo/redo
  * 
  * PERFORMANCE TARGETS:
  * - First response token: <500ms
  * - Complete response: <3 seconds
  * - Template creation: <2 seconds
  * - Shape creation: <200ms RTDB write
+ * - AI operation registration: <250ms (fetch + register)
+ * - Undo 500 AI shapes: <500ms (batched delete)
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * UNDO/REDO INTEGRATION - HOW IT WORKS
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Architecture Flow:
+ * 1. User sends message to AI Assistant
+ * 2. Cloud Function executes operations (bulk_create, template, etc.)
+ * 3. Cloud Function tracks operation in /ai-operations/{userId}/operations/{operationId}
+ * 4. Cloud Function returns operationId to frontend
+ * 5. Frontend fetches operation data to get affected shape IDs
+ * 6. Frontend fetches current shape data for redo capability
+ * 7. Frontend creates AIOperationCommand with shape IDs and data
+ * 8. Command registered with undo manager via registerAIOperation()
+ * 9. User can now press Ctrl+Z to undo (removes all shapes atomically)
+ * 10. User can press Ctrl+Y to redo (recreates all shapes)
+ * 11. Operation appears in History Timeline with purple styling
+ * 
+ * Data Structures:
+ * 
+ * RTDB Operation Data (/ai-operations/{userId}/operations/{operationId}):
+ * {
+ *   operationId: "ai-op-1234567890_abc123",
+ *   userId: "user_xyz",
+ *   timestamp: 1234567890,
+ *   toolCalls: [
+ *     {
+ *       functionName: "bulk_create",
+ *       params: { shapes: [...] },
+ *       affectedShapeIds: ["shape_123", "shape_456", ...]
+ *     }
+ *   ],
+ *   reversible: true
+ * }
+ * 
+ * AIOperationCommand Instance:
+ * {
+ *   canvasId: "global-canvas-v1",
+ *   description: "AI: Created 50 rectangles in grid",
+ *   affectedShapeIds: ["shape_123", "shape_456", ...],
+ *   shapeData: [{ id: "shape_123", type: "rectangle", ... }, ...],
+ *   user: { uid, displayName, ... },
+ *   deleteShapeFn: deleteShape,
+ *   createShapeFn: createShape,
+ *   metadata: { timestamp, isAI: true }
+ * }
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
+ * TESTING COMMANDS - CONSOLE VERIFICATION
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * Test 1: Verify AI Operation Registration
+ * ─────────────────────────────────────────
+ * 1. Open AI Assistant (✨ button in bottom-right)
+ * 2. Type: "create 10 red circles"
+ * 3. Wait for AI to create circles
+ * 4. Open console and run:
+ * 
+ *    > window.undoManager.getFullHistory()
+ * 
+ * Expected Output:
+ * Array with last entry showing:
+ * {
+ *   description: "AI: Created 10 circles",
+ *   isAI: true,
+ *   timestamp: <recent timestamp>,
+ *   user: { uid, displayName },
+ *   status: "done"
+ * }
+ * 
+ * Test 2: Verify Atomic Undo (Ctrl+Z)
+ * ────────────────────────────────────
+ * 1. Create AI shapes: "create 50 blue rectangles"
+ * 2. Count shapes on canvas (should be 50)
+ * 3. Press Ctrl+Z (or Cmd+Z on Mac)
+ * 4. All 50 shapes should disappear instantly (<500ms)
+ * 5. Verify in console:
+ * 
+ *    > window.undoManager.getState()
+ * 
+ * Expected Output:
+ * {
+ *   undoStackSize: <decreased by 1>,
+ *   redoStackSize: <increased by 1>,
+ *   canUndo: true/false,
+ *   canRedo: true
+ * }
+ * 
+ * Test 3: Verify Atomic Redo (Ctrl+Y)
+ * ────────────────────────────────────
+ * 1. After undoing in Test 2, press Ctrl+Y (or Cmd+Y)
+ * 2. All 50 shapes should reappear
+ * 3. Verify shapes have correct properties (position, color, size)
+ * 
+ * Test 4: Verify History Timeline Display
+ * ────────────────────────────────────────
+ * 1. Open History Timeline (📜 dropdown in bottom-left)
+ * 2. Create AI shapes: "create login form"
+ * 3. AI operation should appear in timeline with:
+ *    - Purple gradient background
+ *    - ✨ sparkle icon on left
+ *    - "AI:" prefix in description
+ *    - Different hover state (purple tint)
+ * 
+ * Test 5: Verify Mixed Manual/AI Operations
+ * ──────────────────────────────────────────
+ * 1. Manually create a rectangle (R key)
+ * 2. Ask AI: "create 10 circles"
+ * 3. Manually create another rectangle
+ * 4. Open History Timeline - should show:
+ *    - Manual rectangle (normal styling)
+ *    - AI circles (purple styling with ✨)
+ *    - Manual rectangle (normal styling)
+ * 5. Press Ctrl+Z three times:
+ *    - First undo: removes second manual rectangle
+ *    - Second undo: removes all 10 AI circles atomically
+ *    - Third undo: removes first manual rectangle
+ * 
+ * Test 6: Verify Large Batch Performance
+ * ───────────────────────────────────────
+ * 1. Ask AI: "create 500 rectangles in random positions"
+ * 2. Wait for shapes to appear
+ * 3. Start timer and press Ctrl+Z
+ * 4. Measure time until all shapes disappear
+ * 
+ * Expected: <500ms for 500 shapes (batched delete)
+ * 
+ * Console command:
+ * > console.time('ai-undo'); // Press Ctrl+Z here
+ * > console.timeEnd('ai-undo');
+ * 
+ * Test 7: Verify Shape Data Fetch
+ * ────────────────────────────────
+ * After AI creates shapes, check console logs for:
+ * "[AI Canvas] Registering AI operation with N affected shapes"
+ * "[AI Canvas] Fetched N shape data objects for redo"
+ * "[AI Canvas] ✅ AI operation registered for undo/redo: AI: ..."
+ * 
+ * Test 8: Verify Operation ID Flow
+ * ─────────────────────────────────
+ * In console after AI operation:
+ * > firebase.database().ref('ai-operations/<your-uid>/last-operation').once('value').then(s => console.log(s.val()))
+ * 
+ * Should return operationId like: "ai-op-1234567890_abc123"
+ * 
+ * Test 9: Verify Affected Shape IDs
+ * ──────────────────────────────────
+ * After AI creates 10 shapes:
+ * > const history = window.undoManager.getFullHistory()
+ * > const lastAI = history.filter(h => h.isAI).pop()
+ * > console.log(lastAI)
+ * 
+ * Note: AIOperationCommand stores affectedShapeIds but it's internal to the command object.
+ * To verify, check console logs during operation registration.
+ * 
+ * Test 10: Verify Error Handling
+ * ───────────────────────────────
+ * Simulate error by disconnecting network:
+ * 1. Open DevTools → Network tab → Toggle offline
+ * 2. Ask AI: "create 5 circles"
+ * 3. Should show error message
+ * 4. Reconnect network
+ * 5. Retry - should work and register operation
+ * 
+ * ═══════════════════════════════════════════════════════════════════════════
  * 
  * All functionality documented inline - no external documentation files.
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import { ref, onValue, push, set, query, limitToLast } from 'firebase/database';
+import { ref, onValue, push, set, query, limitToLast, get } from 'firebase/database';
 import { rtdb } from '../../services/firebase';
+import { useUndo } from '../../contexts/UndoContext';
+import { AIOperationCommand } from '../../utils/commands';
+import { deleteShape, createShape } from '../../services/canvasRTDB';
 
 const CANVAS_ID = 'global-canvas-v1';
 
@@ -104,6 +276,7 @@ export default function AICanvas({
   onOpenChange = null
 }) {
   const { user } = useAuth();
+  const { registerAIOperation } = useUndo();
   
   // Use controlled state if provided, otherwise local state
   const [localIsOpen, setLocalIsOpen] = useState(false);
@@ -162,7 +335,6 @@ export default function AICanvas({
       
       if (loadedMessages.length > 0) {
         setMessages(loadedMessages);
-        console.log(`[AI Canvas] Loaded ${loadedMessages.length} messages from conversation history`);
       }
     });
 
@@ -189,13 +361,11 @@ export default function AICanvas({
     if (isOpen && inputRef.current) {
       // Immediate focus attempt
       inputRef.current.focus();
-      console.log('[AI Canvas] Focus attempt 1 (immediate)');
       
       // Focus after next frame (ensures DOM painted)
       requestAnimationFrame(() => {
         if (inputRef.current && isOpen) {
           inputRef.current.focus();
-          console.log('[AI Canvas] Focus attempt 2 (RAF)');
         }
       });
       
@@ -203,14 +373,12 @@ export default function AICanvas({
       const timer1 = setTimeout(() => {
         if (inputRef.current && isOpen) {
           inputRef.current.focus();
-          console.log('[AI Canvas] Focus attempt 3 (100ms)');
         }
       }, 100);
       
       const timer2 = setTimeout(() => {
         if (inputRef.current && isOpen) {
           inputRef.current.focus();
-          console.log('[AI Canvas] Focus attempt 4 (300ms)');
         }
       }, 300);
       
@@ -261,7 +429,6 @@ export default function AICanvas({
     };
     
     await push(conversationRef, messageWithTimestamp);
-    console.log(`[AI Canvas] Stored message in RTDB:`, message.role);
   };
 
   const sendMessage = async () => {
@@ -326,8 +493,6 @@ export default function AICanvas({
         totalShapes: shapes.length
       };
 
-      console.log('[AI Canvas] Sending request with canvas context:', canvasContext);
-
       // Call AI endpoint with canvas context
       const response = await fetch(AI_ENDPOINT, {
         method: 'POST',
@@ -351,6 +516,20 @@ export default function AICanvas({
       }
 
       const data = await response.json();
+      
+      // ═══════════════════════════════════════════════════════════════════
+      // DETAILED LOGGING: AI Response Data
+      // ═══════════════════════════════════════════════════════════════════
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🤖 [AI RESPONSE] Received response from Cloud Function');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('Response data:', JSON.stringify(data, null, 2));
+      console.log('Response time:', data.responseTime, 'ms');
+      console.log('Tools executed:', data.toolsExecuted);
+      console.log('Token usage:', data.tokenUsage);
+      console.log('Operation ID:', data.operationId);
+      console.log('Message:', data.message);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       /**
        * Progressive Display Simulation - OpenAI Streaming Pace
@@ -415,12 +594,174 @@ export default function AICanvas({
 
       console.log(`[AI Canvas] Response time: ${data.responseTime}ms, Tools: ${data.toolsExecuted}, Tokens: ${data.tokenUsage}`);
       
+      /**
+       * Register AI Operation with Undo Manager
+       * 
+       * After AI executes operations (create shapes, templates, etc.), we register
+       * them with the undo manager for proper Ctrl+Z/Ctrl+Y support.
+       * 
+       * Architecture:
+       * 1. Cloud Function returns operation ID and affected shape IDs
+       * 2. We fetch current shape data from RTDB for redo capability
+       * 3. Create AIOperationCommand with shape IDs and data
+       * 4. Register with undo manager for atomic undo/redo
+       * 
+       * Performance:
+       * - Shape data fetch: <200ms for 500 shapes
+       * - Command creation: <10ms
+       * - Registration: <5ms
+       * - Total: <250ms overhead after AI execution
+       * 
+       * Undo/Redo:
+       * - Ctrl+Z removes all shapes from this operation atomically
+       * - Ctrl+Y recreates all shapes with original properties
+       * - Appears in History Timeline with purple styling
+       */
+      // ═══════════════════════════════════════════════════════════════════
+      // DETAILED LOGGING: AI Operation Registration
+      // ═══════════════════════════════════════════════════════════════════
+      console.log('🔍 [AI REGISTRATION] Starting operation registration check...');
+      console.log('   toolsExecuted:', data.toolsExecuted);
+      console.log('   operationId:', data.operationId);
+      console.log('   registerAIOperation available:', !!registerAIOperation);
+      console.log('   user.uid:', user?.uid);
+      
+      if (data.toolsExecuted > 0 && data.operationId && registerAIOperation) {
+        console.log('✅ [AI REGISTRATION] Conditions met - proceeding with registration');
+        
+        try {
+          // Fetch AI operation data from RTDB to get affected shape IDs
+          const operationPath = `ai-operations/${user.uid}/operations/${data.operationId}`;
+          console.log('📥 [AI REGISTRATION] Fetching operation data from RTDB:', operationPath);
+          
+          const operationRef = ref(rtdb, operationPath);
+          const operationSnapshot = await get(operationRef);
+          const operationData = operationSnapshot.val();
+          
+          console.log('📦 [AI REGISTRATION] Operation data received:', operationData ? 'YES' : 'NO');
+          if (operationData) {
+            console.log('   Operation data:', JSON.stringify(operationData, null, 2));
+          }
+          
+          if (operationData && operationData.toolCalls) {
+            console.log('🔧 [AI REGISTRATION] Processing tool calls:', operationData.toolCalls.length);
+            
+            // Extract all affected shape IDs from tool calls
+            const allShapeIds = [];
+            for (let i = 0; i < operationData.toolCalls.length; i++) {
+              const toolCall = operationData.toolCalls[i];
+              console.log(`   Tool call ${i}:`, toolCall.functionName);
+              console.log('   Affected shape IDs:', toolCall.affectedShapeIds);
+              
+              if (toolCall.affectedShapeIds && Array.isArray(toolCall.affectedShapeIds)) {
+                allShapeIds.push(...toolCall.affectedShapeIds);
+                console.log(`   Added ${toolCall.affectedShapeIds.length} shape IDs`);
+              } else {
+                console.warn(`   ⚠️  No affectedShapeIds array found in tool call ${i}`);
+              }
+            }
+            
+            // Deduplicate shape IDs
+            const uniqueShapeIds = [...new Set(allShapeIds)];
+            console.log('📊 [AI REGISTRATION] Extracted shape IDs:');
+            console.log('   Total collected:', allShapeIds.length);
+            console.log('   Unique:', uniqueShapeIds.length);
+            console.log('   IDs:', uniqueShapeIds.join(', '));
+            
+            if (uniqueShapeIds.length > 0) {
+              // Fetch current shape data for redo capability
+              const shapesPath = `canvas/${CANVAS_ID}/shapes`;
+              console.log('📥 [AI REGISTRATION] Fetching shape data from:', shapesPath);
+              
+              const shapesRef = ref(rtdb, shapesPath);
+              const shapesSnapshot = await get(shapesRef);
+              const allShapes = shapesSnapshot.val() || {};
+              
+              console.log('📦 [AI REGISTRATION] All shapes in canvas:', Object.keys(allShapes).length);
+              
+              // Get shape data for affected shapes only
+              const shapeData = uniqueShapeIds
+                .map(id => allShapes[id])
+                .filter(Boolean); // Filter out null/undefined
+              
+              console.log('✅ [AI REGISTRATION] Fetched shape data:', shapeData.length, 'shapes');
+              console.log('   Sample shape:', shapeData[0] ? {
+                id: shapeData[0].id,
+                type: shapeData[0].type,
+                x: shapeData[0].x,
+                y: shapeData[0].y
+              } : 'NONE');
+              
+              // Create AI operation command
+              const historyDesc = `AI: ${fullMessage.substring(0, 50)}${fullMessage.length > 50 ? '...' : ''}`;
+              console.log('🏗️  [AI REGISTRATION] Creating AIOperationCommand...');
+              console.log('   Description:', historyDesc);
+              console.log('   Canvas ID:', CANVAS_ID);
+              console.log('   Affected shapes:', uniqueShapeIds.length);
+              
+              const aiCommand = new AIOperationCommand({
+                canvasId: CANVAS_ID,
+                description: historyDesc,
+                affectedShapeIds: uniqueShapeIds,
+                shapeData: shapeData,
+                user: user,
+                deleteShapeFn: deleteShape,
+                createShapeFn: createShape
+              });
+              
+              console.log('✅ [AI REGISTRATION] AIOperationCommand created successfully');
+              
+              // Register with undo manager
+              console.log('📝 [AI REGISTRATION] Calling registerAIOperation...');
+              registerAIOperation(aiCommand);
+              
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('✅ [AI REGISTRATION] COMPLETE - Operation registered for undo/redo');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+              console.log('   Description:', historyDesc);
+              console.log('   Shapes:', uniqueShapeIds.length);
+              console.log('   Shape IDs:', uniqueShapeIds.slice(0, 5).join(', '), uniqueShapeIds.length > 5 ? `... (+${uniqueShapeIds.length - 5} more)` : '');
+              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+            } else {
+              console.error('❌ [AI REGISTRATION] FAILED - No affected shape IDs found');
+              console.error('   Tool calls processed:', operationData.toolCalls.length);
+              console.error('   Shape IDs extracted:', allShapeIds.length);
+            }
+          } else {
+            console.error('❌ [AI REGISTRATION] FAILED - No operation data found');
+            console.error('   Operation ID:', data.operationId);
+            console.error('   Path checked:', operationPath);
+            console.error('   Operation data exists:', !!operationData);
+            console.error('   Tool calls exist:', !!(operationData && operationData.toolCalls));
+          }
+        } catch (error) {
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.error('❌ [AI REGISTRATION] EXCEPTION THROWN');
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.error('Error:', error);
+          console.error('Error message:', error.message);
+          console.error('Error stack:', error.stack);
+          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          // Non-critical error - shapes were created successfully, just can't undo
+        }
+      } else {
+        console.warn('⚠️  [AI REGISTRATION] Skipping registration - conditions not met:');
+        if (data.toolsExecuted === 0) {
+          console.warn('   - No tools were executed (toolsExecuted = 0)');
+        }
+        if (!data.operationId) {
+          console.warn('   - No operation ID in response');
+        }
+        if (!registerAIOperation) {
+          console.warn('   - registerAIOperation function not available');
+        }
+      }
+      
       // CRITICAL: Re-focus input after response for seamless conversation flow
       // Longer timeout ensures React re-renders complete before focus
       setTimeout(() => {
         if (inputRef.current && isOpen) {
           inputRef.current.focus();
-          console.log('[AI Canvas] Input re-focused after response');
         }
       }, 200);
       
@@ -445,7 +786,6 @@ export default function AICanvas({
       setTimeout(() => {
         if (inputRef.current && isOpen) {
           inputRef.current.focus();
-          console.log('[AI Canvas] Input re-focused after error');
         }
       }, 200);
     } finally {
@@ -477,7 +817,6 @@ export default function AICanvas({
     const handleEscape = (e) => {
       if (e.key === 'Escape' && isOpen) {
         setIsOpen(false);
-        console.log('[AI Canvas] Closed via Escape key');
       }
     };
 
@@ -510,14 +849,12 @@ export default function AICanvas({
         `ai-conversations/${user.uid}/${sessionIdRef.current}`
       );
       await set(conversationRef, null); // Delete conversation
-      console.log('[AI Canvas] Conversation cleared from RTDB');
     }
     
     // Generate new session ID for fresh conversation
     const newSessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     sessionStorage.setItem('ai-session-id', newSessionId);
     sessionIdRef.current = newSessionId;
-    console.log('[AI Canvas] New session started:', newSessionId);
   };
 
   if (!user) {
@@ -870,7 +1207,6 @@ export default function AICanvas({
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#9ca3af';
                   e.currentTarget.style.boxShadow = '0 0 0 3px rgba(156, 163, 175, 0.1)';
-                  console.log('[AI Canvas] Input focused - cursor visible');
                 }}
                 onBlur={(e) => {
                   // Allow blur so user can interact with canvas

@@ -156,10 +156,18 @@ async function getMaxZIndex(): Promise<number> {
 
 // Tool implementations
 async function createShapeTool(params: any, userId: string): Promise<string> {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔨 [createShapeTool] CALLED');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('Params:', JSON.stringify(params, null, 2));
+  console.log('User ID:', userId);
+  
   const validated = CreateShapeSchema.parse(params);
   const shapeId = `shape_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  console.log('Generated shape ID:', shapeId);
 
   const maxZ = await getMaxZIndex();
+  console.log('Max Z-index:', maxZ);
 
   /**
    * LARGE Canvas-Scale Default Dimensions for AI-Created Shapes
@@ -206,11 +214,25 @@ async function createShapeTool(params: any, userId: string): Promise<string> {
     shape.fontSize = validated.fontSize || 120; // LARGE canvas-scale font (120px)
   }
 
-  await rtdb.ref(`canvas/${CANVAS_ID}/shapes/${shapeId}`).set(shape);
+  const shapePath = `canvas/${CANVAS_ID}/shapes/${shapeId}`;
+  console.log('Writing shape to RTDB:', shapePath);
+  console.log('Shape data:', JSON.stringify(shape, null, 2));
+  
+  await rtdb.ref(shapePath).set(shape);
+  console.log('✅ Shape written to RTDB');
+  
   await rtdb.ref(`canvas/${CANVAS_ID}/metadata/lastUpdated`).set(Date.now());
+  console.log('✅ Metadata updated');
 
-  console.log(`[AI Tool] Created ${validated.type} shape: ${shapeId}`);
-  return `Successfully created ${validated.type} at (${validated.x}, ${validated.y})`;
+  // CRITICAL: Include shape ID in result so extractShapeIdsFromResult can find it
+  const resultMessage = `Successfully created ${validated.type} ${shapeId} at (${validated.x}, ${validated.y})`;
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`✅ [createShapeTool] COMPLETE - Returning: ${resultMessage}`);
+  console.log('   Shape ID:', shapeId);
+  console.log('   (Shape ID included in result for extraction)');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  
+  return resultMessage;
 }
 
 async function updateShapeTool(params: any, userId: string): Promise<string> {
@@ -793,23 +815,36 @@ interface AIOperation {
  * Enables tracking which shapes were created/modified for undo.
  */
 function extractShapeIdsFromResult(functionName: string, result: string, params: any): string[] {
+  console.log('  🔍 [extractShapeIds] Extracting from:', functionName);
+  console.log('    Result string:', result.substring(0, 200));
+  
   const shapeIds: string[] = [];
   
   // Extract from result message
-  const idMatches = result.match(/shape_\d+_[a-z0-9]+/g);
+  // Updated regex to match both formats:
+  // - Old: shape_1234567890_abc123
+  // - New: shape_1234567890_0_abc123 (with index)
+  const idMatches = result.match(/shape_\d+(?:_\d+)?_[a-z0-9]+/g);
+  console.log('    Regex matches:', idMatches);
   if (idMatches) {
     shapeIds.push(...idMatches);
+    console.log('    Added from regex:', idMatches.length, 'IDs');
   }
   
   // Extract from params for update/delete operations
   if (params.shapeId) {
     shapeIds.push(params.shapeId);
+    console.log('    Added from params.shapeId:', params.shapeId);
   }
   if (params.shapeIds && Array.isArray(params.shapeIds)) {
     shapeIds.push(...params.shapeIds);
+    console.log('    Added from params.shapeIds:', params.shapeIds.length, 'IDs');
   }
   
-  return [...new Set(shapeIds)]; // Deduplicate
+  const uniqueIds = [...new Set(shapeIds)];
+  console.log('    Final unique IDs:', uniqueIds.length, '→', uniqueIds);
+  
+  return uniqueIds; // Deduplicate
 }
 
 /**
@@ -822,27 +857,53 @@ async function trackAIOperation(
   userId: string,
   toolCalls: Array<{ functionName: string; params: any; result: string }>
 ): Promise<string> {
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔧 [trackAIOperation] CALLED');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('User ID:', userId);
+  console.log('Tool calls:', toolCalls.length);
+  
   const operationId = `ai-op-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  console.log('Generated operation ID:', operationId);
+  
+  console.log('Processing tool calls to extract shape IDs...');
+  const processedToolCalls = toolCalls.map((tc, idx) => {
+    console.log(`  Processing tool call ${idx}: ${tc.functionName}`);
+    const affectedShapeIds = extractShapeIdsFromResult(tc.functionName, tc.result, tc.params);
+    console.log(`    Extracted ${affectedShapeIds.length} shape IDs:`, affectedShapeIds);
+    
+    return {
+      functionName: tc.functionName,
+      params: tc.params,
+      affectedShapeIds
+    };
+  });
   
   const operation: AIOperation = {
     operationId,
     userId,
     timestamp: Date.now(),
-    toolCalls: toolCalls.map(tc => ({
-      functionName: tc.functionName,
-      params: tc.params,
-      affectedShapeIds: extractShapeIdsFromResult(tc.functionName, tc.result, tc.params)
-    })),
+    toolCalls: processedToolCalls,
     reversible: true
   };
   
+  console.log('Operation object to store:', JSON.stringify(operation, null, 2));
+  
   // Store operation
-  await rtdb.ref(`ai-operations/${userId}/operations/${operationId}`).set(operation);
+  const operationPath = `ai-operations/${userId}/operations/${operationId}`;
+  console.log('Writing to RTDB path:', operationPath);
+  await rtdb.ref(operationPath).set(operation);
+  console.log('✅ Operation written to RTDB');
   
   // Update last operation pointer
-  await rtdb.ref(`ai-operations/${userId}/last-operation`).set(operationId);
+  const lastOpPath = `ai-operations/${userId}/last-operation`;
+  console.log('Updating last-operation pointer:', lastOpPath);
+  await rtdb.ref(lastOpPath).set(operationId);
+  console.log('✅ Last-operation pointer updated');
   
-  console.log(`[AI Operation] Tracked operation ${operationId} with ${operation.toolCalls.length} tool calls`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`✅ [trackAIOperation] COMPLETE - Returning: ${operationId}`);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
   return operationId;
 }
@@ -1840,14 +1901,27 @@ Be helpful, creative, and produce professional-looking results.`;
       }
 
       // Track this AI operation for undo (before final response)
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📝 [AI TRACKING] Starting operation tracking...');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
       const executedTools = toolCalls.map((tc: any, index: number) => ({
         functionName: tc.function.name,
         params: JSON.parse(tc.function.arguments),
         result: toolResults[index].content
       }));
       
+      console.log(`[AI TRACKING] Tool calls to track: ${executedTools.length}`);
+      executedTools.forEach((tool, idx) => {
+        console.log(`  Tool ${idx}: ${tool.functionName}`);
+        console.log(`    Result: ${tool.result.substring(0, 100)}...`);
+      });
+      
+      console.log('[AI TRACKING] Calling trackAIOperation...');
       const operationId = await trackAIOperation(userId, executedTools);
-      console.log(`[AI Agent] Operation tracked for undo: ${operationId}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(`✅ [AI TRACKING] Operation tracked with ID: ${operationId}`);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       // Get final response after tool execution
       const followUpCompletion = await openai.chat.completions.create({
@@ -1879,13 +1953,23 @@ Be helpful, creative, and produce professional-looking results.`;
         toolCalls.length
       );
 
-      res.status(200).json({
+      const responsePayload = {
         message: finalResponse,
         toolsExecuted: toolCalls.length,
         responseTime,
         tokenUsage: totalTokens,
         operationId, // Include for undo reference
-      });
+      };
+      
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📤 [AI RESPONSE] Sending response to frontend:');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(JSON.stringify(responsePayload, null, 2));
+      console.log('   operationId value:', operationId);
+      console.log('   operationId type:', typeof operationId);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      res.status(200).json(responsePayload);
     } else {
       // No tool calls, return direct response
       const finalResponse = responseMessage.content;

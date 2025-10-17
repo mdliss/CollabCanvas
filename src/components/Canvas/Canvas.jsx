@@ -302,16 +302,12 @@ export default function Canvas() {
   useEffect(() => {
     if (!user) return;
     
-    console.log('[Canvas] Subscribing to RTDB shapes...');
-    
     // Subscribe to RTDB - no conflicts, no snapping!
     const unsub = subscribeToShapes(CANVAS_ID, (newShapes) => {
-      console.log('[Canvas] RTDB shapes updated. Count:', newShapes.length);
       setShapes(newShapes);
     });
     
     return () => { 
-      console.log('[Canvas] Unsubscribing from RTDB shapes');
       unsub();
     };
   }, [user]);
@@ -1256,7 +1252,6 @@ export default function Canvas() {
     // Close AI chat when clicking a shape
     if (isAIChatOpen) {
       setIsAIChatOpen(false);
-      console.log('[Canvas] Closed AI chat via shape click');
     }
     
     const selectStartTime = performance.now();
@@ -2411,7 +2406,6 @@ export default function Canvas() {
       // Close AI chat when clicking canvas background
       if (isAIChatOpen) {
         setIsAIChatOpen(false);
-        console.log('[Canvas] Closed AI chat via canvas click');
       }
       
       if (selectedIds.length > 0) {

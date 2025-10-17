@@ -33,8 +33,6 @@ export const setUserOnline = async (uid, name, color, photoURL = null) => {
 
   // CRITICAL FIX: Remove user completely on disconnect (not just mark offline)
   await onDisconnect(userRef).remove();
-  
-  console.log('[Presence] User set online with auto-disconnect:', uid);
 };
 
 export const setUserOffline = async (uid) => {
@@ -42,8 +40,6 @@ export const setUserOffline = async (uid) => {
   
   const userRef = ref(rtdb, `${BASE}/${uid}`);
   await remove(userRef);
-  
-  console.log('[Presence] User removed from presence:', uid);
 };
 
 export const watchPresence = (callback) => {
@@ -63,7 +59,6 @@ export const watchPresence = (callback) => {
         photoURL: x.photoURL || null,
         online: true
       }));
-    console.log('[Presence] Online users count:', arr.length, '(filtered valid entries only)');
     callback(arr);
   });
 };

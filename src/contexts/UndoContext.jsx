@@ -50,6 +50,10 @@ export function UndoProvider({ children }) {
   const logAIAction = useCallback((description, user = null) => {
     undoManager.logAIAction(description, user);
   }, []);
+  
+  const registerAIOperation = useCallback((aiCommand) => {
+    undoManager.registerAIOperation(aiCommand);
+  }, []);
 
   const value = {
     ...state,
@@ -62,6 +66,7 @@ export function UndoProvider({ children }) {
     endBatch,
     getFullHistory,
     logAIAction,
+    registerAIOperation,
     getStackSizes: () => undoManager.getStackSizes()
   };
 
