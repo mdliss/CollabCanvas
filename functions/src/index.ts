@@ -497,16 +497,18 @@ function createLoginFormTemplate(params: TemplateParams, userId: string): any[] 
   const shapes: any[] = [];
   const timestamp = Date.now();
   
-  // Title
+  // Title - FIXED: Increased width from 400 to 1200 to prevent text clipping
+  // Font size is 180px (120 * 1.5), needs ~108px per character
+  // "Login" = 5 chars × 108px = 540px minimum, using 1200px for safe margin
   shapes.push({
     id: `shape_${timestamp}_${Math.random().toString(36).substr(2, 9)}`,
     type: 'text',
     text: 'Login',
-    x: centerX - 200 * scale,
+    x: centerX - 600 * scale,  // Center the wider text box
     y: currentY,
-    width: 400 * scale,
-    height: 150 * scale,
-    fontSize: fontSize * 1.5,
+    width: 1200 * scale,  // Increased from 400 to prevent "LOGI" clipping
+    height: 250 * scale,  // Increased from 150 to accommodate taller font
+    fontSize: fontSize * 1.5,  // 180px
     fill: textColor,
     align: 'center',
     fontWeight: 'bold',
@@ -623,15 +625,15 @@ function createLoginFormTemplate(params: TemplateParams, userId: string): any[] 
     lockedAt: null
   });
   
-  // Submit button text
+  // Submit button text - Increased width for better rendering
   shapes.push({
     id: `shape_${timestamp + 6}_${Math.random().toString(36).substr(2, 9)}`,
     type: 'text',
     text: 'Sign In',
-    x: centerX - 200 * scale,
+    x: centerX - 400 * scale,  // Center the wider text box
     y: currentY + 80,
-    width: 400 * scale,
-    height: 100,
+    width: 800 * scale,  // Increased from 400 for clearer rendering
+    height: 150 * scale,  // Increased from 100 for taller font
     fontSize: 72 * scale,
     fill: '#ffffff',
     align: 'center',
