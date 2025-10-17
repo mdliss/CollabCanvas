@@ -22,20 +22,24 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
-import { subscribeToProjects, createProject, deleteProject, updateProject, getUserSubscription } from '../../services/projects';
+import { subscribeToProjects, createProject, deleteProject, updateProject, getUserSubscription, listProjects, listSharedCanvases } from '../../services/projects';
 import SubscriptionModal from './SubscriptionModal';
 import RenameModal from './RenameModal';
 import CouponModal from './CouponModal';
+import ShareModal from './ShareModal';
 
 export default function LandingPage() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [projects, setProjects] = useState([]);
+  const [ownedProjects, setOwnedProjects] = useState([]);
+  const [sharedProjects, setSharedProjects] = useState([]);
+  const [filter, setFilter] = useState('all'); // 'all' | 'owned' | 'shared'
   const [subscription, setSubscription] = useState({ isPremium: false, tier: 'free' });
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [renamingProject, setRenamingProject] = useState(null);
+  const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
 
   // Load projects and subscription status
@@ -48,33 +52,48 @@ export default function LandingPage() {
         const sub = await getUserSubscription(user.uid);
         setSubscription(sub);
 
-        // Subscribe to projects
-        const unsubscribe = subscribeToProjects(user.uid, (projectsList) => {
-          setProjects(projectsList);
-          setLoading(false);
+        // Load owned projects
+        const owned = await listProjects(user.uid);
+        setOwnedProjects(owned);
+        
+        // Load shared canvases
+        const shared = await listSharedCanvases(user.email);
+        setSharedProjects(shared);
+        
+        setLoading(false);
+        
+        console.log('[LandingPage] Loaded:', {
+          owned: owned.length,
+          shared: shared.length
         });
-
-        return unsubscribe;
+        
       } catch (error) {
         console.error('[LandingPage] Failed to load data:', error);
         setLoading(false);
       }
     };
 
-    const unsubscribe = loadData();
+    loadData();
     
-    return () => {
-      if (unsubscribe && typeof unsubscribe.then === 'function') {
-        unsubscribe.then(unsub => unsub && unsub());
-      }
-    };
+    // Poll for updates every 5 seconds to catch shared canvas changes
+    const interval = setInterval(loadData, 5000);
+    
+    return () => clearInterval(interval);
   }, [user]);
+
+  // Combine and filter projects
+  const allProjects = [...ownedProjects, ...sharedProjects];
+  const filteredProjects = filter === 'owned' 
+    ? ownedProjects 
+    : filter === 'shared' 
+      ? sharedProjects 
+      : allProjects;
 
   const handleCreateProject = async () => {
     if (!user) return;
 
-    // Check if at free tier limit
-    if (!subscription.isPremium && projects.length >= 3) {
+    // Check if at free tier limit (only count owned projects)
+    if (!subscription.isPremium && ownedProjects.length >= 3) {
       setShowSubscriptionModal(true);
       return;
     }
@@ -144,6 +163,11 @@ export default function LandingPage() {
     setSubscription(sub);
   };
 
+  const handleShare = async (project, e) => {
+    e.stopPropagation();
+    setSharingProject(project);
+  };
+
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -152,8 +176,8 @@ export default function LandingPage() {
     );
   }
 
-  const canCreateMore = subscription.isPremium || projects.length < 3;
-  const remainingProjects = subscription.isPremium ? '∞' : Math.max(0, 3 - projects.length);
+  const canCreateMore = subscription.isPremium || ownedProjects.length < 3;
+  const remainingProjects = subscription.isPremium ? '∞' : Math.max(0, 3 - ownedProjects.length);
 
   return (
     <div style={styles.container}>
@@ -164,7 +188,7 @@ export default function LandingPage() {
             CollabCanvas
           </h1>
           <p style={styles.subtitle}>
-            {user?.displayName || user?.email?.split('@')[0] || 'User'}'s Projects
+            {ownedProjects.length} owned · {sharedProjects.length} shared
           </p>
         </div>
         
@@ -222,6 +246,69 @@ export default function LandingPage() {
         </div>
       </div>
 
+      {/* Filter Toggle */}
+      {allProjects.length > 0 && (
+        <div style={styles.filterContainer}>
+          <button
+            onClick={() => setFilter('all')}
+            style={{
+              ...styles.filterButton,
+              ...(filter === 'all' ? styles.filterButtonActive : {})
+            }}
+            onMouseEnter={(e) => {
+              if (filter !== 'all') {
+                e.target.style.background = '#fafafa';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (filter !== 'all') {
+                e.target.style.background = '#ffffff';
+              }
+            }}
+          >
+            All ({allProjects.length})
+          </button>
+          <button
+            onClick={() => setFilter('owned')}
+            style={{
+              ...styles.filterButton,
+              ...(filter === 'owned' ? styles.filterButtonActive : {})
+            }}
+            onMouseEnter={(e) => {
+              if (filter !== 'owned') {
+                e.target.style.background = '#fafafa';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (filter !== 'owned') {
+                e.target.style.background = '#ffffff';
+              }
+            }}
+          >
+            Owned ({ownedProjects.length})
+          </button>
+          <button
+            onClick={() => setFilter('shared')}
+            style={{
+              ...styles.filterButton,
+              ...(filter === 'shared' ? styles.filterButtonActive : {})
+            }}
+            onMouseEnter={(e) => {
+              if (filter !== 'shared') {
+                e.target.style.background = '#fafafa';
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (filter !== 'shared') {
+                e.target.style.background = '#ffffff';
+              }
+            }}
+          >
+            Shared ({sharedProjects.length})
+          </button>
+        </div>
+      )}
+
       {/* Project Grid */}
       <div style={styles.gridContainer}>
         {/* Create New Project Card */}
@@ -257,11 +344,14 @@ export default function LandingPage() {
         </button>
 
         {/* Project Cards */}
-        {projects.map((project) => (
+        {filteredProjects.map((project) => (
           <div
             key={project.id}
             onClick={() => handleOpenProject(project)}
-            style={styles.projectCard}
+            style={{
+              ...styles.projectCard,
+              ...(project.isShared ? { borderLeftWidth: '3px', borderLeftColor: '#3b82f6', borderLeftStyle: 'solid' } : {})
+            }}
             onMouseEnter={(e) => {
               e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.1)';
               e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.12)';
@@ -289,48 +379,64 @@ export default function LandingPage() {
               <div style={styles.projectName}>
                 {project.isStarred && <span style={styles.starIcon}>★</span>}
                 {project.name}
+                {project.isShared && (
+                  <span style={styles.sharedBadge}>
+                    {project.sharedRole === 'editor' ? 'Can Edit' : 'View Only'}
+                  </span>
+                )}
               </div>
               <div style={styles.projectMeta}>
                 {new Date(project.updatedAt).toLocaleDateString()}
               </div>
             </div>
 
-            {/* Actions */}
-            <div style={styles.projectActions}>
-              <button
-                onClick={(e) => handleToggleStar(project, e)}
-                style={styles.actionButton}
-                title={project.isStarred ? 'Unstar' : 'Star'}
-              >
-                {project.isStarred ? '★' : '☆'}
-              </button>
-              <button
-                onClick={(e) => handleRename(project, e)}
-                style={styles.actionButton}
-                title="Rename project"
-              >
-                ✎
-              </button>
-              <button
-                onClick={(e) => handleDeleteProject(project, e)}
-                style={{...styles.actionButton, ...styles.deleteButton}}
-                title="Delete project"
-              >
-                ×
-              </button>
-            </div>
+            {/* Actions - Only show for owned projects */}
+            {project.isOwned && (
+              <div style={styles.projectActions}>
+                <button
+                  onClick={(e) => handleToggleStar(project, e)}
+                  style={styles.actionButton}
+                  title={project.isStarred ? 'Unstar' : 'Star'}
+                >
+                  {project.isStarred ? '★' : '☆'}
+                </button>
+                <button
+                  onClick={(e) => handleShare(project, e)}
+                  style={styles.actionButton}
+                  title={subscription.isPremium ? 'Share canvas' : 'Share (Premium)'}
+                >
+                  ⎋
+                </button>
+                <button
+                  onClick={(e) => handleRename(project, e)}
+                  style={styles.actionButton}
+                  title="Rename project"
+                >
+                  ✎
+                </button>
+                <button
+                  onClick={(e) => handleDeleteProject(project, e)}
+                  style={{...styles.actionButton, ...styles.deleteButton}}
+                  title="Delete project"
+                >
+                  ×
+                </button>
+              </div>
+            )}
           </div>
         ))}
       </div>
 
       {/* Empty State */}
-      {projects.length === 0 && (
+      {filteredProjects.length === 0 && (
         <div style={styles.emptyState}>
           <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '500', color: '#2c2e33' }}>
-            No Projects Yet
+            {filter === 'shared' ? 'No Shared Canvases' : filter === 'owned' ? 'No Projects Yet' : 'No Canvases'}
           </h2>
           <p style={{ margin: '0', fontSize: '14px', color: '#646669', fontWeight: '400' }}>
-            Create your first canvas to get started
+            {filter === 'shared' 
+              ? 'Canvases shared with you will appear here' 
+              : 'Create your first canvas to get started'}
           </p>
         </div>
       )}
@@ -355,6 +461,15 @@ export default function LandingPage() {
           project={renamingProject}
           onSave={handleSaveRename}
           onClose={() => setRenamingProject(null)}
+        />
+      )}
+      
+      {sharingProject && (
+        <ShareModal
+          project={sharingProject}
+          currentUser={user}
+          isPremium={subscription.isPremium}
+          onClose={() => setSharingProject(null)}
         />
       )}
     </div>
@@ -461,6 +576,33 @@ const styles = {
     boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
   },
   
+  filterContainer: {
+    maxWidth: '1200px',
+    width: '100%',
+    margin: '0 auto 28px auto',
+    display: 'flex',
+    gap: '10px',
+    justifyContent: 'center'
+  },
+  
+  filterButton: {
+    background: '#ffffff',
+    color: '#646669',
+    border: '1px solid rgba(0, 0, 0, 0.08)',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontSize: '13px',
+    fontWeight: '400',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease'
+  },
+  
+  filterButtonActive: {
+    background: '#2c2e33',
+    color: '#ffffff',
+    borderColor: '#2c2e33'
+  },
+  
   gridContainer: {
     maxWidth: '1200px',
     width: '100%',
@@ -543,7 +685,8 @@ const styles = {
     marginBottom: '4px',
     display: 'flex',
     alignItems: 'center',
-    gap: '6px'
+    gap: '6px',
+    flexWrap: 'wrap'
   },
   
   projectMeta: {
@@ -554,6 +697,16 @@ const styles = {
   
   starIcon: {
     fontSize: '13px'
+  },
+  
+  sharedBadge: {
+    fontSize: '11px',
+    fontWeight: '400',
+    color: '#3b82f6',
+    background: '#eff6ff',
+    padding: '2px 8px',
+    borderRadius: '4px',
+    border: '1px solid rgba(59, 130, 246, 0.2)'
   },
   
   projectActions: {

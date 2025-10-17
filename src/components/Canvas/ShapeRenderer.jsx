@@ -91,7 +91,8 @@ export default function ShapeRenderer({
   onTransformEnd,
   onTextUpdate,
   onOpenTextEditor,
-  isBeingDraggedByOther = false
+  isBeingDraggedByOther = false,
+  isViewOnly = false
 }) {
   // Konva node references
   const shapeRef = useRef(null);
@@ -935,6 +936,7 @@ export default function ShapeRenderer({
     onSelect(shape.id, isShiftKey);
   };
 
+  const canEdit = !isViewOnly;
   const isLockedByOther = shape.isLocked && shape.lockedBy !== currentUserId;
   
   const strokeColor = isBeingDraggedByOther 
@@ -950,14 +952,14 @@ export default function ShapeRenderer({
 
   const commonProps = {
     ref: shapeRef,
-    draggable: !isLockedByOther && !isBeingDraggedByOther,
-    onClick: handleClick,
-    onTap: handleClick,
-    onDragStart: handleDragStart,
-    onDragMove: handleDragMove,
-    onDragEnd: handleDragEnd,
-    onTransformEnd: handleTransformEnd,
-    onTransformStart: handleTransformStart,
+    draggable: !isLockedByOther && !isBeingDraggedByOther && canEdit,
+    onClick: onSelect ? handleClick : undefined,
+    onTap: onSelect ? handleClick : undefined,
+    onDragStart: onDragStart && canEdit ? handleDragStart : undefined,
+    onDragMove: onDragMove && canEdit ? handleDragMove : undefined,
+    onDragEnd: onDragEnd && canEdit ? handleDragEnd : undefined,
+    onTransformEnd: onTransformEnd && canEdit ? handleTransformEnd : undefined,
+    onTransformStart: onTransformStart && canEdit ? handleTransformStart : undefined,
     dragBoundFunc: dragBoundFunc,
     perfectDrawEnabled: false,
     hitStrokeWidth: 8,
@@ -1227,7 +1229,7 @@ export default function ShapeRenderer({
   return (
     <>
       {renderShape()}
-      {isSelected && !isLockedByOther && !isBeingDraggedByOther && (
+      {isSelected && !isLockedByOther && !isBeingDraggedByOther && canEdit && (
         <Transformer
           ref={transformerRef}
           boundBoxFunc={(oldBox, newBox) => {

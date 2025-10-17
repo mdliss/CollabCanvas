@@ -181,6 +181,7 @@ import { ref, remove, onValue } from "firebase/database";
 import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 import AICanvas from "../AI/AICanvas";
+import { checkCanvasAccess } from "../../services/sharing";
 
 const GRID_SIZE = 50;
 const GRID_COLOR = "#e0e0e0";
@@ -193,6 +194,7 @@ export default function Canvas() {
   // Dynamic canvas ID from URL params or fallback to global canvas
   const CANVAS_ID = canvasId || "global-canvas-v1";
   const [shapes, setShapes] = useState([]);
+  const [canvasAccess, setCanvasAccess] = useState({ hasAccess: true, role: 'owner', loading: true });
   const [selectedIds, setSelectedIds] = useState([]);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [lastError, setLastError] = useState(null);
@@ -292,6 +294,30 @@ export default function Canvas() {
       if (unsubscribe) unsubscribe();
     };
   }, [CANVAS_ID]);
+
+  // Check canvas access permissions
+  useEffect(() => {
+    if (!user || !CANVAS_ID) return;
+
+    const checkAccess = async () => {
+      try {
+        const access = await checkCanvasAccess(CANVAS_ID, user.uid, user.email);
+        setCanvasAccess({ ...access, loading: false });
+        
+        console.log('[Canvas] Access check:', access);
+        
+        if (!access.hasAccess) {
+          console.warn('[Canvas] No access to canvas:', CANVAS_ID);
+          navigate('/');
+        }
+      } catch (error) {
+        console.error('[Canvas] Access check failed:', error);
+        setCanvasAccess({ hasAccess: true, role: 'owner', loading: false }); // Fallback to owner for backward compatibility
+      }
+    };
+
+    checkAccess();
+  }, [user, CANVAS_ID, navigate]);
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -833,6 +859,12 @@ export default function Canvas() {
    * handleAddShape('text');
    */
   const handleAddShape = async (type) => {
+    // Check if user has edit permissions
+    if (isViewer) {
+      showFeedback('View-only mode - cannot create shapes');
+      return;
+    }
+    
     // Calculate viewport center in canvas coordinates (accounting for zoom and pan)
     const centerX = (-stagePos.x + window.innerWidth / 2) / stageScale;
     const centerY = (-stagePos.y + (window.innerHeight - 50) / 2) / stageScale;
@@ -2694,24 +2726,70 @@ export default function Canvas() {
     return lines;
   };
 
+  const isViewer = canvasAccess.role === 'viewer';
+  const canEdit = canvasAccess.role === 'owner' || canvasAccess.role === 'editor';
+
   return (
     <div>
+      {/* View-Only Banner */}
+      {isViewer && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          background: '#fef3c7',
+          border: 'none',
+          borderBottom: '1px solid rgba(245, 158, 11, 0.2)',
+          padding: '12px 20px',
+          zIndex: 10001,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: '16px',
+          fontSize: '13px',
+          color: '#92400e',
+          fontWeight: '400'
+        }}>
+          <span>View-Only Mode</span>
+          <span style={{ opacity: 0.6 }}>•</span>
+          <button
+            style={{
+              background: '#92400e',
+              color: '#ffffff',
+              border: 'none',
+              padding: '6px 14px',
+              borderRadius: '6px',
+              fontSize: '12px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#78350f'}
+            onMouseLeave={(e) => e.target.style.background = '#92400e'}
+            onClick={() => alert('Contact the canvas owner to request edit access.')}
+          >
+            Request Edit Access
+          </button>
+        </div>
+      )}
+      
       {/* Back to Projects Button */}
       <button
         onClick={() => navigate('/')}
         style={{
           position: 'fixed',
-          top: '20px',
+          top: isViewer ? '64px' : '20px',
           left: '20px',
           padding: '10px 16px',
-          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
+          background: '#ffffff',
           border: '1px solid rgba(0, 0, 0, 0.06)',
           borderRadius: '10px',
           fontSize: '14px',
-          fontWeight: '600',
-          color: '#374151',
+          fontWeight: '500',
+          color: '#2c2e33',
           cursor: 'pointer',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'all 0.2s ease',
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           zIndex: 10000,
           display: 'flex',
@@ -2719,12 +2797,12 @@ export default function Canvas() {
           gap: '8px'
         }}
         onMouseEnter={(e) => {
-          e.target.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
-          e.target.style.transform = 'translateY(-1px)';
+          e.target.style.background = '#fafafa';
+          e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
         }}
         onMouseLeave={(e) => {
-          e.target.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
-          e.target.style.transform = 'translateY(0)';
+          e.target.style.background = '#ffffff';
+          e.target.style.borderColor = 'rgba(0, 0, 0, 0.06)';
         }}
         title="Back to projects"
       >
@@ -3048,17 +3126,18 @@ export default function Canvas() {
                 currentUserId={user?.uid}
                 currentUserName={user?.displayName || user?.email?.split('@')[0] || 'User'}
                 currentUser={user}
-                onSelect={handleShapeSelect}
-                onRequestLock={handleRequestLock}
-                onDragStart={handleShapeDragStart}
-                onDragMove={handleShapeDragMove}
-                onDragEnd={handleShapeDragEnd}
-                onTransformStart={handleShapeTransformStart}
-                onTransformEnd={handleShapeTransformEnd}
-                onTextUpdate={handleTextUpdate}
-                onOpenTextEditor={handleOpenTextEditor}
+                onSelect={canEdit ? handleShapeSelect : null}
+                onRequestLock={canEdit ? handleRequestLock : null}
+                onDragStart={canEdit ? handleShapeDragStart : null}
+                onDragMove={canEdit ? handleShapeDragMove : null}
+                onDragEnd={canEdit ? handleShapeDragEnd : null}
+                onTransformStart={canEdit ? handleShapeTransformStart : null}
+                onTransformEnd={canEdit ? handleShapeTransformEnd : null}
+                onTextUpdate={canEdit ? handleTextUpdate : null}
+                onOpenTextEditor={canEdit ? handleOpenTextEditor : null}
                 isBeingDraggedByOther={isDraggedByOther}
                 draggedByUserName={isDraggedByOther ? dragData.displayName : null}
+                isViewOnly={isViewer}
               />
             );
           })}

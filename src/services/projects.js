@@ -62,7 +62,7 @@ export const getUserSubscription = async (userId) => {
 };
 
 /**
- * List all projects for a user
+ * List all projects for a user (owned projects only)
  * 
  * @param {string} userId - User ID
  * @returns {Promise<Array>} Array of project objects
@@ -77,7 +77,60 @@ export const listProjects = async (userId) => {
   
   const projectsMap = snapshot.val();
   return Object.values(projectsMap)
+    .map(p => ({ ...p, isOwned: true, isShared: false }))
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); // Most recent first
+};
+
+/**
+ * List canvases shared with user
+ * 
+ * @param {string} userEmail - User's email address
+ * @returns {Promise<Array>} Array of shared canvas objects
+ */
+export const listSharedCanvases = async (userEmail) => {
+  if (!userEmail) return [];
+  
+  try {
+    // Query all canvases to find ones where user is a collaborator
+    // Note: In production, you'd want an indexed query or dedicated shared-with-me collection
+    const canvasesRef = ref(rtdb, 'canvas');
+    const snapshot = await get(canvasesRef);
+    
+    if (!snapshot.exists()) {
+      return [];
+    }
+    
+    const allCanvases = snapshot.val();
+    const sharedCanvases = [];
+    
+    // Check each canvas for collaborator entry
+    for (const [canvasId, canvasData] of Object.entries(allCanvases)) {
+      const collaborators = canvasData.collaborators || {};
+      const emailKey = userEmail.replace(/[@.]/g, '_');
+      
+      if (collaborators[emailKey]) {
+        const collab = collaborators[emailKey];
+        sharedCanvases.push({
+          id: `shared_${canvasId}`,
+          name: canvasData.metadata?.projectName || 'Shared Canvas',
+          canvasId: canvasId,
+          createdAt: canvasData.metadata?.createdAt || Date.now(),
+          updatedAt: canvasData.metadata?.lastUpdated || Date.now(),
+          createdBy: canvasData.metadata?.createdBy,
+          isOwned: false,
+          isShared: true,
+          sharedRole: collab.role,
+          sharedBy: collab.addedBy
+        });
+      }
+    }
+    
+    return sharedCanvases.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+    
+  } catch (error) {
+    console.error('[Projects] Failed to list shared canvases:', error);
+    return [];
+  }
 };
 
 /**

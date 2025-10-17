@@ -73,8 +73,8 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
           <button
             onClick={onClose}
             style={styles.closeButton}
-            onMouseEnter={(e) => e.target.style.background = 'rgba(0, 0, 0, 0.1)'}
-            onMouseLeave={(e) => e.target.style.background = 'transparent'}
+            onMouseEnter={(e) => e.target.style.color = '#2c2e33'}
+            onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
           >
             ×
           </button>
@@ -82,7 +82,6 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
 
         {/* Header */}
         <div style={styles.header}>
-          <div style={styles.icon}>✨</div>
           <h2 style={styles.title}>Upgrade to Premium</h2>
           <p style={styles.subtitle}>Unlock unlimited projects and premium features</p>
         </div>
@@ -90,17 +89,14 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
         {/* Limit Warning (if at free tier limit) */}
         {currentProjectCount >= 3 && (
           <div style={styles.warning}>
-            <span style={{ fontSize: '20px' }}>⚠️</span>
-            <div>
-              <div style={{ fontWeight: '600', marginBottom: '4px' }}>Project Limit Reached</div>
-              <div style={{ fontSize: '14px' }}>
-                You've reached the free tier limit of 3 projects. Upgrade to create unlimited canvases.
-              </div>
+            <div style={{ fontWeight: '600', marginBottom: '4px' }}>Project Limit Reached</div>
+            <div style={{ fontSize: '13px' }}>
+              You've reached the free tier limit of 3 projects. Upgrade to create unlimited canvases.
             </div>
           </div>
         )}
 
-        {/* Pricing Card */}
+        {/* Pricing */}
         <div style={styles.pricingCard}>
           <div style={styles.price}>
             <span style={styles.currency}>$</span>
@@ -109,26 +105,10 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
           </div>
           
           <div style={styles.features}>
-            <div style={styles.feature}>
-              <span style={styles.checkmark}>✓</span>
-              <span>Unlimited canvas projects</span>
-            </div>
-            <div style={styles.feature}>
-              <span style={styles.checkmark}>✓</span>
-              <span>Priority AI assistant access</span>
-            </div>
-            <div style={styles.feature}>
-              <span style={styles.checkmark}>✓</span>
-              <span>Advanced export options</span>
-            </div>
-            <div style={styles.feature}>
-              <span style={styles.checkmark}>✓</span>
-              <span>Premium support</span>
-            </div>
-            <div style={styles.feature}>
-              <span style={styles.checkmark}>✓</span>
-              <span>Cancel anytime</span>
-            </div>
+            <div style={styles.feature}>Unlimited canvas projects</div>
+            <div style={styles.feature}>Share canvases with others</div>
+            <div style={styles.feature}>Priority support</div>
+            <div style={styles.feature}>Cancel anytime</div>
           </div>
         </div>
 
@@ -143,14 +123,12 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
           }}
           onMouseEnter={(e) => {
             if (!loading) {
-              e.target.style.background = 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)';
-              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.background = '#1a1c1f';
             }
           }}
           onMouseLeave={(e) => {
             if (!loading) {
-              e.target.style.background = 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)';
-              e.target.style.transform = 'translateY(0)';
+              e.target.style.background = '#2c2e33';
             }
           }}
         >
@@ -160,14 +138,13 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
         {/* Error Message */}
         {error && (
           <div style={styles.error}>
-            ⚠️ {error}
+            {error}
           </div>
         )}
 
         {/* Security Notice */}
         <div style={styles.securityNotice}>
-          <span style={{ fontSize: '16px' }}>🔒</span>
-          <span>Secure payment processed by Stripe</span>
+          Secure payment processed by Stripe
         </div>
       </div>
     </div>
@@ -190,33 +167,32 @@ const styles = {
   },
   
   modal: {
-    background: 'rgba(255, 255, 255, 0.98)',
-    borderRadius: '24px',
+    background: '#ffffff',
+    borderRadius: '16px',
     padding: '40px',
-    maxWidth: '500px',
+    maxWidth: '440px',
     width: '90%',
-    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.3)',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
     position: 'relative',
-    backdropFilter: 'blur(10px)',
     border: '1px solid rgba(0, 0, 0, 0.06)'
   },
   
   closeButton: {
     position: 'absolute',
-    top: '20px',
-    right: '20px',
+    top: '16px',
+    right: '16px',
     background: 'transparent',
     border: 'none',
-    fontSize: '32px',
+    fontSize: '28px',
     color: '#9ca3af',
     cursor: 'pointer',
-    width: '40px',
-    height: '40px',
-    borderRadius: '8px',
+    width: '32px',
+    height: '32px',
+    borderRadius: '6px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'all 0.2s'
+    transition: 'color 0.2s ease'
   },
   
   header: {
@@ -224,120 +200,106 @@ const styles = {
     marginBottom: '32px'
   },
   
-  icon: {
-    fontSize: '48px',
-    marginBottom: '16px'
-  },
-  
   title: {
     margin: '0 0 8px 0',
-    fontSize: '28px',
-    fontWeight: '700',
-    color: '#111827'
+    fontSize: '22px',
+    fontWeight: '600',
+    color: '#2c2e33',
+    letterSpacing: '-0.02em'
   },
   
   subtitle: {
     margin: 0,
-    fontSize: '16px',
-    color: '#6b7280',
+    fontSize: '14px',
+    color: '#646669',
+    fontWeight: '400',
     lineHeight: '1.5'
   },
   
   warning: {
-    background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+    background: '#fef3c7',
     border: '1px solid rgba(245, 158, 11, 0.2)',
-    borderRadius: '12px',
+    borderRadius: '10px',
     padding: '16px',
     marginBottom: '24px',
-    display: 'flex',
-    gap: '12px',
-    alignItems: 'flex-start',
-    color: '#92400e'
+    color: '#92400e',
+    fontSize: '14px'
   },
   
   pricingCard: {
-    background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
-    borderRadius: '16px',
-    padding: '32px',
+    background: '#fafafa',
+    borderRadius: '12px',
+    padding: '28px',
     marginBottom: '24px',
-    border: '1px solid rgba(139, 92, 246, 0.2)'
+    border: '1px solid rgba(0, 0, 0, 0.06)'
   },
   
   price: {
     textAlign: 'center',
     marginBottom: '24px',
-    color: '#5b21b6'
+    color: '#2c2e33'
   },
   
   currency: {
-    fontSize: '24px',
-    fontWeight: '600',
+    fontSize: '20px',
+    fontWeight: '500',
     verticalAlign: 'top'
   },
   
   amount: {
-    fontSize: '56px',
-    fontWeight: '700'
+    fontSize: '48px',
+    fontWeight: '600'
   },
   
   period: {
-    fontSize: '18px',
-    color: '#7c3aed'
+    fontSize: '16px',
+    color: '#646669',
+    fontWeight: '400'
   },
   
   features: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '12px'
+    gap: '10px'
   },
   
   feature: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    fontSize: '15px',
-    color: '#5b21b6'
-  },
-  
-  checkmark: {
-    fontSize: '20px',
-    color: '#10b981',
-    fontWeight: '700'
+    fontSize: '14px',
+    color: '#2c2e33',
+    fontWeight: '400',
+    textAlign: 'center'
   },
   
   subscribeButton: {
     width: '100%',
-    background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+    background: '#2c2e33',
     color: '#ffffff',
     border: 'none',
-    padding: '16px',
-    borderRadius: '12px',
-    fontSize: '18px',
-    fontWeight: '700',
+    padding: '14px',
+    borderRadius: '8px',
+    fontSize: '15px',
+    fontWeight: '500',
     cursor: 'pointer',
-    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-    boxShadow: '0 4px 16px rgba(139, 92, 246, 0.3)',
+    transition: 'all 0.2s ease',
     marginBottom: '16px'
   },
   
   error: {
-    background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+    background: '#fee2e2',
     color: '#991b1b',
     padding: '12px 16px',
     borderRadius: '8px',
-    fontSize: '14px',
+    fontSize: '13px',
     marginBottom: '16px',
-    border: '1px solid rgba(153, 27, 27, 0.2)'
+    border: '1px solid rgba(153, 27, 27, 0.15)',
+    textAlign: 'center'
   },
   
   securityNotice: {
     textAlign: 'center',
-    fontSize: '13px',
-    color: '#6b7280',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '8px'
+    fontSize: '12px',
+    color: '#9ca3af',
+    fontWeight: '400'
   }
 };
 
