@@ -2422,6 +2422,12 @@ export default function Canvas() {
   };
 
   const handleStageMouseUp = () => {
+    console.log('[MouseUp] 🖱️ Mouse up detected', {
+      isPanning,
+      hasSelectionStart: !!selectionStartRef.current,
+      hasSelectionBox: !!selectionBox
+    });
+    
     if (isPanning) {
       setIsPanning(false);
       panStartRef.current = null;
@@ -2429,17 +2435,29 @@ export default function Canvas() {
       return;
     }
     
-    if (!selectionStartRef.current || !selectionBox) {
+    // CRITICAL FIX: Always clear selection box, even if no drag happened
+    // This prevents "stuck" selection box issue
+    const hadSelectionDrag = selectionStartRef.current && selectionBox;
+    
+    if (!hadSelectionDrag) {
+      // No selection drag - just cleanup
       selectionStartRef.current = null;
       setSelectionBox(null);
+      console.log('[MouseUp] ✅ No selection drag - refs cleared');
       return;
     }
 
+    // Process intersecting shapes
     const intersectingShapes = shapes.filter(shape =>
       shapeIntersectsBox(shape, selectionBox)
     );
 
     const isShiftKey = selectionStartRef.current.isShiftKey;
+
+    console.log('[MouseUp] Processing selection:', {
+      intersectingShapes: intersectingShapes.length,
+      isShiftKey
+    });
 
     if (intersectingShapes.length > 0) {
       if (isShiftKey) {
@@ -2450,7 +2468,7 @@ export default function Canvas() {
             if (user?.uid) {
               const name = user.displayName || user.email?.split('@')[0] || 'User';
               const color = generateUserColor(user.uid);
-              setSelection(shape.id, user.uid, name, color);
+              setSelection(CANVAS_ID, shape.id, user.uid, name, color);
             }
           }
         });
@@ -2461,13 +2479,16 @@ export default function Canvas() {
         if (user?.uid) {
           const name = user.displayName || user.email?.split('@')[0] || 'User';
           const color = generateUserColor(user.uid);
-          newIds.forEach(id => setSelection(id, user.uid, name, color));
+          newIds.forEach(id => setSelection(CANVAS_ID, id, user.uid, name, color));
         }
       }
+      console.log('[MouseUp] ✅ Selected', intersectingShapes.length, 'shapes');
     }
 
+    // CRITICAL: Always clear refs and selection box
     selectionStartRef.current = null;
     setSelectionBox(null);
+    console.log('[MouseUp] ✅ Selection complete - box and refs cleared');
   };
 
   const handleStageMouseLeave = () => {
