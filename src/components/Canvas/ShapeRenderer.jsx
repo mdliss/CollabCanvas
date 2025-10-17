@@ -78,12 +78,14 @@ const CANVAS_ID = "global-canvas-v1";
 export default function ShapeRenderer({ 
   shape, 
   isSelected,
+  selectedShapeIds = [],
   currentUserId,
   currentUserName,
   currentUser,
   onSelect, 
   onRequestLock,
   onDragStart,
+  onDragMove,
   onDragEnd,
   onTransformStart,
   onTransformEnd,
@@ -460,6 +462,32 @@ export default function ShapeRenderer({
     }, 500);
   };
 
+  /**
+   * Handle Drag Move for Multi-Shape Dragging
+   * 
+   * Called continuously during drag to update follower shapes in real-time.
+   * When dragging one selected shape among multiple selections, all other
+   * selected shapes move by the same delta, creating group drag behavior.
+   * 
+   * @param {KonvaEvent} e - Konva drag move event
+   */
+  const handleDragMove = (e) => {
+    if (!onDragMove) return;
+    
+    // Only trigger group drag if part of multi-selection
+    const isMultiSelection = selectedShapeIds.includes(shape.id) && selectedShapeIds.length > 1;
+    if (!isMultiSelection) return;
+    
+    // Get current position of leader shape
+    const currentPos = {
+      x: e.target.x(),
+      y: e.target.y()
+    };
+    
+    // Notify parent to update follower shapes
+    onDragMove(shape.id, currentPos);
+  };
+  
   /**
    * Handles drag end event with delayed flag clearing to prevent visual flutter
    * 
@@ -926,6 +954,7 @@ export default function ShapeRenderer({
     onClick: handleClick,
     onTap: handleClick,
     onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
     onDragEnd: handleDragEnd,
     onTransformEnd: handleTransformEnd,
     onTransformStart: handleTransformStart,

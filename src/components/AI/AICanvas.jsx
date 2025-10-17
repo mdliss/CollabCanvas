@@ -14,9 +14,10 @@
  * - Context awareness (understands selection, viewport, references)
  * - Conversation memory across sessions
  * - Layout templates for common UI patterns
- * - Full Undo/Redo support via Ctrl+Z/Ctrl+Y (NEW - atomic AI operation undo)
- * - History Timeline integration with purple AI styling (NEW)
- * - Usage tracking and budget enforcement
+ * - Full Undo/Redo support via Ctrl+Z/Ctrl+Y (atomic AI operation undo)
+ * - History Timeline integration with purple AI styling
+ * - Interruptible streaming (type during response to send immediately) (NEW)
+ * - Faster streaming (60 chars/sec, 2.4× faster than before) (NEW)
  * 
  * ARCHITECTURE:
  * - Frontend: React component with chat interface
@@ -196,6 +197,38 @@
  * 4. Reconnect network
  * 5. Retry - should work and register operation
  * 
+ * Test 11: Verify Streaming Interruption (NEW)
+ * ─────────────────────────────────────────────
+ * 1. Ask AI a question that generates a long response
+ * 2. Watch the response stream character-by-character
+ * 3. While streaming is active (before it finishes):
+ *    - Notice input placeholder says "Type to interrupt..."
+ *    - Notice input has purple tint/glow
+ *    - Start typing a new message
+ *    - Press Enter
+ * 4. Expected behavior:
+ *    - Stream immediately stops
+ *    - Previous message completes and is saved to history
+ *    - New message is sent
+ *    - No waiting for stream to finish
+ * 
+ * Test 12: Verify Faster Streaming Speed (NEW)
+ * ──────────────────────────────────────────────
+ * 1. Ask AI: "explain what you can do"
+ * 2. Observe streaming speed (should be ~60 chars/sec)
+ * 3. Compare to old speed (was ~25 chars/sec)
+ * 4. Should feel noticeably snappier (2.4× faster)
+ * 
+ * Console verification:
+ * > // Watch for this during stream:
+ * [AI Streaming] 🎬 Starting stream animation: 150 chars
+ * [AI Streaming] ✅ Stream animation complete
+ * 
+ * > // If interrupted:
+ * [AI Streaming] ⚡ User interrupted stream - cancelling animation
+ * [AI Streaming] ⏹️  Stream interrupted by user - completing message immediately
+ * [AI Streaming] ✅ Message completed and stored
+ * 
  * ═══════════════════════════════════════════════════════════════════════════
  * 
  * All functionality documented inline - no external documentation files.
@@ -291,6 +324,9 @@ export default function AICanvas({
   // Streaming state for progressive display
   const [streamingMessage, setStreamingMessage] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const streamingAnimationRef = useRef(null); // Store animation frame ID for cancellation
+  const fullStreamingMessageRef = useRef(''); // Store full message for interruption completion
+  const streamingContextRef = useRef(null); // Store message context for completion
   
   // Conversation persistence
   const sessionIdRef = useRef(getSessionId());
@@ -347,6 +383,15 @@ export default function AICanvas({
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages]);
+  
+  // Cleanup: Cancel streaming on unmount
+  useEffect(() => {
+    return () => {
+      if (streamingAnimationRef.current) {
+        cancelAnimationFrame(streamingAnimationRef.current);
+      }
+    };
+  }, []);
 
   /**
    * Aggressive Input Focus Strategy
@@ -431,8 +476,67 @@ export default function AICanvas({
     await push(conversationRef, messageWithTimestamp);
   };
 
+  /**
+   * Cancel Active Streaming and Complete Message
+   * 
+   * Interrupts streaming animation and immediately completes the message.
+   * Called when user sends new message while previous response is still streaming.
+   * 
+   * This enables rapid-fire interaction without waiting for slow streaming to complete.
+   * 
+   * Implementation:
+   * 1. Cancel animation frame loop
+   * 2. Add full message to conversation immediately
+   * 3. Clear streaming state
+   * 4. Ready for next message
+   * 
+   * The interrupted message still gets saved to history with its full content.
+   */
+  const cancelStreaming = () => {
+    if (!isStreaming) return;
+    
+    console.log('[AI Streaming] ⚡ Stream interrupted by user - completing message immediately');
+    
+    // Cancel animation frame
+    if (streamingAnimationRef.current) {
+      cancelAnimationFrame(streamingAnimationRef.current);
+      streamingAnimationRef.current = null;
+    }
+    
+    // Complete the message immediately with full content
+    const fullMessage = fullStreamingMessageRef.current;
+    const context = streamingContextRef.current;
+    
+    if (fullMessage && context) {
+      // Clear streaming state
+      setStreamingMessage('');
+      setIsStreaming(false);
+      
+      // Add complete message to conversation
+      const assistantMessageObj = { role: 'assistant', content: fullMessage };
+      storeMessage(assistantMessageObj);
+      setMessages([
+        ...context.newMessages,
+        assistantMessageObj,
+      ]);
+      
+      console.log('[AI Streaming] ✅ Message completed and stored');
+    }
+    
+    // Clear refs
+    fullStreamingMessageRef.current = '';
+    streamingContextRef.current = null;
+  };
+  
   const sendMessage = async () => {
     if (!inputValue.trim() || isLoading) return;
+    
+    // CRITICAL: If user types during streaming, interrupt the stream
+    // This allows rapid-fire interaction without waiting for slow streaming
+    if (isStreaming) {
+      console.log('[AI Streaming] ⚡ User interrupted stream - cancelling animation');
+      cancelStreaming();
+    }
 
     const userMessage = inputValue.trim();
     setInputValue('');
@@ -532,32 +636,43 @@ export default function AICanvas({
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       /**
-       * Progressive Display Simulation - OpenAI Streaming Pace
+       * Progressive Display Simulation - Faster Streaming
        * 
-       * Displays AI response token-by-token at OpenAI's natural streaming speed.
-       * Full response received from backend, but animated on frontend
-       * for ChatGPT-like perceived responsiveness.
+       * Displays AI response token-by-token at accelerated speed for snappier UX.
+       * Full response received from backend, but animated on frontend.
        * 
        * Performance:
-       * - Displays ~25 characters per second (matches OpenAI streaming)
+       * - Displays ~60 characters per second (2.4× faster than before)
        * - Uses requestAnimationFrame for smooth 60fps animation
-       * - ~0.4 characters per frame at 60fps = 24 chars/second
-       * - Feels natural and allows comfortable reading
+       * - ~1 character per frame at 60fps = 60 chars/second
+       * - Feels responsive while still being readable
+       * 
+       * Interruption Support:
+       * - User can send new message during streaming
+       * - Animation cancels immediately via cancelStreaming()
+       * - Enables rapid-fire interaction without waiting
        * 
        * Architecture Decision:
        * - Simpler than true Server-Sent Events
        * - Works with tool calling (no SSE complexity)
-       * - Same visual effect with less backend complexity
+       * - Interruptible for better UX
        */
       const fullMessage = data.message;
+      
+      // Store full message and context for interruption handling
+      fullStreamingMessageRef.current = fullMessage;
+      streamingContextRef.current = { newMessages };
+      
       setIsStreaming(true);
       setStreamingMessage('');
+      
+      console.log('[AI Streaming] 🎬 Starting stream animation:', fullMessage.length, 'chars');
       
       // Animate message display character by character
       let currentIndex = 0;
       let lastFrameTime = performance.now();
-      const charsPerSecond = 25; // Match OpenAI's streaming speed
-      const msPerChar = 1000 / charsPerSecond; // ~40ms per character
+      const charsPerSecond = 60; // Faster streaming (was 25) - 2.4× speed increase
+      const msPerChar = 1000 / charsPerSecond; // ~16.67ms per character
       
       const animateMessage = (currentTime) => {
         // Calculate how many characters to display based on elapsed time
@@ -571,9 +686,12 @@ export default function AICanvas({
         }
         
         if (currentIndex < fullMessage.length) {
-          requestAnimationFrame(animateMessage);
+          // Store animation frame ID for cancellation
+          streamingAnimationRef.current = requestAnimationFrame(animateMessage);
         } else {
           // Animation complete - add to permanent messages
+          console.log('[AI Streaming] ✅ Stream animation complete');
+          streamingAnimationRef.current = null;
           setStreamingMessage('');
           setIsStreaming(false);
           
@@ -587,10 +705,14 @@ export default function AICanvas({
             ...newMessages,
             assistantMessageObj,
           ]);
+          
+          // Clear refs
+          fullStreamingMessageRef.current = '';
+          streamingContextRef.current = null;
         }
       };
       
-      requestAnimationFrame(animateMessage);
+      streamingAnimationRef.current = requestAnimationFrame(animateMessage);
 
       console.log(`[AI Canvas] Response time: ${data.responseTime}ms, Tools: ${data.toolsExecuted}, Tokens: ${data.tokenUsage}`);
       
@@ -907,8 +1029,8 @@ export default function AICanvas({
 
   return (
     <>
-      {/* AI Toggle Button - Matches Toolbar Aesthetic Exactly
-          Positioned left of center button in bottom-right corner */}
+      {/* AI Toggle Button - Moved to Far Right Edge
+          Positioned at right edge for easy access */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setHoveredButton('ai')}
@@ -916,7 +1038,7 @@ export default function AICanvas({
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: '78px', // Center button at 20px + 48px width + 10px gap = 78px
+          right: '20px', // Far right edge (was 78px)
           width: '48px',
           height: '48px',
           display: 'flex',
@@ -931,18 +1053,18 @@ export default function AICanvas({
           zIndex: 1000,
           ...getAIButtonStyle()
         }}
-        title="AI Assistant"
+        title="AI Assistant (Shift+A)"
       >
         ✨
       </button>
 
-      {/* Chat Panel - Toolbar-Matching Design with Smooth Transitions
-          Positioned in bottom-right, left of toolbar to avoid overlap */}
+      {/* Chat Panel - Positioned at Far Right
+          Anchored to right edge above AI button */}
       <div
         style={{
           position: 'fixed',
           bottom: '78px', // Above the AI button with 10px gap
-          right: '88px', // Bottom-right area, just left of toolbar
+          right: '20px', // Far right edge to match AI button
           width: '380px',
           maxHeight: '600px',
           // EXACT TOOLBAR STYLING:
@@ -1190,28 +1312,39 @@ export default function AICanvas({
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask AI..."
+                placeholder={isStreaming ? "Type to interrupt..." : "Ask AI..."}
                 disabled={isLoading}
                 maxLength={500}
                 autoFocus={isOpen}
                 style={{
                   flex: 1,
                   padding: '10px 12px',
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  border: isStreaming 
+                    ? '1px solid rgba(139, 92, 246, 0.3)' 
+                    : '1px solid rgba(0, 0, 0, 0.06)',
                   borderRadius: '8px',
                   fontSize: '13px',
                   outline: 'none',
                   transition: 'all 0.2s',
-                  background: '#ffffff',
+                  background: isStreaming 
+                    ? 'rgba(245, 243, 255, 0.5)' 
+                    : '#ffffff',
+                  boxShadow: isStreaming 
+                    ? '0 0 0 3px rgba(139, 92, 246, 0.1)' 
+                    : 'none',
                 }}
                 onFocus={(e) => {
-                  e.currentTarget.style.borderColor = '#9ca3af';
-                  e.currentTarget.style.boxShadow = '0 0 0 3px rgba(156, 163, 175, 0.1)';
+                  if (!isStreaming) {
+                    e.currentTarget.style.borderColor = '#9ca3af';
+                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(156, 163, 175, 0.1)';
+                  }
                 }}
                 onBlur={(e) => {
-                  // Allow blur so user can interact with canvas
-                  e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.06)';
-                  e.currentTarget.style.boxShadow = 'none';
+                  if (!isStreaming) {
+                    // Allow blur so user can interact with canvas
+                    e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.06)';
+                    e.currentTarget.style.boxShadow = 'none';
+                  }
                 }}
               />
               <button

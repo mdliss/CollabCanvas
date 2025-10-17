@@ -25,18 +25,11 @@ const TEXT_MAX_LENGTH = 500;
 /**
  * AI Usage and Budget Constants
  * 
- * Cost Calculation (GPT-4 pricing as of 2024):
- * - Input: $0.03 per 1K tokens
- * - Output: $0.06 per 1K tokens
- * - Average request: ~500 tokens input + 200 tokens output = $0.027
- * 
- * Monthly Budget:
- * - Free tier: $5/month (~185 requests)
- * - Prevents runaway costs while allowing generous usage
+ * DISABLED: Budget system removed for unlimited usage
  */
-const USER_MONTHLY_BUDGET_USD = 5.00;
-const GPT4_INPUT_COST_PER_1K = 0.03;
-const GPT4_OUTPUT_COST_PER_1K = 0.06;
+// const USER_MONTHLY_BUDGET_USD = 5.00;
+// const GPT4_INPUT_COST_PER_1K = 0.03;
+// const GPT4_OUTPUT_COST_PER_1K = 0.06;
 
 // Rate limiting map
 const rateLimits = new Map<string, { count: number; resetTime: number }>();
@@ -993,11 +986,11 @@ async function undoAIOperationTool(params: any, userId: string): Promise<string>
  */
 
 /**
- * Get Month Key for Usage Tracking
+ * Helper functions for usage tracking
  * 
- * Format: YYYY-MM (e.g., "2025-10")
- * Used to partition usage data by month for billing cycles.
+ * DISABLED: Not needed with budget system removed
  */
+/*
 function getMonthKey(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -1005,31 +998,19 @@ function getMonthKey(): string {
   return `${year}-${month}`;
 }
 
-/**
- * Calculate Cost from Token Usage
- * 
- * GPT-4 Pricing:
- * - Input: $0.03 per 1K tokens
- * - Output: $0.06 per 1K tokens
- * 
- * @param inputTokens - Prompt tokens used
- * @param outputTokens - Completion tokens used
- * @returns Estimated cost in USD
- */
 function calculateCost(inputTokens: number, outputTokens: number): number {
-  const inputCost = (inputTokens / 1000) * GPT4_INPUT_COST_PER_1K;
-  const outputCost = (outputTokens / 1000) * GPT4_OUTPUT_COST_PER_1K;
+  const inputCost = (inputTokens / 1000) * 0.03;
+  const outputCost = (outputTokens / 1000) * 0.06;
   return inputCost + outputCost;
 }
+*/
 
 /**
  * Check User Budget
  * 
- * Verifies user hasn't exceeded monthly budget before processing request.
- * Prevents unexpected costs and enforces usage limits.
- * 
- * @throws Error if budget exceeded
+ * DISABLED: Budget checking removed for unlimited usage
  */
+/*
 async function checkUserBudget(userId: string): Promise<void> {
   const monthKey = getMonthKey();
   const usageRef = rtdb.ref(`ai-usage/${userId}/${monthKey}`);
@@ -1044,18 +1025,14 @@ async function checkUserBudget(userId: string): Promise<void> {
     );
   }
 }
+*/
 
 /**
  * Track Usage and Update Budget
  * 
- * Records token usage and calculates costs after each AI request.
- * Aggregates monthly usage for budget enforcement.
- * 
- * @param userId - User ID for usage tracking
- * @param inputTokens - Prompt tokens used
- * @param outputTokens - Completion tokens used
- * @param toolCalls - Number of function calls executed
+ * DISABLED: Usage tracking removed for unlimited usage
  */
+/*
 async function trackUsage(
   userId: string,
   inputTokens: number,
@@ -1082,6 +1059,7 @@ async function trackUsage(
   
   console.log(`[AI Usage] Tracked: ${inputTokens + outputTokens} tokens, ${toolCalls} tools, ~$${calculateCost(inputTokens, outputTokens).toFixed(4)}`);
 }
+*/
 
 /**
  * Optimized Bulk Create with Batched RTDB Writes
@@ -1328,17 +1306,8 @@ export const aiCanvasAgent = functions
       });
     }
 
-    // Check budget before processing (prevent cost overruns)
-    try {
-      await checkUserBudget(userId);
-    } catch (budgetError: any) {
-      console.warn(`[AI Agent] Budget check failed for user ${userId}:`, budgetError.message);
-      res.status(429).json({ 
-        error: budgetError.message,
-        budgetExceeded: true
-      });
-      return;
-    }
+    // Budget checking disabled - unlimited usage
+    console.log('[AI Agent] Budget checking disabled - proceeding with request');
 
     // Define tools for function calling
     const tools = [
@@ -1947,13 +1916,8 @@ Be helpful, creative, and produce professional-looking results.`;
       console.log(`[AI Agent] Request completed in ${responseTime}ms`);
       console.log(`[AI Agent] Token usage: ${totalTokens}`);
 
-      // Track usage for budget monitoring
-      await trackUsage(
-        userId,
-        (completion.usage?.prompt_tokens || 0) + (followUpCompletion.usage?.prompt_tokens || 0),
-        (completion.usage?.completion_tokens || 0) + (followUpCompletion.usage?.completion_tokens || 0),
-        toolCalls.length
-      );
+      // Usage tracking disabled
+      console.log('[AI Agent] Token usage:', (completion.usage?.total_tokens || 0) + (followUpCompletion.usage?.total_tokens || 0));
 
       const responsePayload = {
         message: finalResponse,
@@ -1979,13 +1943,8 @@ Be helpful, creative, and produce professional-looking results.`;
 
       console.log(`[AI Agent] Request completed in ${responseTime}ms (no tools)`);
 
-      // Track usage even without tool calls
-      await trackUsage(
-        userId,
-        completion.usage?.prompt_tokens || 0,
-        completion.usage?.completion_tokens || 0,
-        0
-      );
+      // Usage tracking disabled
+      console.log('[AI Agent] Token usage:', completion.usage?.total_tokens || 0);
 
       res.status(200).json({
         message: finalResponse,

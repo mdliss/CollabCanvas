@@ -934,8 +934,16 @@ export default function Canvas() {
     setStagePos(newPos);
   };
 
+  /**
+   * Handle Multi-Shape Drag Start
+   * 
+   * When dragging a selected shape, store initial positions for ALL selected shapes.
+   * This enables group dragging where all selected shapes move together.
+   * 
+   * @param {string} shapeId - ID of the shape being dragged (the "leader")
+   */
   const handleShapeDragStart = (shapeId) => {
-    // Store initial position for undo
+    // Store initial position for the dragged shape
     const shape = shapes.find(s => s.id === shapeId);
     if (shape) {
       dragStartStateRef.current[shapeId] = {
@@ -944,6 +952,22 @@ export default function Canvas() {
         rotation: shape.rotation
       };
     }
+    
+    // If this shape is part of a selection, store initial positions for ALL selected shapes
+    if (selectedIds.includes(shapeId) && selectedIds.length > 1) {
+      console.log(`[Multi-Drag] 📦 Starting group drag with ${selectedIds.length} shapes`);
+      selectedIds.forEach(id => {
+        const s = shapes.find(sh => sh.id === id);
+        if (s && !dragStartStateRef.current[id]) {
+          dragStartStateRef.current[id] = {
+            x: s.x,
+            y: s.y,
+            rotation: s.rotation
+          };
+        }
+      });
+    }
+    
     setEditing(true);
   };
 
@@ -986,39 +1010,118 @@ export default function Canvas() {
    * handleShapeDragEnd('shape_456', {x: 300, y: 300});
    * // Shape unlocked, available to other users
    */
+  /**
+   * Handle Multi-Shape Drag Move
+   * 
+   * When dragging a selected shape in a multi-selection, move all selected shapes together.
+   * Calculates delta from leader shape and applies to all followers.
+   * 
+   * @param {string} leaderShapeId - ID of shape being actively dragged
+   * @param {Object} newPos - New position of leader shape {x, y}
+   */
+  const handleShapeDragMove = (leaderShapeId, newPos) => {
+    // Only handle group dragging if this shape is part of a multi-selection
+    if (!selectedIds.includes(leaderShapeId) || selectedIds.length <= 1) {
+      return;
+    }
+    
+    const leaderStartPos = dragStartStateRef.current[leaderShapeId];
+    if (!leaderStartPos) return;
+    
+    // Calculate how far the leader has moved from its starting position
+    const deltaX = newPos.x - leaderStartPos.x;
+    const deltaY = newPos.y - leaderStartPos.y;
+    
+    // Apply the same delta to all other selected shapes (except the leader)
+    selectedIds.forEach(id => {
+      if (id === leaderShapeId) return; // Skip leader (already being dragged)
+      
+      const startPos = dragStartStateRef.current[id];
+      if (!startPos) return;
+      
+      // Calculate new position for this follower
+      const newX = startPos.x + deltaX;
+      const newY = startPos.y + deltaY;
+      
+      // Update the shape in RTDB (this will trigger re-render for all users)
+      updateShape(CANVAS_ID, id, { x: newX, y: newY }, user).catch(err => {
+        console.error(`[Multi-Drag] Failed to update follower ${id}:`, err);
+      });
+    });
+  };
+  
   const handleShapeDragEnd = async (shapeId, pos) => {
     setEditing(false);
     
     console.log(`[DragEnd] 🏁 Drag complete for ${shapeId.slice(0, 8)}`, {
       hasSelectionLock: selectionLocksRef.current.has(shapeId),
-      isSelected: selectedIds.includes(shapeId)
+      isSelected: selectedIds.includes(shapeId),
+      isGroupDrag: selectedIds.includes(shapeId) && selectedIds.length > 1
     });
     
-    // Get the old position from dragStart
-    const oldPosition = dragStartStateRef.current[shapeId];
+    // If this was a group drag, handle all selected shapes
+    const isGroupDrag = selectedIds.includes(shapeId) && selectedIds.length > 1;
     
-    if (oldPosition) {
-      // Wrap in command for undo/redo
-      const command = new MoveShapeCommand(
-        CANVAS_ID,
-        shapeId,
-        pos, // new position
-        oldPosition, // old position
-        user,
-        updateShape
-      );
+    if (isGroupDrag) {
+      console.log(`[Multi-Drag] 📦 Completing group drag for ${selectedIds.length} shapes`);
+      
+      // Start batch for multiple shape moves
+      startBatch(`Moved ${selectedIds.length} shapes`);
       
       try {
-        await execute(command, user);
-      } catch (error) {
-        console.error('[Canvas] Move failed:', error);
+        // Process all selected shapes
+        for (const id of selectedIds) {
+          const oldPosition = dragStartStateRef.current[id];
+          if (!oldPosition) continue;
+          
+          const currentShape = shapes.find(s => s.id === id);
+          if (!currentShape) continue;
+          
+          // Create move command for each shape
+          const command = new MoveShapeCommand(
+            CANVAS_ID,
+            id,
+            { x: currentShape.x, y: currentShape.y, rotation: currentShape.rotation },
+            oldPosition,
+            user,
+            updateShape
+          );
+          
+          await execute(command, user);
+          delete dragStartStateRef.current[id];
+        }
+      } finally {
+        await endBatch();
       }
       
-      // Clean up stored state
-      delete dragStartStateRef.current[shapeId];
+      console.log(`[Multi-Drag] ✅ Group drag complete`);
     } else {
-      // Fallback if no initial state (shouldn't happen)
-      await updateShape(CANVAS_ID, shapeId, pos, user);
+      // Single shape drag
+      const oldPosition = dragStartStateRef.current[shapeId];
+      
+      if (oldPosition) {
+        // Wrap in command for undo/redo
+        const command = new MoveShapeCommand(
+          CANVAS_ID,
+          shapeId,
+          pos, // new position
+          oldPosition, // old position
+          user,
+          updateShape
+        );
+        
+        try {
+          await execute(command, user);
+        } catch (error) {
+          console.error('[Canvas] Move failed:', error);
+        }
+        
+        // Clean up stored state
+        delete dragStartStateRef.current[shapeId];
+      } else {
+        // Fallback if no initial state (shouldn't happen)
+        await updateShape(CANVAS_ID, shapeId, pos, user);
+      }
     }
     
     // CRITICAL: Lock release coordination
@@ -2879,12 +2982,14 @@ export default function Canvas() {
                 key={shape.id}
                 shape={displayShape}
                 isSelected={selectedIds.includes(shape.id)}
+                selectedShapeIds={selectedIds}
                 currentUserId={user?.uid}
                 currentUserName={user?.displayName || user?.email?.split('@')[0] || 'User'}
                 currentUser={user}
                 onSelect={handleShapeSelect}
                 onRequestLock={handleRequestLock}
                 onDragStart={handleShapeDragStart}
+                onDragMove={handleShapeDragMove}
                 onDragEnd={handleShapeDragEnd}
                 onTransformStart={handleShapeTransformStart}
                 onTransformEnd={handleShapeTransformEnd}
@@ -2966,7 +3071,7 @@ export default function Canvas() {
         </Layer>
       </Stage>
       
-      {/* FEATURE 4: Recenter Button - Modernized to match toolbar style */}
+      {/* FEATURE 4: Recenter Button - Positioned left of AI button */}
       <button
         onClick={() => {
           const centeredPos = getCenteredPosition(stageScale);
@@ -2996,7 +3101,7 @@ export default function Canvas() {
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: '20px',
+          right: '78px', // Left of AI button (AI at 20px + 48px width + 10px gap)
           width: '48px',
           height: '48px',
           display: 'flex',
