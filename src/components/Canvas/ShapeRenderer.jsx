@@ -6,20 +6,18 @@ import { updateShape } from "../../services/canvasRTDB";
 const CANVAS_ID = "global-canvas-v1";
 
 /**
- * ShapeRenderer - FIXED VERSION - No more compound scaling for circles AND stars!
+ * ShapeRenderer - ROTATION FIX VERSION
  * 
  * CRITICAL FIX APPLIED (2025-10-17):
- * Both circle and star transformations now use node's current dimensions
- * instead of stored dimensions to prevent compound scaling.
+ * Fixed rotation synchronization for rectangles and triangles.
  * 
- * The bug: We stored visual dimensions in RTDB, applied scale on top in rendering,
- * then used those ALREADY-SCALED dimensions as the base for the NEXT transform,
- * causing exponential growth.
+ * The bug: During rotation, rectangles/triangles rotate around their top-left
+ * corner (x,y), but Konva updates the position to maintain visual continuity.
+ * Remote clients only received the original position, causing visual displacement.
  * 
- * The fix: 
- * - Circles: Use node.radius() (current base radius)
- * - Stars: Use node.innerRadius() and node.outerRadius() (current base radii)
- * - Calculate actual dimensions from these base values × scale
+ * The fix: Always stream the node's CURRENT position during transforms,
+ * regardless of whether it's a rotation or resize. The position changes during
+ * rotation are intentional and must be synchronized.
  */
 export default function ShapeRenderer({ 
   shape, 
@@ -44,7 +42,6 @@ export default function ShapeRenderer({
   const isDraggingRef = useRef(false);
   const dragEndTimeoutRef = useRef(null);
   const checkpointIntervalRef = useRef(null);
-  const initialTransformPosRef = useRef({ x: 0, y: 0 });
   const transformInProgressRef = useRef(false);
 
   console.log(`[ShapeRenderer] 🔄 Render for ${shape.type} ${shape.id.slice(0, 8)}`, {
@@ -125,7 +122,7 @@ export default function ShapeRenderer({
     
     console.log(`[PropSync] ✅ SYNCING props to node for ${shape.type} ${shape.id.slice(0, 8)}`);
     
-    // Apply position
+    // Apply position and rotation
     node.x(shape.x);
     node.y(shape.y);
     node.rotation(shape.rotation || 0);
@@ -171,7 +168,6 @@ export default function ShapeRenderer({
       const width = shape.width || 80;
       const height = shape.height || 80;
       
-      // CRITICAL FIX: Calculate base radii from dimensions
       const radiusX = width * 0.5;
       const radiusY = height * 0.5;
       const baseRadius = Math.min(radiusX, radiusY);
@@ -183,11 +179,9 @@ export default function ShapeRenderer({
         note: 'Setting base radius, scale will be applied in render'
       });
       
-      // Set the base radii on the node
       node.innerRadius(baseRadius * 0.5);
       node.outerRadius(baseRadius);
       
-      // Calculate and apply scale
       const starScaleX = radiusX / baseRadius;
       const starScaleY = radiusY / baseRadius;
       node.scaleX(starScaleX);
@@ -366,14 +360,9 @@ export default function ShapeRenderer({
     transformInProgressRef.current = true;
     console.log('[Transform] 🚫 Transform flag set - prop sync BLOCKED');
     
-    // Store initial position
+    // Store initial state for debugging
     const node = shapeRef.current;
     if (node) {
-      initialTransformPosRef.current = {
-        x: node.x(),
-        y: node.y()
-      };
-      console.log('[Transform] 📍 Initial position stored:', initialTransformPosRef.current);
       console.log('[Transform] 📊 Initial node state:', {
         x: node.x(),
         y: node.y(),
@@ -394,7 +383,11 @@ export default function ShapeRenderer({
     }
     
     /**
-     * DIMENSION STREAMING WITH DETAILED LOGGING
+     * DIMENSION STREAMING WITH ROTATION FIX
+     * 
+     * CRITICAL: Always stream the node's CURRENT position, not stored position.
+     * During rotation, Konva adjusts the x,y to maintain visual continuity.
+     * These position changes are intentional and MUST be synchronized.
      */
     let streamCount = 0;
     transformStreamInterval.current = setInterval(() => {
@@ -404,103 +397,76 @@ export default function ShapeRenderer({
       streamCount++;
       const logThisStream = streamCount % 10 === 0; // Log every 10th stream
       
-      // CRITICAL FIX: Calculate dimensions from node's current state
+      // Calculate dimensions from node's current state
       let width, height;
       const currentScaleX = node.scaleX();
       const currentScaleY = node.scaleY();
       
       if (shape.type === 'circle') {
-        // Use node's current base radius
         const baseRadius = node.radius();
         width = baseRadius * 2 * currentScaleX;
         height = baseRadius * 2 * currentScaleY;
       } else if (shape.type === 'star') {
-        // STAR FIX: Use node's current base outer radius
         const baseOuterRadius = node.outerRadius();
         width = baseOuterRadius * 2 * currentScaleX;
         height = baseOuterRadius * 2 * currentScaleY;
       } else {
-        // All other shapes use stored dimensions
         const baseWidth = shape.width || 100;
         const baseHeight = shape.height || 100;
         width = baseWidth * currentScaleX;
         height = baseHeight * currentScaleY;
       }
       
-      // Detect resize vs rotation
+      // Detect if this is a resize operation
       const isResizing = Math.abs(currentScaleX - 1.0) > 0.01 || 
                          Math.abs(currentScaleY - 1.0) > 0.01;
       
       if (logThisStream) {
         console.log(`[Transform] 📡 Stream #${streamCount} for ${shape.type}:`, {
-          isResizing,
+          operation: isResizing ? 'RESIZE' : 'ROTATION',
           currentScaleX: currentScaleX.toFixed(3),
           currentScaleY: currentScaleY.toFixed(3),
+          currentX: node.x().toFixed(1),
+          currentY: node.y().toFixed(1),
+          rotation: node.rotation().toFixed(1),
           calculatedWidth: width.toFixed(1),
-          calculatedHeight: height.toFixed(1),
-          currentPos: { x: node.x().toFixed(1), y: node.y().toFixed(1) },
-          storedInitialPos: initialTransformPosRef.current,
-          rotation: node.rotation().toFixed(1)
+          calculatedHeight: height.toFixed(1)
         });
       }
       
-      if (isResizing) {
-        // RESIZE: Stream everything
-        streamDragPosition(
-          shape.id,
-          currentUserId,
-          currentUserName || 'User',
-          node.x(),
-          node.y(),
-          node.rotation(),
-          width,
-          height
-        );
-        
-        if (logThisStream) {
-          console.log(`[Transform] 📡 Streaming RESIZE data:`, {
-            x: node.x().toFixed(1),
-            y: node.y().toFixed(1),
-            width: width.toFixed(1),
-            height: height.toFixed(1),
-            rotation: node.rotation().toFixed(1)
-          });
-        }
-      } else {
-        // ROTATION: Use stored position
-        streamDragPosition(
-          shape.id,
-          currentUserId,
-          currentUserName || 'User',
-          initialTransformPosRef.current.x,
-          initialTransformPosRef.current.y,
-          node.rotation(),
-          null,
-          null
-        );
-        
-        if (logThisStream) {
-          console.log(`[Transform] 📡 Streaming ROTATION-ONLY data:`, {
-            storedX: initialTransformPosRef.current.x.toFixed(1),
-            storedY: initialTransformPosRef.current.y.toFixed(1),
-            rotation: node.rotation().toFixed(1),
-            note: 'Using stored position to prevent flicker'
-          });
-        }
+      // CRITICAL FIX: Always stream current position
+      // During rotation, Konva updates x,y to maintain visual alignment
+      // Remote clients MUST receive these position updates
+      streamDragPosition(
+        shape.id,
+        currentUserId,
+        currentUserName || 'User',
+        node.x(),  // Always use current position
+        node.y(),  // Always use current position
+        node.rotation(),
+        isResizing ? width : null,   // Only send dimensions if resizing
+        isResizing ? height : null
+      );
+      
+      if (logThisStream) {
+        console.log(`[Transform] 📡 Streamed data:`, {
+          x: node.x().toFixed(1),
+          y: node.y().toFixed(1),
+          rotation: node.rotation().toFixed(1),
+          width: isResizing ? width.toFixed(1) : 'null',
+          height: isResizing ? height.toFixed(1) : 'null'
+        });
       }
       
     }, 10); // 100Hz
     
-    console.log('[Transform] ✅ Streaming started at 100Hz');
+    console.log('[Transform] ✅ Streaming started at 100Hz with rotation fix');
     
     return true;
   };
 
   /**
-   * TRANSFORM END - FIXED VERSION FOR BOTH CIRCLES AND STARS
-   * 
-   * CRITICAL FIX: Both circles and stars now use node's current dimensions
-   * instead of stored dimensions to prevent compound scaling.
+   * TRANSFORM END - FIXED VERSION FOR ALL SHAPES
    */
   const handleTransformEnd = async () => {
     console.log(`[Transform] 🏁 Transform END for ${shape.type} ${shape.id.slice(0, 8)}`);
@@ -549,11 +515,10 @@ export default function ShapeRenderer({
         }
       });
       
-      // ========== CRITICAL FIX: Shape-specific dimension calculation ==========
+      // Calculate final dimensions based on shape type
       let newWidth, newHeight;
       
       if (shape.type === 'circle') {
-        // CIRCLE FIX: Use the node's CURRENT base radius
         const currentBaseRadius = node.radius();
         newWidth = Math.max(10, currentBaseRadius * 2 * scaleX);
         newHeight = Math.max(10, currentBaseRadius * 2 * scaleY);
@@ -563,11 +528,9 @@ export default function ShapeRenderer({
           scaleX: scaleX.toFixed(3),
           scaleY: scaleY.toFixed(3),
           newWidth: newWidth.toFixed(1),
-          newHeight: newHeight.toFixed(1),
-          calculation: 'radius × 2 × scale'
+          newHeight: newHeight.toFixed(1)
         });
       } else if (shape.type === 'star') {
-        // STAR FIX: Use the node's CURRENT base outer radius
         const currentBaseOuterRadius = node.outerRadius();
         newWidth = Math.max(10, currentBaseOuterRadius * 2 * scaleX);
         newHeight = Math.max(10, currentBaseOuterRadius * 2 * scaleY);
@@ -577,11 +540,9 @@ export default function ShapeRenderer({
           scaleX: scaleX.toFixed(3),
           scaleY: scaleY.toFixed(3),
           newWidth: newWidth.toFixed(1),
-          newHeight: newHeight.toFixed(1),
-          calculation: 'outerRadius × 2 × scale'
+          newHeight: newHeight.toFixed(1)
         });
       } else {
-        // ALL OTHER SHAPES: Use stored dimensions
         const baseWidth = shape.width || 100;
         const baseHeight = shape.height || 100;
         newWidth = Math.max(10, baseWidth * scaleX);
@@ -597,12 +558,6 @@ export default function ShapeRenderer({
           newHeight: newHeight.toFixed(1)
         });
       }
-      
-      console.log(`[Transform] 🧮 Final calculated dimensions:`, {
-        newWidth: newWidth.toFixed(1),
-        newHeight: newHeight.toFixed(1),
-        aspectRatio: (newWidth / newHeight).toFixed(2)
-      });
       
       // Triangle flip detection
       let isFlipped = shape.isFlipped || false;
@@ -621,7 +576,7 @@ export default function ShapeRenderer({
         }
       }
       
-      // Validate
+      // Validate dimensions
       if (!isFinite(newWidth) || newWidth <= 0 || !isFinite(newHeight) || newHeight <= 0) {
         console.error('[Transform] ❌ Invalid dimensions calculated:', {
           newWidth,
@@ -641,12 +596,10 @@ export default function ShapeRenderer({
       
       // Apply new dimensions to node for immediate visual feedback
       if (shape.type === 'circle') {
-        // For circles, calculate new base radius
         const newBaseRadius = (newWidth + newHeight) / 4;
         console.log(`[Transform] 🔵 Circle: setting NEW base radius to ${newBaseRadius.toFixed(1)}`);
         node.radius(newBaseRadius);
       } else if (shape.type === 'star') {
-        // For stars, calculate new base radii from the new dimensions
         const radiusX = newWidth * 0.5;
         const radiusY = newHeight * 0.5;
         const newBaseRadius = Math.min(radiusX, radiusY);
@@ -657,7 +610,6 @@ export default function ShapeRenderer({
         node.innerRadius(newInnerRadius);
         node.outerRadius(newOuterRadius);
         
-        // Apply scale to achieve elliptical star
         node.scaleX(radiusX / newBaseRadius);
         node.scaleY(radiusY / newBaseRadius);
       } else if (shape.type !== 'line') {
@@ -666,10 +618,10 @@ export default function ShapeRenderer({
         node.height(newHeight);
       }
       
-      // Build RTDB attributes
+      // Build RTDB attributes - CRITICAL: Include current position
       newAttrs = {
-        x: node.x(),
-        y: node.y(),
+        x: node.x(),        // Current position after rotation/transform
+        y: node.y(),        // Current position after rotation/transform
         width: newWidth,
         height: newHeight,
         rotation: node.rotation()
@@ -679,7 +631,10 @@ export default function ShapeRenderer({
         newAttrs.isFlipped = isFlipped;
       }
 
-      console.log('[Transform] 💾 Writing to RTDB:', newAttrs);
+      console.log('[Transform] 💾 Writing to RTDB:', {
+        ...newAttrs,
+        note: 'Position includes rotation adjustments'
+      });
       
       // Write to RTDB
       await onTransformEnd(shape.id, newAttrs);
@@ -784,7 +739,7 @@ export default function ShapeRenderer({
           );
         } else {
           const radius = width / 2;
-          console.log(`[Render] 🔵 Circle as PERFECT CIRCLE: radius=${radius}`);
+          console.log(`[Render] 🔵 Perfect circle: radius=${radius}`);
           
           return (
             <Circle
