@@ -195,6 +195,11 @@ export default function Canvas() {
   const CANVAS_ID = canvasId || "global-canvas-v1";
   const [shapes, setShapes] = useState([]);
   const [canvasAccess, setCanvasAccess] = useState({ hasAccess: true, role: 'owner', loading: true });
+  
+  // Permission flags - Must be defined early for use in useEffect dependencies
+  const isViewer = canvasAccess.role === 'viewer';
+  const canEdit = canvasAccess.role === 'owner' || canvasAccess.role === 'editor';
+  
   const [selectedIds, setSelectedIds] = useState([]);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [lastError, setLastError] = useState(null);
@@ -424,6 +429,17 @@ export default function Canvas() {
     const handleKeyDown = async (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       
+      // Escape key - Close open panels (priority: layer panel first)
+      if (e.key === 'Escape') {
+        if (isLayersPanelVisible) {
+          e.preventDefault();
+          setIsLayersPanelVisible(false);
+          showFeedback('Layers panel closed');
+          return;
+        }
+        // Allow other Escape handlers to run (deselect shapes, etc.)
+      }
+      
       // Recenter View - Press '0' (zero) or Home key
       if ((e.key === '0' || e.key === 'Home') && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
@@ -433,8 +449,8 @@ export default function Canvas() {
         return;
       }
       
-      // Undo/Redo shortcuts (Cmd/Ctrl + Z, Cmd/Ctrl + Shift + Z)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
+      // Undo/Redo shortcuts (Cmd/Ctrl + Z, Cmd/Ctrl + Shift + Z) - Editors only
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z' && canEdit) {
         e.preventDefault();
         if (e.shiftKey) {
           // Redo
@@ -477,15 +493,15 @@ export default function Canvas() {
         return;
       }
       
-      // Duplicate selected shapes (Cmd/Ctrl + D)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length > 0) {
+      // Duplicate selected shapes (Cmd/Ctrl + D) - Editors only
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length > 0 && canEdit) {
         e.preventDefault();
         await handleDuplicate();
         return;
       }
       
-      // Cut selected shapes (Cmd/Ctrl + X)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x' && selectedIds.length > 0) {
+      // Cut selected shapes (Cmd/Ctrl + X) - Editors only
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'x' && selectedIds.length > 0 && canEdit) {
         e.preventDefault();
         const shapesToCopy = selectedIds
           .map(id => shapes.find(s => s.id === id))
@@ -532,8 +548,8 @@ export default function Canvas() {
         return;
       }
       
-      // Paste copied shapes (Cmd/Ctrl + V)
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && copiedShapes.length > 0) {
+      // Paste copied shapes (Cmd/Ctrl + V) - Editors only
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'v' && copiedShapes.length > 0 && canEdit) {
         e.preventDefault();
         await handlePaste(); // Uses default offset behavior (no position argument)
         return;
@@ -545,7 +561,8 @@ export default function Canvas() {
         return;
       }
       
-      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
+      // Delete/Backspace - Editors only
+      if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0 && canEdit) {
         e.preventDefault();
         try {
           // Start batching if deleting multiple shapes
@@ -585,8 +602,8 @@ export default function Canvas() {
         return;
       }
       
-      // Z-Index shortcuts - Shift + { and Shift + } for to front/back
-      if ((e.metaKey || e.ctrlKey) === false && !e.altKey && e.shiftKey && selectedIds.length > 0) {
+      // Z-Index shortcuts - Shift + { and Shift + } for to front/back (Editors only)
+      if ((e.metaKey || e.ctrlKey) === false && !e.altKey && e.shiftKey && selectedIds.length > 0 && canEdit) {
         if (e.key === '{') {
           e.preventDefault();
           // Send to back (Shift + {)
@@ -680,8 +697,8 @@ export default function Canvas() {
         }
       }
       
-      // Z-Index shortcuts ([ and ] without modifiers for forward/backward)
-      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && selectedIds.length > 0) {
+      // Z-Index shortcuts ([ and ] without modifiers for forward/backward) - Editors only
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey && selectedIds.length > 0 && canEdit) {
         if (e.key === '[') {
           e.preventDefault();
           // Send backward
@@ -777,33 +794,41 @@ export default function Canvas() {
             break;
           case 'l':
             // FIX #4: Shift+L toggles layers panel (verified working)
-            // Regular L creates a line shape
+            // Regular L creates a line shape (editors only)
             if (e.shiftKey) {
               e.preventDefault();
               const newState = !isLayersPanelVisible;
               setIsLayersPanelVisible(newState);
               console.log('[Keyboard] Shift+L pressed - Layers panel:', newState ? 'SHOWN' : 'HIDDEN');
               showFeedback(newState ? 'Layers panel opened' : 'Layers panel closed');
-            } else {
+            } else if (canEdit) {
               e.preventDefault();
               handleAddShape('line');
             }
             break;
           case 'r':
-            e.preventDefault();
-            handleAddShape('rectangle');
+            if (canEdit) {
+              e.preventDefault();
+              handleAddShape('rectangle');
+            }
             break;
           case 'c':
-            e.preventDefault();
-            handleAddShape('circle');
+            if (canEdit) {
+              e.preventDefault();
+              handleAddShape('circle');
+            }
             break;
           case 't':
-            e.preventDefault();
-            handleAddShape(e.shiftKey ? 'triangle' : 'text');
+            if (canEdit) {
+              e.preventDefault();
+              handleAddShape(e.shiftKey ? 'triangle' : 'text');
+            }
             break;
           case 's':
-            e.preventDefault();
-            handleAddShape('star');
+            if (canEdit) {
+              e.preventDefault();
+              handleAddShape('star');
+            }
             break;
           case 'v':
             e.preventDefault();
@@ -829,7 +854,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes, getCenteredPosition, stageScale]);
+  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes, getCenteredPosition, stageScale, canEdit, isLayersPanelVisible]);
 
   /**
    * Create shape with canvas-appropriate dimensions
@@ -2726,9 +2751,6 @@ export default function Canvas() {
     return lines;
   };
 
-  const isViewer = canvasAccess.role === 'viewer';
-  const canEdit = canvasAccess.role === 'owner' || canvasAccess.role === 'editor';
-
   return (
     <div>
       {/* View-Only Banner */}
@@ -2922,8 +2944,8 @@ export default function Canvas() {
         </ErrorBoundary>
       )}
       
-      {/* History Timeline */}
-      <HistoryTimeline />
+      {/* History Timeline - Hidden for viewers */}
+      {canEdit && <HistoryTimeline />}
       
       <DebugNote 
         projectId={import.meta.env.VITE_FB_PROJECT_ID} 
@@ -2935,47 +2957,50 @@ export default function Canvas() {
         cursorCount={Object.keys(cursors).length}
       />
       <PresenceList users={onlineUsers} />
-      <ShapeToolbar 
-        onAddShape={handleAddShape}
-        onUndo={async () => {
-          if (canUndo) {
-            try {
-              const description = await undo();
-              if (description) {
-                showFeedback(`Undo: ${description}`);
+      {/* Toolbar - Hidden for viewers */}
+      {canEdit && (
+        <ShapeToolbar 
+          onAddShape={handleAddShape}
+          onUndo={async () => {
+            if (canUndo) {
+              try {
+                const description = await undo();
+                if (description) {
+                  showFeedback(`Undo: ${description}`);
+                }
+              } catch (error) {
+                console.error('[Undo] Failed:', error);
+                showFeedback('Undo failed');
               }
-            } catch (error) {
-              console.error('[Undo] Failed:', error);
-              showFeedback('Undo failed');
             }
-          }
-        }}
-        onRedo={async () => {
-          if (canRedo) {
-            try {
-              const description = await redo();
-              if (description) {
-                showFeedback(`Redo: ${description}`);
+          }}
+          onRedo={async () => {
+            if (canRedo) {
+              try {
+                const description = await redo();
+                if (description) {
+                  showFeedback(`Redo: ${description}`);
+                }
+              } catch (error) {
+                console.error('[Redo] Failed:', error);
+                showFeedback('Redo failed');
               }
-            } catch (error) {
-              console.error('[Redo] Failed:', error);
-              showFeedback('Redo failed');
             }
-          }
-        }}
-        canUndo={canUndo}
-        canRedo={canRedo}
-        onBringToFront={handleBringToFront}
-        onSendToBack={handleSendToBack}
-        onBringForward={handleBringForward}
-        onSendBackward={handleSendBackward}
-        onDuplicate={handleDuplicate}
-        hasSelection={selectedIds.length > 0}
-        isLayersPanelVisible={isLayersPanelVisible}
-      />
+          }}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onBringToFront={handleBringToFront}
+          onSendToBack={handleSendToBack}
+          onBringForward={handleBringForward}
+          onSendBackward={handleSendBackward}
+          onDuplicate={handleDuplicate}
+          hasSelection={selectedIds.length > 0}
+          isLayersPanelVisible={isLayersPanelVisible}
+        />
+      )}
       
-      {/* Color Palette - shows when shapes are selected */}
-      {selectedIds.length > 0 && (
+      {/* Color Palette - shows when shapes are selected (editors only) */}
+      {selectedIds.length > 0 && canEdit && (
         <ColorPalette
           onColorSelect={handleColorChange}
           onGradientSelect={handleGradientChange}
@@ -3212,7 +3237,7 @@ export default function Canvas() {
         </Layer>
       </Stage>
       
-      {/* FEATURE 4: Recenter Button - Positioned left of AI button */}
+      {/* FEATURE 4: Recenter Button - Swapped to far right, dynamically positioned */}
       <button
         onClick={() => {
           const centeredPos = getCenteredPosition(stageScale);
@@ -3242,7 +3267,7 @@ export default function Canvas() {
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: '78px', // Left of AI button (AI at 20px + 48px width + 10px gap)
+          right: `${isLayersPanelVisible ? 20 + 340 : 20}px`, // Swapped - now at far right
           width: '48px',
           height: '48px',
           display: 'flex',
@@ -3253,8 +3278,8 @@ export default function Canvas() {
           borderRadius: '10px',
           cursor: 'pointer',
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
-          zIndex: 1000,
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          zIndex: 1001,
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           padding: 0
         }}
         title="Center View (0 or Home)"
@@ -3278,18 +3303,20 @@ export default function Canvas() {
         </svg>
       </button>
 
-      {/* AI Canvas Assistant with Canvas Context
-          Controlled open state for canvas click-to-close */}
-      <AICanvas 
-        canvasId={CANVAS_ID}
-        selectedShapeIds={selectedIds}
-        shapes={shapes}
-        stagePos={stagePos}
-        stageScale={stageScale}
-        stageRef={stageRef}
-        isOpen={isAIChatOpen}
-        onOpenChange={setIsAIChatOpen}
-      />
+      {/* AI Canvas Assistant - Hidden for viewers */}
+      {canEdit && (
+        <AICanvas 
+          canvasId={CANVAS_ID}
+          selectedShapeIds={selectedIds}
+          shapes={shapes}
+          stagePos={stagePos}
+          stageScale={stageScale}
+          stageRef={stageRef}
+          isOpen={isAIChatOpen}
+          onOpenChange={setIsAIChatOpen}
+          isLayersPanelVisible={isLayersPanelVisible}
+        />
+      )}
     </div>
   );
 }

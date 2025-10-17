@@ -305,10 +305,15 @@ export default function AICanvas({
   stageScale = 1,
   stageRef = null,
   isOpen: externalIsOpen = null,
-  onOpenChange = null
+  onOpenChange = null,
+  isLayersPanelVisible = false
 }) {
   const { user } = useAuth();
   const { registerAIOperation } = useUndo();
+  
+  const LAYER_PANEL_WIDTH = 340;
+  const baseRight = 78; // Swapped with center button - AI now further left
+  const dynamicRight = isLayersPanelVisible ? baseRight + LAYER_PANEL_WIDTH : baseRight;
   
   console.log('[AICanvas] Initialized with canvasId:', canvasId);
   
@@ -1032,8 +1037,7 @@ export default function AICanvas({
 
   return (
     <>
-      {/* AI Toggle Button - Moved to Far Right Edge
-          Positioned at right edge for easy access */}
+      {/* AI Toggle Button - Dynamically positioned based on layer panel */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         onMouseEnter={() => setHoveredButton('ai')}
@@ -1041,7 +1045,7 @@ export default function AICanvas({
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: '20px', // Far right edge (was 78px)
+          right: `${dynamicRight}px`, // Slides left when layer panel opens
           width: '48px',
           height: '48px',
           display: 'flex',
@@ -1051,9 +1055,9 @@ export default function AICanvas({
           border: '1px solid rgba(0, 0, 0, 0.06)',
           borderRadius: '10px',
           cursor: 'pointer',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           fontWeight: '600',
-          zIndex: 1000,
+          zIndex: 1001,
           ...getAIButtonStyle()
         }}
         title="AI Assistant (Shift+A)"
@@ -1061,13 +1065,12 @@ export default function AICanvas({
         ✨
       </button>
 
-      {/* Chat Panel - Positioned at Far Right
-          Anchored to right edge above AI button */}
+      {/* Chat Panel - Dynamically positioned based on layer panel */}
       <div
         style={{
           position: 'fixed',
           bottom: '78px', // Above the AI button with 10px gap
-          right: '20px', // Far right edge to match AI button
+          right: `${dynamicRight}px`, // Slides left when layer panel opens
           width: '380px',
           maxHeight: '600px',
           // EXACT TOOLBAR STYLING:
@@ -1083,7 +1086,7 @@ export default function AICanvas({
           // SMOOTH TRANSITIONS:
           opacity: isOpen ? 1 : 0,
           transform: isOpen ? 'translateY(0) scale(1)' : 'translateY(10px) scale(0.95)',
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           pointerEvents: isOpen ? 'auto' : 'none',
         }}
       >
