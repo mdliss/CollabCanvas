@@ -27,9 +27,13 @@ export default function ShapeRenderer({
   const transformerRef = useRef(null);
   const dragStreamInterval = useRef(null);
   const transformStreamInterval = useRef(null);
-  const isDraggingRef = useRef(false); // Track if THIS user is currently dragging this shape
-  const dragEndTimeoutRef = useRef(null); // FEATURE 2: Track timeout for delayed isDraggingRef reset
-  const checkpointIntervalRef = useRef(null); // FEATURE 1: Track checkpoint interval for drag persistence
+  const isDraggingRef = useRef(false);
+  const dragEndTimeoutRef = useRef(null);
+  const checkpointIntervalRef = useRef(null);
+  
+  // CRITICAL FIX: Dedicated flag for transform operations
+  // This prevents prop updates from interfering with active transforms
+  const transformInProgressRef = useRef(false);
 
   // Don't render hidden shapes
   if (shape.hidden) {
@@ -44,41 +48,82 @@ export default function ShapeRenderer({
     }
   }, [isSelected]);
 
-  // Synchronize position from props ONLY when not dragging
-  // This prevents RTDB updates from interfering with active drags
-  // CRITICAL FIX: Also block when being dragged by another user to prevent flickering
+  // CRITICAL FIX: Complete prop synchronization with transform isolation
+  // This effect synchronizes ALL shape properties from RTDB to Konva nodes
+  // but BLOCKS updates during active LOCAL transforms to prevent interference
   useEffect(() => {
     const node = shapeRef.current;
     if (!node) return;
     
-    const currentPos = { x: node.x(), y: node.y() };
-    const newPos = { x: shape.x, y: shape.y };
-    const deltaX = Math.abs(currentPos.x - newPos.x);
-    const deltaY = Math.abs(currentPos.y - newPos.y);
-    const posChanged = deltaX > 0.01 || deltaY > 0.01; // Account for floating point precision
-    
-    // Block updates when THIS user is dragging
-    if (isDraggingRef.current) {
+    // PRIORITY 1: Block ALL prop updates during active transform
+    // This is THE most critical fix - prevents checkpoint interference
+    if (transformInProgressRef.current) {
+      console.log('[PropSync] ⛔ BLOCKED - Transform in progress');
       return;
     }
     
-    // CRITICAL FIX: Block updates when ANOTHER user is dragging
-    // This prevents flickering because position flows naturally through props
-    // React-konva automatically syncs x/y props to the Konva node
-    // Manual position updates here would conflict with that, causing stuttering
+    // PRIORITY 2: Block updates when being dragged by another user
+    // Prevents flickering from RTDB position updates during remote drags
     if (isBeingDraggedByOther) {
+      console.log('[PropSync] ⛔ BLOCKED - Being dragged by other user');
       return;
     }
     
-    // Sync position from props to Konva node for all other cases
-    // (e.g., undo/redo, programmatic moves, drag end sync)
-    if (posChanged) {
-      node.position(newPos);
-      node.getLayer()?.batchDraw();
+    // PRIORITY 3: Block updates during local drag (position only)
+    if (isDraggingRef.current) {
+      console.log('[PropSync] ⛔ BLOCKED - Local drag in progress');
+      return;
     }
-  }, [shape.x, shape.y, shape.id, isBeingDraggedByOther]);
+    
+    // Safe to apply prop updates - synchronize ALL properties
+    console.log('[PropSync] ✅ Syncing props to node:', {
+      id: shape.id,
+      x: shape.x,
+      y: shape.y,
+      width: shape.width,
+      height: shape.height,
+      rotation: shape.rotation
+    });
+    
+    // Apply position
+    node.x(shape.x);
+    node.y(shape.y);
+    node.rotation(shape.rotation || 0);
+    
+    // Apply dimensions based on shape type
+    if (shape.type === 'circle') {
+      const radius = (shape.width || 100) / 2;
+      node.radius(radius);
+    } else if (shape.type === 'star') {
+      const size = shape.width || 80;
+      node.innerRadius(size * 0.25);
+      node.outerRadius(size * 0.5);
+    } else if (shape.type !== 'line') {
+      // For rect, text, diamond, triangle
+      node.width(shape.width || 100);
+      node.height(shape.height || 100);
+    }
+    
+    // CRITICAL: Ensure scale is always 1.0
+    // This prevents compound scaling from previous transforms
+    node.scaleX(1);
+    node.scaleY(1);
+    
+    // Request re-render
+    node.getLayer()?.batchDraw();
+    
+  }, [
+    shape.x, 
+    shape.y, 
+    shape.width,      // CRITICAL: Added to dependencies
+    shape.height,     // CRITICAL: Added to dependencies
+    shape.rotation,
+    shape.id,
+    shape.type,
+    isBeingDraggedByOther
+  ]);
 
-  // Clean up drag/transform streams when shape is deselected or unmounted
+  // Clean up all intervals and timeouts when shape is deselected or unmounted
   useEffect(() => {
     return () => {
       if (dragStreamInterval.current) {
@@ -93,13 +138,11 @@ export default function ShapeRenderer({
         stopDragStream(shape.id);
       }
       
-      // FEATURE 1: Clean up checkpoint interval
       if (checkpointIntervalRef.current) {
         clearInterval(checkpointIntervalRef.current);
         checkpointIntervalRef.current = null;
       }
       
-      // FEATURE 2: Clean up drag end timeout
       if (dragEndTimeoutRef.current) {
         clearTimeout(dragEndTimeoutRef.current);
         dragEndTimeoutRef.current = null;
@@ -109,7 +152,7 @@ export default function ShapeRenderer({
 
   // No drag bounds - infinite canvas allows shapes to be placed anywhere
   const dragBoundFunc = (pos) => {
-    return pos; // No clamping
+    return pos;
   };
 
   const handleDragStart = async (e) => {
@@ -122,11 +165,10 @@ export default function ShapeRenderer({
       return;
     }
     
-    // Mark as dragging to prevent position updates from props
     isDraggingRef.current = true;
     onDragStart(shape.id);
     
-    // Start streaming drag position at ~100Hz (10ms) for smoother updates
+    // Start streaming drag position at ~100Hz (10ms)
     dragStreamInterval.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUserId) {
@@ -141,9 +183,7 @@ export default function ShapeRenderer({
       }
     }, 10);
     
-    // FEATURE 1: Start checkpoint system for drag persistence on disconnect
-    // Write position to RTDB every 500ms during drag
-    // If connection drops or page reloads, last checkpoint is preserved
+    // Start checkpoint system - POSITION ONLY during drag
     checkpointIntervalRef.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUser) {
@@ -151,9 +191,9 @@ export default function ShapeRenderer({
           x: node.x(),
           y: node.y(),
           rotation: node.rotation()
+          // NOTE: No width/height during drag - only position!
         };
         updateShape(CANVAS_ID, shape.id, checkpointData, currentUser).catch(err => {
-          // Silent fail for checkpoints - not critical
           console.warn('[Checkpoint] Failed to save position:', err.message);
         });
       }
@@ -168,7 +208,7 @@ export default function ShapeRenderer({
     }
     stopDragStream(shape.id);
     
-    // FEATURE 1: Stop checkpoint interval
+    // Stop checkpoint interval
     if (checkpointIntervalRef.current) {
       clearInterval(checkpointIntervalRef.current);
       checkpointIntervalRef.current = null;
@@ -180,124 +220,164 @@ export default function ShapeRenderer({
       y: node.y()
     };
     
-    // Call parent first (this writes to RTDB)
+    // Write final position to RTDB
     onDragEnd(shape.id, finalPos);
     
-    // FEATURE 2: Delay isDragging flag reset by 100ms to prevent position flash
-    // This keeps position sync blocked until RTDB update arrives
+    // Delay flag reset to prevent position flash
     dragEndTimeoutRef.current = setTimeout(() => {
       isDraggingRef.current = false;
       dragEndTimeoutRef.current = null;
     }, 100);
   };
 
+  // CRITICAL FIX: Completely rewritten transform end handler
   const handleTransformEnd = async () => {
+    console.log('🎯 [Transform] Transform ending for shape:', shape.id);
+    
+    // Stop streaming
     if (transformStreamInterval.current) {
       clearInterval(transformStreamInterval.current);
       transformStreamInterval.current = null;
     }
     await stopDragStream(shape.id);
     
+    // CRITICAL FIX: Stop checkpoint interval
+    // This prevents any more dimension writes during finalization
+    if (checkpointIntervalRef.current) {
+      console.log('✅ [Transform] Stopping checkpoint interval');
+      clearInterval(checkpointIntervalRef.current);
+      checkpointIntervalRef.current = null;
+    }
+    
     const node = shapeRef.current;
-    if (!node) return;
+    if (!node) {
+      console.error('❌ [Transform] No node reference');
+      transformInProgressRef.current = false;
+      return;
+    }
 
     let newAttrs;
     
-    // Handle circles specially - they use radius, not width/height
-    if (shape.type === 'circle') {
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
-      const avgScale = (scaleX + scaleY) / 2; // Uniform scaling for circles
-      
-      // IMPORTANT: Use the shape's base radius (from stored width), not the node's current radius
-      // The node's radius might already be scaled by the transformer, causing exponential growth
-      const baseRadius = (shape.width || 100) / 2;
-      const newRadius = baseRadius * avgScale;
-      const newDiameter = newRadius * 2;
-      
-      // Validate that we got valid numbers
-      if (!isFinite(newRadius) || newRadius <= 0 || !isFinite(newDiameter) || newDiameter <= 0) {
-        console.error('[Circle handleTransformEnd] Invalid radius/diameter calculated:', {
-          baseRadius, avgScale, newRadius, newDiameter, shapeWidth: shape.width
+    try {
+      // Handle circles specially - they use radius, not width/height
+      if (shape.type === 'circle') {
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        const avgScale = (scaleX + scaleY) / 2;
+        
+        const baseRadius = (shape.width || 100) / 2;
+        const newRadius = baseRadius * avgScale;
+        const newDiameter = newRadius * 2;
+        
+        if (!isFinite(newRadius) || newRadius <= 0 || !isFinite(newDiameter) || newDiameter <= 0) {
+          console.error('[Circle] Invalid radius calculated:', {
+            baseRadius, avgScale, newRadius, newDiameter
+          });
+          transformInProgressRef.current = false;
+          return;
+        }
+        
+        console.log('[Circle] Transform complete:', {
+          baseRadius,
+          scale: avgScale,
+          newRadius,
+          newDiameter
         });
-        // Fall back to current shape dimensions - don't save invalid transform
-        return;
+        
+        // CRITICAL: Reset scale BEFORE applying new radius
+        node.scaleX(1);
+        node.scaleY(1);
+        node.radius(newRadius);
+        
+        newAttrs = {
+          x: node.x(),
+          y: node.y(),
+          width: newDiameter,
+          height: newDiameter,
+          rotation: node.rotation()
+        };
+      } else {
+        // For rectangles, text, lines, triangles, stars, etc.
+        const scaleX = node.scaleX();
+        const scaleY = node.scaleY();
+        
+        console.log('[Transform] Calculating dimensions:', {
+          type: shape.type,
+          baseWidth: node.width(),
+          baseHeight: node.height(),
+          scaleX,
+          scaleY
+        });
+        
+        // Calculate new dimensions from scale factors
+        const newWidth = Math.max(10, node.width() * scaleX);
+        const newHeight = Math.max(10, node.height() * scaleY);
+        
+        console.log('[Transform] New dimensions:', {
+          newWidth,
+          newHeight
+        });
+        
+        // CRITICAL: Reset scale BEFORE applying new dimensions
+        // This prevents compound scaling on next transform
+        node.scaleX(1);
+        node.scaleY(1);
+        node.width(newWidth);
+        node.height(newHeight);
+
+        newAttrs = {
+          x: node.x(),
+          y: node.y(),
+          width: newWidth,
+          height: newHeight,
+          rotation: node.rotation()
+        };
       }
-      
-      console.log('[Circle handleTransformEnd]', {
-        shapeId: shape.id,
-        baseRadius: baseRadius,
-        scale: avgScale,
-        newRadius: newRadius,
-        newDiameter: newDiameter
-      });
-      
-      // Reset scale and apply to radius
-      node.scaleX(1);
-      node.scaleY(1);
-      node.radius(newRadius);
-      
-      // No bounds checking - allow shapes anywhere!
-      newAttrs = {
-        x: node.x(),
-        y: node.y(),
-        width: newDiameter,   // Store as diameter in Firestore
-        height: newDiameter,  // Keep square for circles
-        rotation: node.rotation()
-      };
-    } else {
-      // For rectangles, text, lines, etc.
-      const scaleX = node.scaleX();
-      const scaleY = node.scaleY();
-      
-      const newWidth = Math.max(10, node.width() * scaleX);
-      const newHeight = Math.max(10, node.height() * scaleY);
-      
-      // Reset scale and apply to width/height
-      node.scaleX(1);
-      node.scaleY(1);
-      node.width(newWidth);
-      node.height(newHeight);
 
-      // No bounds checking - allow shapes anywhere!
-      newAttrs = {
-        x: node.x(),
-        y: node.y(),
-        width: newWidth,
-        height: newHeight,
-        rotation: node.rotation()
-      };
+      console.log('✅ [Transform] Final attributes:', newAttrs);
+      
+      // Write to RTDB and AWAIT completion
+      await onTransformEnd(shape.id, newAttrs);
+      
+      console.log('✅ [Transform] Database write complete');
+      
+    } catch (error) {
+      console.error('❌ [Transform] Error during transform end:', error);
+    } finally {
+      // CRITICAL: Delay clearing the transform flag
+      // This ensures the RTDB write has time to propagate before
+      // we allow prop sync to resume
+      setTimeout(() => {
+        transformInProgressRef.current = false;
+        console.log('✅ [Transform] Transform flag cleared');
+      }, 150);
     }
-
-    onTransformEnd(shape.id, newAttrs);
-    
-    // FEATURE 2: Delay isDragging flag reset by 100ms to prevent position flash
-    // This keeps position sync blocked until RTDB update arrives
-    dragEndTimeoutRef.current = setTimeout(() => {
-      isDraggingRef.current = false;
-      dragEndTimeoutRef.current = null;
-    }, 100);
   };
 
+  // CRITICAL FIX: Enhanced transform start handler
   const handleTransformStart = async () => {
+    console.log('🎯 [Transform] Transform starting for shape:', shape.id);
+    
     const lockAcquired = await onRequestLock(shape.id);
     if (!lockAcquired) {
-      console.warn("[Shape] Transform cancelled - shape locked by another user");
+      console.warn("[Transform] Cancelled - shape locked by another user");
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
       }
       return false;
     }
     
-    // Mark as dragging to prevent position updates during transform
-    isDraggingRef.current = true;
+    // CRITICAL: Set transform flag IMMEDIATELY
+    // This blocks all prop updates during the transform
+    transformInProgressRef.current = true;
+    console.log('✅ [Transform] Transform flag set - prop sync BLOCKED');
     
-    // Notify parent (for performance tracking and undo state capture)
+    // Notify parent
     if (onTransformStart) {
       onTransformStart(shape.id);
     }
     
-    // Start streaming transform updates (rotation, scale, position) at ~100Hz (10ms)
+    // Start streaming transform updates at ~100Hz
     transformStreamInterval.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUserId) {
@@ -307,31 +387,15 @@ export default function ShapeRenderer({
           currentUserName || 'User',
           node.x(),
           node.y(),
-          node.rotation()  // Stream live rotation during transform
+          node.rotation()
         );
       }
     }, 10);
     
-    // FEATURE 1: Start checkpoint system for transform persistence on disconnect
-    // Write position/size/rotation to RTDB every 500ms during transform
-    checkpointIntervalRef.current = setInterval(() => {
-      const node = shapeRef.current;
-      if (node && currentUser) {
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        const checkpointData = {
-          x: node.x(),
-          y: node.y(),
-          width: Math.max(10, node.width() * scaleX),
-          height: Math.max(10, node.height() * scaleY),
-          rotation: node.rotation()
-        };
-        updateShape(CANVAS_ID, shape.id, checkpointData, currentUser).catch(err => {
-          // Silent fail for checkpoints - not critical
-          console.warn('[Checkpoint] Failed to save transform:', err.message);
-        });
-      }
-    }, 500);
+    // CRITICAL FIX: NO checkpoint interval during transform
+    // The checkpoint system was writing dimensions to RTDB every 500ms,
+    // which caused prop updates that interfered with the active transform
+    console.log('✅ [Transform] Transform started - checkpoints DISABLED');
     
     return true;
   };
@@ -344,24 +408,20 @@ export default function ShapeRenderer({
 
   const isLockedByOther = shape.isLocked && shape.lockedBy !== currentUserId;
   
-  // Visual styling: orange stroke for shapes being dragged by others
   const strokeColor = isBeingDraggedByOther 
-    ? "#ff6600"  // Orange stroke when being dragged by another user
+    ? "#ff6600"
     : isLockedByOther 
-      ? "#ff0000"  // Red when locked
-      : (isSelected ? "#0066cc" : undefined);  // Blue when selected by you
+      ? "#ff0000"
+      : (isSelected ? "#0066cc" : undefined);
   
   const strokeWidth = (isBeingDraggedByOther || isLockedByOther || isSelected) ? 3 : 0;
   
-  // Calculate opacity: use shape's opacity if set, otherwise 1.0
-  // Reduce to 0.6 if being dragged by another user
   const baseOpacity = shape.opacity !== undefined ? shape.opacity : 1.0;
   const shapeOpacity = isBeingDraggedByOther ? 0.6 : baseOpacity;
 
   const commonProps = {
     ref: shapeRef,
-    draggable: !isLockedByOther && !isBeingDraggedByOther,  // Can't drag if someone else is dragging
-    // REMOVED: dragBoundFunc - no bounds checking, drag anywhere!
+    draggable: !isLockedByOther && !isBeingDraggedByOther,
     onClick: handleClick,
     onTap: handleClick,
     onDragStart: handleDragStart,
@@ -372,13 +432,12 @@ export default function ShapeRenderer({
     hitStrokeWidth: 8,
     stroke: strokeColor,
     strokeWidth: strokeWidth,
-    opacity: shapeOpacity  // Combines shape's opacity with drag state
+    opacity: shapeOpacity
   };
 
   const renderShape = () => {
     switch (shape.type) {
       case 'circle':
-        // Ensure we have a valid width for calculating radius
         const circleRadius = (typeof shape.width === 'number' && shape.width > 0) 
           ? shape.width / 2 
           : 50;
@@ -413,7 +472,6 @@ export default function ShapeRenderer({
         );
       
       case 'text':
-        // Check if text has a gradient - don't apply default fill if it does
         const hasGradient = shape.fillLinearGradientColorStops && 
                            shape.fillLinearGradientColorStops.length > 0;
         const textFill = hasGradient ? shape.fill : (shape.fill || '#000000');
@@ -440,7 +498,6 @@ export default function ShapeRenderer({
             onDblClick={async (e) => {
               e.cancelBubble = true;
               
-              // Check authentication
               if (!currentUser) {
                 console.error('[Text Edit] No authenticated user');
                 alert('Please sign in to edit text');
@@ -545,7 +602,6 @@ export default function ShapeRenderer({
         <Transformer
           ref={transformerRef}
           boundBoxFunc={(oldBox, newBox) => {
-            // Limit resize
             if (newBox.width < 10 || newBox.height < 10) {
               return oldBox;
             }
@@ -556,4 +612,3 @@ export default function ShapeRenderer({
     </>
   );
 }
-
