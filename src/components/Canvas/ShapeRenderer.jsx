@@ -6,18 +6,20 @@ import { updateShape } from "../../services/canvasRTDB";
 const CANVAS_ID = "global-canvas-v1";
 
 /**
- * ShapeRenderer - renders different shape types with transform support
- */
-/**
- * ShapeRenderer - Renders different shape types with transform support
+ * ShapeRenderer - FIXED VERSION - No more compound scaling for circles AND stars!
  * 
- * CRITICAL FIXES APPLIED:
- * - FIX #1: Ellipse support with independent width/height dimensions
- * - FIX #2: Real-time dimension streaming during resize operations
- * - FIX #6: Professional inline text editor integration
+ * CRITICAL FIX APPLIED (2025-10-17):
+ * Both circle and star transformations now use node's current dimensions
+ * instead of stored dimensions to prevent compound scaling.
  * 
- * @param {Object} props
- * @param {Function} props.onOpenTextEditor - NEW: Opens inline text editor (FIX #6)
+ * The bug: We stored visual dimensions in RTDB, applied scale on top in rendering,
+ * then used those ALREADY-SCALED dimensions as the base for the NEXT transform,
+ * causing exponential growth.
+ * 
+ * The fix: 
+ * - Circles: Use node.radius() (current base radius)
+ * - Stars: Use node.innerRadius() and node.outerRadius() (current base radii)
+ * - Calculate actual dimensions from these base values × scale
  */
 export default function ShapeRenderer({ 
   shape, 
@@ -32,7 +34,7 @@ export default function ShapeRenderer({
   onTransformStart,
   onTransformEnd,
   onTextUpdate,
-  onOpenTextEditor, // FIX #6: New prop for inline text editing
+  onOpenTextEditor,
   isBeingDraggedByOther = false
 }) {
   const shapeRef = useRef(null);
@@ -42,118 +44,178 @@ export default function ShapeRenderer({
   const isDraggingRef = useRef(false);
   const dragEndTimeoutRef = useRef(null);
   const checkpointIntervalRef = useRef(null);
-  
-  // CRITICAL FIX: Dedicated flag for transform operations
-  // This prevents prop updates from interfering with active transforms
+  const initialTransformPosRef = useRef({ x: 0, y: 0 });
   const transformInProgressRef = useRef(false);
 
-  // Don't render hidden shapes
+  console.log(`[ShapeRenderer] 🔄 Render for ${shape.type} ${shape.id.slice(0, 8)}`, {
+    isSelected,
+    isBeingDraggedByOther,
+    transformInProgress: transformInProgressRef.current,
+    width: shape.width,
+    height: shape.height,
+    x: shape.x,
+    y: shape.y,
+    rotation: shape.rotation
+  });
+
   if (shape.hidden) {
+    console.log(`[ShapeRenderer] ⏭️  Shape ${shape.id.slice(0, 8)} is hidden, skipping render`);
     return null;
   }
 
   // Attach transformer to selected shape
   useEffect(() => {
     if (isSelected && shapeRef.current && transformerRef.current) {
+      console.log(`[Transformer] 📎 Attaching transformer to ${shape.type} ${shape.id.slice(0, 8)}`);
       transformerRef.current.nodes([shapeRef.current]);
       transformerRef.current.getLayer().batchDraw();
     }
   }, [isSelected]);
 
-  // CRITICAL FIX: Complete prop synchronization with transform isolation
-  // This effect synchronizes ALL shape properties from RTDB to Konva nodes
-  // but BLOCKS updates during active LOCAL transforms to prevent interference
+  /**
+   * PROP SYNCHRONIZATION WITH EXTENSIVE LOGGING
+   */
   useEffect(() => {
     const node = shapeRef.current;
-    if (!node) return;
-    
-    // PRIORITY 1: Block ALL prop updates during active transform
-    // This is THE most critical fix - prevents checkpoint interference
-    if (transformInProgressRef.current) {
-      console.log('[PropSync] ⛔ BLOCKED - Transform in progress');
+    if (!node) {
+      console.log(`[PropSync] ⚠️  No node ref for ${shape.id.slice(0, 8)}`);
       return;
     }
     
-    // PRIORITY 2: Block updates when being dragged by another user
-    // Prevents flickering from RTDB position updates during remote drags
-    if (isBeingDraggedByOther) {
-      console.log('[PropSync] ⛔ BLOCKED - Being dragged by other user');
-      return;
-    }
-    
-    // PRIORITY 3: Block updates during local drag (position only)
-    if (isDraggingRef.current) {
-      console.log('[PropSync] ⛔ BLOCKED - Local drag in progress');
-      return;
-    }
-    
-    // Safe to apply prop updates - synchronize ALL properties
-    console.log('[PropSync] ✅ Syncing props to node:', {
-      id: shape.id,
-      x: shape.x,
-      y: shape.y,
-      width: shape.width,
-      height: shape.height,
-      rotation: shape.rotation
+    console.log(`[PropSync] 🔍 Checking sync conditions for ${shape.type} ${shape.id.slice(0, 8)}`, {
+      transformInProgress: transformInProgressRef.current,
+      isBeingDraggedByOther,
+      isDragging: isDraggingRef.current,
+      shapeData: {
+        x: shape.x,
+        y: shape.y,
+        width: shape.width,
+        height: shape.height,
+        rotation: shape.rotation
+      },
+      currentNodeState: {
+        x: node.x(),
+        y: node.y(),
+        scaleX: node.scaleX(),
+        scaleY: node.scaleY(),
+        rotation: node.rotation(),
+        radius: shape.type === 'circle' ? node.radius() : 'N/A',
+        innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
+        outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+      }
     });
+    
+    // BLOCK 1: Transform in progress
+    if (transformInProgressRef.current) {
+      console.log(`[PropSync] ⛔ BLOCKED - Transform in progress for ${shape.id.slice(0, 8)}`);
+      return;
+    }
+    
+    // BLOCK 2: Being dragged by remote user
+    if (isBeingDraggedByOther) {
+      console.log(`[PropSync] ⛔ BLOCKED - Being dragged by other user for ${shape.id.slice(0, 8)}`);
+      return;
+    }
+    
+    // BLOCK 3: Local drag
+    if (isDraggingRef.current) {
+      console.log(`[PropSync] ⛔ BLOCKED - Local drag in progress for ${shape.id.slice(0, 8)}`);
+      return;
+    }
+    
+    console.log(`[PropSync] ✅ SYNCING props to node for ${shape.type} ${shape.id.slice(0, 8)}`);
     
     // Apply position
     node.x(shape.x);
     node.y(shape.y);
     node.rotation(shape.rotation || 0);
+    console.log(`[PropSync] 📍 Position set: x=${shape.x}, y=${shape.y}, rotation=${shape.rotation || 0}`);
     
-    // Apply dimensions based on shape type
+    /**
+     * DIMENSION APPLICATION WITH DETAILED LOGGING
+     */
     if (shape.type === 'circle') {
-      // CRITICAL FIX #1: Support ellipses with independent width/height
-      // Konva Circle uses radius, but we store width/height for ellipse support
       const width = shape.width || 100;
       const height = shape.height || 100;
-      
-      // Check if this is an ellipse (different width/height)
       const isEllipse = Math.abs(width - height) > 1;
       
+      console.log(`[PropSync] 🔵 Circle dimension sync:`, {
+        width,
+        height,
+        isEllipse,
+        calculation: isEllipse ? 'ellipse with scale' : 'perfect circle'
+      });
+      
       if (isEllipse) {
-        // For ellipses, use the smaller dimension as base radius
-        // Then scale to achieve ellipse effect
         const baseRadius = Math.min(width, height) / 2;
-        node.radius(baseRadius);
+        const scaleX = width / (baseRadius * 2);
+        const scaleY = height / (baseRadius * 2);
         
-        // Apply scale to achieve ellipse effect
-        // This is done AFTER setting radius and will be reset to 1.0 below
-        // but the visual dimensions come from width/height
-        node.scaleX(width / (baseRadius * 2));
-        node.scaleY(height / (baseRadius * 2));
-        
-        console.log('[PropSync] Ellipse dimensions applied:', {
-          width,
-          height,
+        console.log(`[PropSync] 🔵 Ellipse calculation:`, {
           baseRadius,
-          scaleX: width / (baseRadius * 2),
-          scaleY: height / (baseRadius * 2)
+          scaleX: scaleX.toFixed(3),
+          scaleY: scaleY.toFixed(3)
         });
+        
+        node.radius(baseRadius);
+        node.scaleX(scaleX);
+        node.scaleY(scaleY);
       } else {
-        // Perfect circle - use width as diameter
         const radius = width / 2;
+        console.log(`[PropSync] 🔵 Perfect circle: radius=${radius}`);
         node.radius(radius);
-        // Scales will be reset to 1.0 below for circles
+        node.scaleX(1);
+        node.scaleY(1);
       }
     } else if (shape.type === 'star') {
-      const size = shape.width || 80;
-      node.innerRadius(size * 0.25);
-      node.outerRadius(size * 0.5);
+      const width = shape.width || 80;
+      const height = shape.height || 80;
+      
+      // CRITICAL FIX: Calculate base radii from dimensions
+      const radiusX = width * 0.5;
+      const radiusY = height * 0.5;
+      const baseRadius = Math.min(radiusX, radiusY);
+      
+      console.log(`[PropSync] ⭐ Star dimension sync:`, {
+        width,
+        height,
+        baseRadius,
+        note: 'Setting base radius, scale will be applied in render'
+      });
+      
+      // Set the base radii on the node
+      node.innerRadius(baseRadius * 0.5);
+      node.outerRadius(baseRadius);
+      
+      // Calculate and apply scale
+      const starScaleX = radiusX / baseRadius;
+      const starScaleY = radiusY / baseRadius;
+      node.scaleX(starScaleX);
+      node.scaleY(starScaleY);
     } else if (shape.type !== 'line') {
-      // For rect, text, diamond, triangle
+      console.log(`[PropSync] 📐 Standard shape (${shape.type}) dimension sync:`, {
+        width: shape.width || 100,
+        height: shape.height || 100
+      });
+      
       node.width(shape.width || 100);
       node.height(shape.height || 100);
-    }
-    
-    // CRITICAL: For non-ellipse shapes, ensure scale is always 1.0
-    // This prevents compound scaling from previous transforms
-    // For ellipses, we intentionally keep the scale to achieve the aspect ratio
-    if (shape.type !== 'circle' || Math.abs((shape.width || 100) - (shape.height || 100)) < 1) {
       node.scaleX(1);
       node.scaleY(1);
     }
+    
+    console.log(`[PropSync] ✅ Sync complete, final node state:`, {
+      x: node.x(),
+      y: node.y(),
+      scaleX: node.scaleX(),
+      scaleY: node.scaleY(),
+      rotation: node.rotation(),
+      width: node.width ? node.width() : 'N/A',
+      height: node.height ? node.height() : 'N/A',
+      radius: shape.type === 'circle' ? node.radius() : 'N/A',
+      innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
+      outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+    });
     
     // Request re-render
     node.getLayer()?.batchDraw();
@@ -161,17 +223,18 @@ export default function ShapeRenderer({
   }, [
     shape.x, 
     shape.y, 
-    shape.width,      // CRITICAL: Added to dependencies
-    shape.height,     // CRITICAL: Added to dependencies
+    shape.width,
+    shape.height,
     shape.rotation,
     shape.id,
     shape.type,
     isBeingDraggedByOther
   ]);
 
-  // Clean up all intervals and timeouts when shape is deselected or unmounted
+  // Cleanup
   useEffect(() => {
     return () => {
+      console.log(`[Cleanup] 🧹 Cleaning up intervals for ${shape.id.slice(0, 8)}`);
       if (dragStreamInterval.current) {
         clearInterval(dragStreamInterval.current);
         dragStreamInterval.current = null;
@@ -196,21 +259,22 @@ export default function ShapeRenderer({
     };
   }, [isSelected, shape.id]);
 
-  // No drag bounds - infinite canvas allows shapes to be placed anywhere
   const dragBoundFunc = (pos) => {
     return pos;
   };
 
   const handleDragStart = async (e) => {
+    console.log(`[Drag] 🎯 Drag START for ${shape.type} ${shape.id.slice(0, 8)}`);
     e.cancelBubble = true;
     
     const lockAcquired = await onRequestLock(shape.id);
     if (!lockAcquired) {
       e.target.stopDrag();
-      console.warn("[ShapeRenderer] Drag cancelled - shape locked by another user");
+      console.warn(`[Drag] ⛔ Drag cancelled - shape locked by another user`);
       return;
     }
     
+    console.log(`[Drag] ✅ Lock acquired, starting drag`);
     isDraggingRef.current = true;
     onDragStart(shape.id);
     
@@ -229,7 +293,7 @@ export default function ShapeRenderer({
       }
     }, 10);
     
-    // Start checkpoint system - POSITION ONLY during drag
+    // Start checkpoint system
     checkpointIntervalRef.current = setInterval(() => {
       const node = shapeRef.current;
       if (node && currentUser) {
@@ -237,8 +301,8 @@ export default function ShapeRenderer({
           x: node.x(),
           y: node.y(),
           rotation: node.rotation()
-          // NOTE: No width/height during drag - only position!
         };
+        console.log(`[Checkpoint] 💾 Saving position:`, checkpointData);
         updateShape(CANVAS_ID, shape.id, checkpointData, currentUser).catch(err => {
           console.warn('[Checkpoint] Failed to save position:', err.message);
         });
@@ -247,6 +311,8 @@ export default function ShapeRenderer({
   };
 
   const handleDragEnd = (e) => {
+    console.log(`[Drag] 🏁 Drag END for ${shape.type} ${shape.id.slice(0, 8)}`);
+    
     // Stop streaming
     if (dragStreamInterval.current) {
       clearInterval(dragStreamInterval.current);
@@ -266,234 +332,120 @@ export default function ShapeRenderer({
       y: node.y()
     };
     
+    console.log(`[Drag] 📍 Final position:`, finalPos);
+    
     // Write final position to RTDB
     onDragEnd(shape.id, finalPos);
     
-    // Delay flag reset to prevent position flash
+    // Delay flag reset
     dragEndTimeoutRef.current = setTimeout(() => {
       isDraggingRef.current = false;
       dragEndTimeoutRef.current = null;
+      console.log(`[Drag] ✅ Drag flag cleared`);
     }, 100);
   };
 
   /**
-   * CRITICAL FIX #1: Transform end handler with ellipse support
-   * 
-   * This handler persists shape transformations to RTDB after user completes
-   * a resize/rotate operation. Key fixes:
-   * 
-   * 1. ELLIPSE SUPPORT: Circles now support independent width/height dimensions
-   *    by calculating separate X and Y scales instead of averaging them.
-   *    This allows users to create ovals and ellipses with any aspect ratio.
-   * 
-   * 2. DIMENSION STREAMING: All dimension properties (width, height) are captured
-   *    and will be streamed to remote users during active transforms.
-   * 
-   * 3. CHECKPOINT ISOLATION: Stops checkpoint interval to prevent interference
-   *    during the final database write operation.
-   * 
-   * @fires onTransformEnd - Writes final shape state to RTDB
-   */
-  const handleTransformEnd = async () => {
-    console.log('🎯 [Transform] Transform ending for shape:', shape.id);
-    
-    // Stop streaming
-    if (transformStreamInterval.current) {
-      clearInterval(transformStreamInterval.current);
-      transformStreamInterval.current = null;
-    }
-    await stopDragStream(shape.id);
-    
-    // CRITICAL FIX: Stop checkpoint interval
-    // This prevents any more dimension writes during finalization
-    if (checkpointIntervalRef.current) {
-      console.log('✅ [Transform] Stopping checkpoint interval');
-      clearInterval(checkpointIntervalRef.current);
-      checkpointIntervalRef.current = null;
-    }
-    
-    const node = shapeRef.current;
-    if (!node) {
-      console.error('❌ [Transform] No node reference');
-      transformInProgressRef.current = false;
-      return;
-    }
-
-    let newAttrs;
-    
-    try {
-      // CRITICAL FIX #1: Handle circles with INDEPENDENT width/height for ellipse support
-      // Previous bug: averaged scaleX and scaleY, forcing 1:1 aspect ratio
-      // New behavior: allows ellipses with any aspect ratio
-      if (shape.type === 'circle') {
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        
-        // FIX: Calculate independent dimensions instead of averaging scales
-        // This is the KEY fix for BUG #1: Circle Resize Reverts to Perfect Circle
-        const baseWidth = shape.width || 100;  // Original diameter (width)
-        const baseHeight = shape.height || 100; // Original diameter (height)
-        
-        const newWidth = Math.max(10, baseWidth * scaleX);
-        const newHeight = Math.max(10, baseHeight * scaleY);
-        
-        // Calculate radius for Konva rendering (uses average for circular shapes)
-        // But we persist independent width/height to support ellipses
-        const radiusX = newWidth / 2;
-        const radiusY = newHeight / 2;
-        
-        if (!isFinite(newWidth) || newWidth <= 0 || !isFinite(newHeight) || newHeight <= 0) {
-          console.error('[Circle] Invalid dimensions calculated:', {
-            baseWidth, baseHeight, scaleX, scaleY, newWidth, newHeight
-          });
-          transformInProgressRef.current = false;
-          return;
-        }
-        
-        console.log('[Circle/Ellipse] Transform complete:', {
-          baseWidth,
-          baseHeight,
-          scaleX,
-          scaleY,
-          newWidth,
-          newHeight,
-          aspectRatio: (newWidth / newHeight).toFixed(2),
-          isEllipse: Math.abs(newWidth - newHeight) > 1
-        });
-        
-        // CRITICAL: Reset scale BEFORE applying new dimensions
-        node.scaleX(1);
-        node.scaleY(1);
-        
-        // Update Konva node with average radius for rendering
-        // But persist both width and height for ellipse support
-        node.radius((radiusX + radiusY) / 2);
-        
-        // FIX: Persist BOTH width and height independently
-        // This allows circles to become ellipses and maintain their aspect ratio
-        newAttrs = {
-          x: node.x(),
-          y: node.y(),
-          width: newWidth,   // Independent width dimension
-          height: newHeight, // Independent height dimension
-          rotation: node.rotation()
-        };
-      } else {
-        // For rectangles, text, lines, triangles, stars, etc.
-        const scaleX = node.scaleX();
-        const scaleY = node.scaleY();
-        
-        console.log('[Transform] Calculating dimensions:', {
-          type: shape.type,
-          baseWidth: node.width(),
-          baseHeight: node.height(),
-          scaleX,
-          scaleY
-        });
-        
-        // Calculate new dimensions from scale factors
-        const newWidth = Math.max(10, node.width() * scaleX);
-        const newHeight = Math.max(10, node.height() * scaleY);
-        
-        console.log('[Transform] New dimensions:', {
-          newWidth,
-          newHeight
-        });
-        
-        // CRITICAL: Reset scale BEFORE applying new dimensions
-        // This prevents compound scaling on next transform
-        node.scaleX(1);
-        node.scaleY(1);
-        node.width(newWidth);
-        node.height(newHeight);
-
-        newAttrs = {
-          x: node.x(),
-          y: node.y(),
-          width: newWidth,
-          height: newHeight,
-          rotation: node.rotation()
-        };
-      }
-
-      console.log('✅ [Transform] Final attributes:', newAttrs);
-      
-      // Write to RTDB and AWAIT completion
-      await onTransformEnd(shape.id, newAttrs);
-      
-      console.log('✅ [Transform] Database write complete');
-      
-    } catch (error) {
-      console.error('❌ [Transform] Error during transform end:', error);
-    } finally {
-      // CRITICAL: Delay clearing the transform flag
-      // This ensures the RTDB write has time to propagate before
-      // we allow prop sync to resume
-      setTimeout(() => {
-        transformInProgressRef.current = false;
-        console.log('✅ [Transform] Transform flag cleared');
-      }, 150);
-    }
-  };
-
-  /**
-   * CRITICAL FIX #2: Transform start handler with real-time dimension streaming
-   * 
-   * Enhanced transform start handler that initiates lock acquisition and begins
-   * streaming transformation state to remote users at 100Hz frequency.
-   * 
-   * Key enhancements:
-   * 1. Acquires exclusive lock before allowing transformation
-   * 2. Sets transform flag to prevent prop sync interference
-   * 3. DIMENSION STREAMING: Now streams width, height during active resize (fixes BUG #2)
-   * 4. Disables checkpoint system during transform to prevent write conflicts
-   * 
-   * Note: We enhance the drag stream to include dimensions. The streamDragPosition
-   * function will be extended to handle dimension data in dragStream.js
-   * 
-   * @returns {boolean} True if transform started successfully, false if blocked by lock
+   * TRANSFORM START WITH EXTENSIVE LOGGING
    */
   const handleTransformStart = async () => {
-    console.log('🎯 [Transform] Transform starting for shape:', shape.id);
+    console.log(`[Transform] 🎯 Transform START for ${shape.type} ${shape.id.slice(0, 8)}`);
     
     const lockAcquired = await onRequestLock(shape.id);
     if (!lockAcquired) {
-      console.warn("[Transform] Cancelled - shape locked by another user");
+      console.warn("[Transform] ⛔ Cancelled - shape locked by another user");
       if (transformerRef.current) {
         transformerRef.current.nodes([]);
       }
       return false;
     }
     
-    // CRITICAL: Set transform flag IMMEDIATELY
-    // This blocks all prop updates during the transform
+    console.log(`[Transform] ✅ Lock acquired`);
+    
+    // Set transform flag
     transformInProgressRef.current = true;
-    console.log('✅ [Transform] Transform flag set - prop sync BLOCKED');
+    console.log('[Transform] 🚫 Transform flag set - prop sync BLOCKED');
+    
+    // Store initial position
+    const node = shapeRef.current;
+    if (node) {
+      initialTransformPosRef.current = {
+        x: node.x(),
+        y: node.y()
+      };
+      console.log('[Transform] 📍 Initial position stored:', initialTransformPosRef.current);
+      console.log('[Transform] 📊 Initial node state:', {
+        x: node.x(),
+        y: node.y(),
+        scaleX: node.scaleX(),
+        scaleY: node.scaleY(),
+        rotation: node.rotation(),
+        width: node.width ? node.width() : 'N/A',
+        height: node.height ? node.height() : 'N/A',
+        radius: shape.type === 'circle' ? node.radius() : 'N/A',
+        innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
+        outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+      });
+    }
     
     // Notify parent
     if (onTransformStart) {
       onTransformStart(shape.id);
     }
     
-    // CRITICAL FIX #2: Stream COMPLETE transformation state at ~100Hz
-    // This includes position AND dimensions so remote users see real-time resize
-    // Previous bug: only streamed x, y, rotation - dimensions were invisible until complete
+    /**
+     * DIMENSION STREAMING WITH DETAILED LOGGING
+     */
+    let streamCount = 0;
     transformStreamInterval.current = setInterval(() => {
       const node = shapeRef.current;
-      if (node && currentUserId) {
-        // Calculate current dimensions including scale
-        let width, height;
-        if (shape.type === 'circle') {
-          const baseRadius = node.radius();
-          width = baseRadius * 2 * node.scaleX();
-          height = baseRadius * 2 * node.scaleY();
-        } else {
-          width = node.width() * node.scaleX();
-          height = node.height() * node.scaleY();
-        }
-        
-        // Stream complete transform state including dimensions
-        // streamDragPosition is extended to accept width/height parameters
+      if (!node || !currentUserId) return;
+      
+      streamCount++;
+      const logThisStream = streamCount % 10 === 0; // Log every 10th stream
+      
+      // CRITICAL FIX: Calculate dimensions from node's current state
+      let width, height;
+      const currentScaleX = node.scaleX();
+      const currentScaleY = node.scaleY();
+      
+      if (shape.type === 'circle') {
+        // Use node's current base radius
+        const baseRadius = node.radius();
+        width = baseRadius * 2 * currentScaleX;
+        height = baseRadius * 2 * currentScaleY;
+      } else if (shape.type === 'star') {
+        // STAR FIX: Use node's current base outer radius
+        const baseOuterRadius = node.outerRadius();
+        width = baseOuterRadius * 2 * currentScaleX;
+        height = baseOuterRadius * 2 * currentScaleY;
+      } else {
+        // All other shapes use stored dimensions
+        const baseWidth = shape.width || 100;
+        const baseHeight = shape.height || 100;
+        width = baseWidth * currentScaleX;
+        height = baseHeight * currentScaleY;
+      }
+      
+      // Detect resize vs rotation
+      const isResizing = Math.abs(currentScaleX - 1.0) > 0.01 || 
+                         Math.abs(currentScaleY - 1.0) > 0.01;
+      
+      if (logThisStream) {
+        console.log(`[Transform] 📡 Stream #${streamCount} for ${shape.type}:`, {
+          isResizing,
+          currentScaleX: currentScaleX.toFixed(3),
+          currentScaleY: currentScaleY.toFixed(3),
+          calculatedWidth: width.toFixed(1),
+          calculatedHeight: height.toFixed(1),
+          currentPos: { x: node.x().toFixed(1), y: node.y().toFixed(1) },
+          storedInitialPos: initialTransformPosRef.current,
+          rotation: node.rotation().toFixed(1)
+        });
+      }
+      
+      if (isResizing) {
+        // RESIZE: Stream everything
         streamDragPosition(
           shape.id,
           currentUserId,
@@ -501,21 +453,254 @@ export default function ShapeRenderer({
           node.x(),
           node.y(),
           node.rotation(),
-          width,   // NEW: Stream width dimension
-          height   // NEW: Stream height dimension
+          width,
+          height
         );
+        
+        if (logThisStream) {
+          console.log(`[Transform] 📡 Streaming RESIZE data:`, {
+            x: node.x().toFixed(1),
+            y: node.y().toFixed(1),
+            width: width.toFixed(1),
+            height: height.toFixed(1),
+            rotation: node.rotation().toFixed(1)
+          });
+        }
+      } else {
+        // ROTATION: Use stored position
+        streamDragPosition(
+          shape.id,
+          currentUserId,
+          currentUserName || 'User',
+          initialTransformPosRef.current.x,
+          initialTransformPosRef.current.y,
+          node.rotation(),
+          null,
+          null
+        );
+        
+        if (logThisStream) {
+          console.log(`[Transform] 📡 Streaming ROTATION-ONLY data:`, {
+            storedX: initialTransformPosRef.current.x.toFixed(1),
+            storedY: initialTransformPosRef.current.y.toFixed(1),
+            rotation: node.rotation().toFixed(1),
+            note: 'Using stored position to prevent flicker'
+          });
+        }
       }
-    }, 10);
+      
+    }, 10); // 100Hz
     
-    // CRITICAL FIX: NO checkpoint interval during transform
-    // The checkpoint system was writing dimensions to RTDB every 500ms,
-    // which caused prop updates that interfered with the active transform
-    console.log('✅ [Transform] Transform started - checkpoints DISABLED, dimension streaming ENABLED');
+    console.log('[Transform] ✅ Streaming started at 100Hz');
     
     return true;
   };
 
+  /**
+   * TRANSFORM END - FIXED VERSION FOR BOTH CIRCLES AND STARS
+   * 
+   * CRITICAL FIX: Both circles and stars now use node's current dimensions
+   * instead of stored dimensions to prevent compound scaling.
+   */
+  const handleTransformEnd = async () => {
+    console.log(`[Transform] 🏁 Transform END for ${shape.type} ${shape.id.slice(0, 8)}`);
+    
+    // Stop streaming
+    if (transformStreamInterval.current) {
+      clearInterval(transformStreamInterval.current);
+      transformStreamInterval.current = null;
+      console.log('[Transform] ⏹️  Streaming stopped');
+    }
+    await stopDragStream(shape.id);
+    
+    // Stop checkpoint
+    if (checkpointIntervalRef.current) {
+      console.log('[Transform] ⏹️  Checkpoint interval stopped');
+      clearInterval(checkpointIntervalRef.current);
+      checkpointIntervalRef.current = null;
+    }
+    
+    const node = shapeRef.current;
+    if (!node) {
+      console.error('[Transform] ❌ No node reference');
+      transformInProgressRef.current = false;
+      return;
+    }
+
+    let newAttrs;
+    
+    try {
+      const scaleX = node.scaleX();
+      const scaleY = node.scaleY();
+      
+      console.log(`[Transform] 📊 Transform end calculation:`, {
+        type: shape.type,
+        scaleX: scaleX.toFixed(3),
+        scaleY: scaleY.toFixed(3),
+        nodeState: {
+          x: node.x(),
+          y: node.y(),
+          rotation: node.rotation(),
+          width: node.width ? node.width() : 'N/A',
+          height: node.height ? node.height() : 'N/A',
+          radius: shape.type === 'circle' ? node.radius() : 'N/A',
+          innerRadius: shape.type === 'star' ? node.innerRadius() : 'N/A',
+          outerRadius: shape.type === 'star' ? node.outerRadius() : 'N/A'
+        }
+      });
+      
+      // ========== CRITICAL FIX: Shape-specific dimension calculation ==========
+      let newWidth, newHeight;
+      
+      if (shape.type === 'circle') {
+        // CIRCLE FIX: Use the node's CURRENT base radius
+        const currentBaseRadius = node.radius();
+        newWidth = Math.max(10, currentBaseRadius * 2 * scaleX);
+        newHeight = Math.max(10, currentBaseRadius * 2 * scaleY);
+        
+        console.log(`[Transform] 🔵 Circle dimension calculation:`, {
+          currentBaseRadius,
+          scaleX: scaleX.toFixed(3),
+          scaleY: scaleY.toFixed(3),
+          newWidth: newWidth.toFixed(1),
+          newHeight: newHeight.toFixed(1),
+          calculation: 'radius × 2 × scale'
+        });
+      } else if (shape.type === 'star') {
+        // STAR FIX: Use the node's CURRENT base outer radius
+        const currentBaseOuterRadius = node.outerRadius();
+        newWidth = Math.max(10, currentBaseOuterRadius * 2 * scaleX);
+        newHeight = Math.max(10, currentBaseOuterRadius * 2 * scaleY);
+        
+        console.log(`[Transform] ⭐ Star dimension calculation:`, {
+          currentBaseOuterRadius,
+          scaleX: scaleX.toFixed(3),
+          scaleY: scaleY.toFixed(3),
+          newWidth: newWidth.toFixed(1),
+          newHeight: newHeight.toFixed(1),
+          calculation: 'outerRadius × 2 × scale'
+        });
+      } else {
+        // ALL OTHER SHAPES: Use stored dimensions
+        const baseWidth = shape.width || 100;
+        const baseHeight = shape.height || 100;
+        newWidth = Math.max(10, baseWidth * scaleX);
+        newHeight = Math.max(10, baseHeight * scaleY);
+        
+        console.log(`[Transform] 📐 Standard shape dimension calculation:`, {
+          type: shape.type,
+          baseWidth,
+          baseHeight,
+          scaleX: scaleX.toFixed(3),
+          scaleY: scaleY.toFixed(3),
+          newWidth: newWidth.toFixed(1),
+          newHeight: newHeight.toFixed(1)
+        });
+      }
+      
+      console.log(`[Transform] 🧮 Final calculated dimensions:`, {
+        newWidth: newWidth.toFixed(1),
+        newHeight: newHeight.toFixed(1),
+        aspectRatio: (newWidth / newHeight).toFixed(2)
+      });
+      
+      // Triangle flip detection
+      let isFlipped = shape.isFlipped || false;
+      
+      if (shape.type === 'triangle') {
+        if (scaleY < 0 && !isFlipped) {
+          console.log('[Triangle] 🔄 Flip detected - inverting to upside down');
+          isFlipped = true;
+          newHeight = Math.abs(newHeight);
+        } else if (scaleY < 0 && isFlipped) {
+          console.log('[Triangle] 🔄 Flip back detected - restoring upright');
+          isFlipped = false;
+          newHeight = Math.abs(newHeight);
+        } else {
+          newHeight = Math.abs(newHeight);
+        }
+      }
+      
+      // Validate
+      if (!isFinite(newWidth) || newWidth <= 0 || !isFinite(newHeight) || newHeight <= 0) {
+        console.error('[Transform] ❌ Invalid dimensions calculated:', {
+          newWidth,
+          newHeight,
+          scaleX,
+          scaleY
+        });
+        transformInProgressRef.current = false;
+        return;
+      }
+      
+      console.log(`[Transform] ✅ Dimensions validated, resetting scales to 1.0`);
+      
+      // Reset scales
+      node.scaleX(1);
+      node.scaleY(1);
+      
+      // Apply new dimensions to node for immediate visual feedback
+      if (shape.type === 'circle') {
+        // For circles, calculate new base radius
+        const newBaseRadius = (newWidth + newHeight) / 4;
+        console.log(`[Transform] 🔵 Circle: setting NEW base radius to ${newBaseRadius.toFixed(1)}`);
+        node.radius(newBaseRadius);
+      } else if (shape.type === 'star') {
+        // For stars, calculate new base radii from the new dimensions
+        const radiusX = newWidth * 0.5;
+        const radiusY = newHeight * 0.5;
+        const newBaseRadius = Math.min(radiusX, radiusY);
+        const newInnerRadius = newBaseRadius * 0.5;
+        const newOuterRadius = newBaseRadius;
+        
+        console.log(`[Transform] ⭐ Star: setting NEW base radii inner=${newInnerRadius.toFixed(1)}, outer=${newOuterRadius.toFixed(1)}`);
+        node.innerRadius(newInnerRadius);
+        node.outerRadius(newOuterRadius);
+        
+        // Apply scale to achieve elliptical star
+        node.scaleX(radiusX / newBaseRadius);
+        node.scaleY(radiusY / newBaseRadius);
+      } else if (shape.type !== 'line') {
+        console.log(`[Transform] 📐 ${shape.type}: setting width=${newWidth.toFixed(1)}, height=${newHeight.toFixed(1)}`);
+        node.width(newWidth);
+        node.height(newHeight);
+      }
+      
+      // Build RTDB attributes
+      newAttrs = {
+        x: node.x(),
+        y: node.y(),
+        width: newWidth,
+        height: newHeight,
+        rotation: node.rotation()
+      };
+      
+      if (shape.type === 'triangle') {
+        newAttrs.isFlipped = isFlipped;
+      }
+
+      console.log('[Transform] 💾 Writing to RTDB:', newAttrs);
+      
+      // Write to RTDB
+      await onTransformEnd(shape.id, newAttrs);
+      
+      console.log('[Transform] ✅ Database write complete');
+      
+    } catch (error) {
+      console.error('[Transform] ❌ Error during transform end:', error);
+      console.error('[Transform] Stack trace:', error.stack);
+    } finally {
+      // Delay clearing transform flag
+      console.log('[Transform] ⏳ Delaying transform flag clear (150ms)...');
+      setTimeout(() => {
+        transformInProgressRef.current = false;
+        console.log('[Transform] ✅ Transform flag cleared - prop sync re-enabled');
+      }, 150);
+    }
+  };
+
   const handleClick = (e) => {
+    console.log(`[Click] 🖱️  Click on ${shape.type} ${shape.id.slice(0, 8)}`);
     e.cancelBubble = true;
     const isShiftKey = e.evt?.shiftKey || false;
     onSelect(shape.id, isShiftKey);
@@ -543,6 +728,7 @@ export default function ShapeRenderer({
     onDragEnd: handleDragEnd,
     onTransformEnd: handleTransformEnd,
     onTransformStart: handleTransformStart,
+    dragBoundFunc: dragBoundFunc,
     perfectDrawEnabled: false,
     hitStrokeWidth: 8,
     stroke: strokeColor,
@@ -550,28 +736,74 @@ export default function ShapeRenderer({
     opacity: shapeOpacity
   };
 
+  /**
+   * SHAPE RENDERING WITH LOGGING
+   */
   const renderShape = () => {
+    console.log(`[Render] 🎨 Rendering ${shape.type} ${shape.id.slice(0, 8)} with props:`, {
+      x: shape.x,
+      y: shape.y,
+      width: shape.width,
+      height: shape.height,
+      rotation: shape.rotation
+    });
+    
     switch (shape.type) {
-      case 'circle':
-        const circleRadius = (typeof shape.width === 'number' && shape.width > 0) 
-          ? shape.width / 2 
-          : 50;
+      case 'circle': {
+        const width = shape.width || 100;
+        const height = shape.height || 100;
+        const isEllipse = Math.abs(width - height) > 1;
         
-        return (
-          <Circle
-            {...commonProps}
-            x={shape.x}
-            y={shape.y}
-            radius={circleRadius}
-            fill={shape.fill}
-            fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
-            fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
-            fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
-            rotation={shape.rotation || 0}
-          />
-        );
+        if (isEllipse) {
+          const avgRadius = (width + height) / 4;
+          const scaleX = width / (avgRadius * 2);
+          const scaleY = height / (avgRadius * 2);
+          
+          console.log(`[Render] 🔵 Circle as ELLIPSE:`, {
+            width,
+            height,
+            avgRadius,
+            scaleX: scaleX.toFixed(3),
+            scaleY: scaleY.toFixed(3)
+          });
+          
+          return (
+            <Circle
+              {...commonProps}
+              x={shape.x}
+              y={shape.y}
+              radius={avgRadius}
+              scaleX={scaleX}
+              scaleY={scaleY}
+              fill={shape.fill}
+              fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+              fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+              fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
+              rotation={shape.rotation || 0}
+            />
+          );
+        } else {
+          const radius = width / 2;
+          console.log(`[Render] 🔵 Circle as PERFECT CIRCLE: radius=${radius}`);
+          
+          return (
+            <Circle
+              {...commonProps}
+              x={shape.x}
+              y={shape.y}
+              radius={radius}
+              fill={shape.fill}
+              fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
+              fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
+              fillLinearGradientColorStops={shape.fillLinearGradientColorStops}
+              rotation={shape.rotation || 0}
+            />
+          );
+        }
+      }
       
       case 'line':
+        console.log(`[Render] ➖ Line`);
         return (
           <Line
             {...commonProps}
@@ -586,7 +818,8 @@ export default function ShapeRenderer({
           />
         );
       
-      case 'text':
+      case 'text': {
+        console.log(`[Render] 📝 Text`);
         const hasGradient = shape.fillLinearGradientColorStops && 
                            shape.fillLinearGradientColorStops.length > 0;
         const textFill = hasGradient ? shape.fill : (shape.fill || '#000000');
@@ -619,12 +852,9 @@ export default function ShapeRenderer({
                 return;
               }
               
-              // CRITICAL FIX #6: Use professional inline text editor instead of window.prompt()
-              // This provides a Figma-quality editing experience with smooth transitions
               if (onOpenTextEditor) {
                 onOpenTextEditor(shape.id);
               } else {
-                // Fallback to prompt if callback not provided (backward compatibility)
                 const newText = window.prompt('Edit text:', shape.text || 'Text');
                 if (newText !== null && newText.trim() !== '' && newText !== shape.text) {
                   try {
@@ -638,8 +868,10 @@ export default function ShapeRenderer({
             }}
           />
         );
+      }
       
       case 'diamond':
+        console.log(`[Render] 💎 Diamond`);
         return (
           <Rect
             {...commonProps}
@@ -660,17 +892,35 @@ export default function ShapeRenderer({
       case 'triangle': {
         const triWidth = shape.width || 100;
         const triHeight = shape.height || 100;
+        const isFlipped = shape.isFlipped || false;
+        
+        console.log(`[Render] 🔺 Triangle:`, {
+          width: triWidth,
+          height: triHeight,
+          isFlipped
+        });
+        
+        let points;
+        if (isFlipped) {
+          points = [
+            triWidth / 2, triHeight,
+            0, 0,
+            triWidth, 0
+          ];
+        } else {
+          points = [
+            triWidth / 2, 0,
+            triWidth, triHeight,
+            0, triHeight
+          ];
+        }
+        
         return (
           <Line
             {...commonProps}
             x={shape.x}
             y={shape.y}
-            points={[
-              triWidth / 2, 0,
-              triWidth, triHeight,
-              0, triHeight,
-              triWidth / 2, 0
-            ]}
+            points={points}
             fill={shape.fill}
             fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
             fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
@@ -681,15 +931,40 @@ export default function ShapeRenderer({
         );
       }
       
-      case 'star':
+      case 'star': {
+        const starWidth = shape.width || 80;
+        const starHeight = shape.height || 80;
+        
+        const radiusX = starWidth * 0.5;
+        const radiusY = starHeight * 0.5;
+        const baseRadius = Math.min(radiusX, radiusY);
+        const innerRadius = baseRadius * 0.5;
+        const outerRadius = baseRadius;
+        const starScaleX = radiusX / baseRadius;
+        const starScaleY = radiusY / baseRadius;
+        
+        console.log(`[Render] ⭐ Star:`, {
+          width: starWidth,
+          height: starHeight,
+          radiusX,
+          radiusY,
+          baseRadius,
+          innerRadius,
+          outerRadius,
+          starScaleX: starScaleX.toFixed(3),
+          starScaleY: starScaleY.toFixed(3)
+        });
+        
         return (
           <Star
             {...commonProps}
             x={shape.x}
             y={shape.y}
             numPoints={5}
-            innerRadius={(shape.width || 80) * 0.25}
-            outerRadius={(shape.width || 80) * 0.5}
+            innerRadius={innerRadius}
+            outerRadius={outerRadius}
+            scaleX={starScaleX}
+            scaleY={starScaleY}
             fill={shape.fill}
             fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
             fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
@@ -697,16 +972,18 @@ export default function ShapeRenderer({
             rotation={shape.rotation || 0}
           />
         );
+      }
       
       case 'rectangle':
       default:
+        console.log(`[Render] 📦 Rectangle`);
         return (
           <Rect
             {...commonProps}
             x={shape.x}
             y={shape.y}
-            width={shape.width}
-            height={shape.height}
+            width={shape.width || 100}
+            height={shape.height || 100}
             fill={shape.fill}
             fillLinearGradientStartPoint={shape.fillLinearGradientStartPoint}
             fillLinearGradientEndPoint={shape.fillLinearGradientEndPoint}
