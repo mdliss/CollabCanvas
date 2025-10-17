@@ -18,6 +18,7 @@ import TextFormattingToolbar from "../UI/TextFormattingToolbar";
 import LayersPanel from "../UI/LayersPanel";
 import HistoryTimeline from "../UI/HistoryTimeline";
 import InlineTextEditor from "../UI/InlineTextEditor";
+import ErrorBoundary from "../UI/ErrorBoundary";
 import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
@@ -2043,21 +2044,87 @@ export default function Canvas() {
         />
       )}
       
-      {/* Layers Panel */}
+      {/* CRITICAL FIX: Error Boundary Isolation for Layers Panel
+          
+          Wraps LayersPanel in its own error boundary to prevent child component
+          failures from unmounting the entire Canvas. If LayersPanel crashes due to
+          unexpected shape data, the error boundary displays a fallback UI while
+          preserving the user's editing session and Canvas functionality.
+          
+          This addresses the issue where LayersPanel crashes would trigger Canvas
+          unmount, destroying presence state and RTDB subscriptions.
+          
+          @see BUG #1 - LayersPanel crashes immediately on render */}
       {isLayersPanelVisible && (
-        <LayersPanel
-          shapes={shapes}
-          selectedIds={selectedIds}
-          onSelect={handleShapeSelect}
-          onRename={handleLayerRename}
-          onDeleteAll={handleDeleteAllShapes}
-          onBringToFront={handleBringToFront}
-          onSendToBack={handleSendToBack}
-          onBringForward={handleBringForward}
-          onSendBackward={handleSendBackward}
-          onClose={() => setIsLayersPanelVisible(false)}
-          user={user}
-        />
+        <ErrorBoundary
+          fallback={
+            <div style={{
+              position: 'fixed',
+              top: 0,
+              right: 0,
+              width: '340px',
+              height: '100vh',
+              backgroundColor: '#ffffff',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12)',
+              zIndex: 10000,
+              padding: '40px',
+              textAlign: 'center',
+              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+            }}>
+              <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#111827', marginBottom: '8px' }}>
+                Layers Panel Error
+              </h3>
+              <p style={{ fontSize: '14px', color: '#6b7280', marginBottom: '24px', lineHeight: '1.5' }}>
+                Unable to load layers panel. This may be due to corrupted shape data.
+              </p>
+              <button
+                onClick={() => {
+                  setIsLayersPanelVisible(false);
+                  showFeedback('Layers panel closed. Try again after refreshing.');
+                }}
+                style={{
+                  padding: '10px 20px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  backgroundColor: '#4f46e5',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
+                }}
+                onMouseOver={(e) => e.target.style.backgroundColor = '#4338ca'}
+                onMouseOut={(e) => e.target.style.backgroundColor = '#4f46e5'}
+              >
+                Close Panel
+              </button>
+            </div>
+          }
+          onError={(error, errorInfo) => {
+            console.error('[LayersPanel Error Boundary]', error);
+            console.error('[LayersPanel Error Info]', errorInfo);
+            showFeedback('Layers panel failed to load. Check console for details.');
+          }}
+        >
+          <LayersPanel
+            shapes={shapes}
+            selectedIds={selectedIds}
+            onSelect={handleShapeSelect}
+            onRename={handleLayerRename}
+            onDeleteAll={handleDeleteAllShapes}
+            onBringToFront={handleBringToFront}
+            onSendToBack={handleSendToBack}
+            onBringForward={handleBringForward}
+            onSendBackward={handleSendBackward}
+            onClose={() => setIsLayersPanelVisible(false)}
+            user={user}
+          />
+        </ErrorBoundary>
       )}
       
       {/* History Timeline */}
