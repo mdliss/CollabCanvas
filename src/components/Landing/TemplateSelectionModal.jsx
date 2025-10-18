@@ -8,8 +8,10 @@
 
 import { useState, useEffect } from 'react';
 import { TEMPLATES } from '../../utils/templates';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function TemplateSelectionModal({ onSelect, onClose, isPremium }) {
+  const { theme } = useTheme();
   const [selectedTemplate, setSelectedTemplate] = useState('blank');
   const [isCreating, setIsCreating] = useState(false);
   const [isVisible, setIsVisible] = useState(false);
@@ -45,6 +47,8 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
       handleClose();
     }
   };
+
+  const styles = getStyles(theme);
 
   return (
     <>
@@ -87,12 +91,12 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
           }}
           onMouseEnter={(e) => {
             if (!isCreating) {
-              e.target.style.color = '#2c2e33';
+              e.target.style.color = theme.text.primary;
             }
           }}
           onMouseLeave={(e) => {
             if (!isCreating) {
-              e.target.style.color = '#9ca3af';
+              e.target.style.color = theme.text.tertiary;
             }
           }}
         >
@@ -114,7 +118,7 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
                 disabled={isCreating || isLocked}
                 style={{
                   ...styles.templateCard,
-                  borderColor: selectedTemplate === key ? '#2c2e33' : '#e0e0e0',
+                  borderColor: selectedTemplate === key ? theme.button.primary : theme.border.medium,
                   borderWidth: '2px', // Fixed at 2px to prevent text reflow
                   cursor: isCreating ? 'not-allowed' : isLocked ? 'not-allowed' : 'pointer',
                   opacity: isCreating ? 0.6 : isLocked ? 0.5 : 1,
@@ -122,14 +126,14 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
                 }}
                 onMouseEnter={(e) => {
                   if (!isCreating && !isLocked && selectedTemplate !== key) {
-                    e.target.style.borderColor = '#9ca3af';
-                    e.target.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.08)';
+                    e.target.style.borderColor = theme.border.strong;
+                    e.target.style.boxShadow = theme.shadow.lg;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!isCreating && !isLocked && selectedTemplate !== key) {
-                    e.target.style.borderColor = '#e0e0e0';
-                    e.target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.04)';
+                    e.target.style.borderColor = theme.border.medium;
+                    e.target.style.boxShadow = theme.shadow.md;
                   }
                 }}
               >
@@ -163,14 +167,14 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
             }}
             onMouseEnter={(e) => {
               if (!isCreating) {
-                e.target.style.background = '#f5f5f5';
-                e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
               }
             }}
             onMouseLeave={(e) => {
               if (!isCreating) {
-                e.target.style.background = '#ffffff';
-                e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
               }
             }}
           >
@@ -184,16 +188,16 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
               cursor: isCreating ? 'not-allowed' : 'pointer',
               opacity: isCreating ? 0.7 : 1
             }}
-            onMouseEnter={(e) => {
-              if (!isCreating) {
-                e.target.style.background = '#1a1c1f';
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!isCreating) {
-                e.target.style.background = '#2c2e33';
-              }
-            }}
+              onMouseEnter={(e) => {
+                if (!isCreating) {
+                  e.target.style.background = theme.button.primaryHover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isCreating) {
+                  e.target.style.background = theme.button.primary;
+                }
+              }}
           >
             {isCreating ? 'Creating...' : 'Create Canvas'}
           </button>
@@ -204,28 +208,28 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
   );
 }
 
-const styles = {
+const getStyles = (theme) => ({
   backdrop: {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
+    background: theme.backdrop,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 10000
   },
   modal: {
-    background: '#ffffff',
+    background: theme.background.card,
     borderRadius: '12px',
     padding: '32px',
     maxWidth: '900px',
     width: '90%',
     maxHeight: '90vh',
     overflowY: 'auto',
-    boxShadow: '0 20px 60px rgba(0, 0, 0, 0.15)',
+    boxShadow: theme.shadow.xl,
     position: 'relative',
     fontFamily: "'Roboto Mono', monospace"
   },
@@ -236,7 +240,7 @@ const styles = {
     background: 'transparent',
     border: 'none',
     fontSize: '32px',
-    color: '#9ca3af',
+    color: theme.text.tertiary,
     cursor: 'pointer',
     padding: '8px',
     lineHeight: '1',
@@ -245,13 +249,13 @@ const styles = {
   title: {
     fontSize: '24px',
     fontWeight: '600',
-    color: '#2c2e33',
+    color: theme.text.primary,
     margin: '0 0 8px 0',
     fontFamily: "'Roboto Mono', monospace"
   },
   subtitle: {
     fontSize: '14px',
-    color: '#646669',
+    color: theme.text.secondary,
     margin: '0 0 32px 0',
     fontFamily: "'Roboto Mono', monospace"
   },
@@ -262,14 +266,14 @@ const styles = {
     marginBottom: '32px'
   },
   templateCard: {
-    background: '#ffffff',
-    border: '2px solid #e0e0e0',
+    background: theme.background.card,
+    border: `2px solid ${theme.border.medium}`,
     borderRadius: '10px',
     padding: '24px 20px', // Increased horizontal padding
     textAlign: 'center',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+    boxShadow: theme.shadow.md,
     position: 'relative',
     minHeight: '180px',
     display: 'flex',
@@ -286,13 +290,13 @@ const styles = {
   templateName: {
     fontSize: '14px',
     fontWeight: '600',
-    color: '#2c2e33',
+    color: theme.text.primary,
     fontFamily: "'Roboto Mono', monospace",
     marginBottom: '4px'
   },
   templateDescription: {
     fontSize: '12px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontFamily: "'Roboto Mono', monospace",
     lineHeight: '1.4'
   },
@@ -300,8 +304,8 @@ const styles = {
     position: 'absolute',
     top: '8px',
     right: '8px',
-    background: '#2c2e33',
-    color: '#ffffff',
+    background: theme.button.primary,
+    color: theme.text.inverse,
     fontSize: '10px',
     fontWeight: '600',
     padding: '4px 8px',
@@ -320,9 +324,9 @@ const styles = {
     justifyContent: 'flex-end'
   },
   cancelButton: {
-    background: '#ffffff',
-    color: '#2c2e33',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.background.card,
+    color: theme.text.primary,
+    border: `1px solid ${theme.border.medium}`,
     padding: '12px 24px',
     borderRadius: '8px',
     fontSize: '14px',
@@ -332,8 +336,8 @@ const styles = {
     fontFamily: "'Roboto Mono', monospace"
   },
   createButton: {
-    background: '#2c2e33',
-    color: '#ffffff',
+    background: theme.button.primary,
+    color: theme.text.inverse,
     border: 'none',
     padding: '12px 24px',
     borderRadius: '8px',
@@ -343,5 +347,5 @@ const styles = {
     transition: 'all 0.2s ease',
     fontFamily: "'Roboto Mono', monospace"
   }
-};
+});
 

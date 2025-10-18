@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar';
 import { getUserProfile } from '../../services/userProfile';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * PresenceList - Shows all online users with avatars
@@ -8,6 +9,7 @@ import { getUserProfile } from '../../services/userProfile';
  * Shows crown next to canvas owner
  */
 export default function PresenceList({ users, canvasOwnerId = null, isVisible = true }) {
+  const { theme } = useTheme();
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -80,18 +82,20 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
         position: "fixed",
         top: 8,
         right: 8,
-        background: "rgba(255, 255, 255, 0.95)",
+        background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : "rgba(255, 255, 255, 0.95)",
         padding: "12px",
         borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        boxShadow: theme.shadow.md,
         fontSize: "14px",
         zIndex: 9998,
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? 'translateX(0)' : 'translateX(20px)',
-        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
+        border: `1px solid ${theme.border.normal}`,
+        backdropFilter: 'blur(10px)'
       }}
     >
-      <div style={{ marginBottom: "8px", fontWeight: "600", color: "#333" }}>
+      <div style={{ marginBottom: "8px", fontWeight: "600", color: theme.text.primary }}>
         {users.length} online
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -109,7 +113,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                   alignItems: "center",
                   gap: "8px",
                   padding: "6px 8px",
-                  background: isSelected ? "#f3f4f6" : "transparent",
+                  background: isSelected ? theme.background.elevated : "transparent",
                   border: "none",
                   borderRadius: "6px",
                   cursor: "pointer",
@@ -117,7 +121,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                   textAlign: "left"
                 }}
                 onMouseEnter={(e) => {
-                  if (!isSelected) e.currentTarget.style.background = "#f9fafb";
+                  if (!isSelected) e.currentTarget.style.background = theme.background.elevated;
                 }}
                 onMouseLeave={(e) => {
                   if (!isSelected) e.currentTarget.style.background = "transparent";
@@ -129,10 +133,10 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                   color={user.color}
                   size="sm"
                 />
-                <span style={{ color: "#555", fontSize: "13px", flex: 1, display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ color: theme.text.secondary, fontSize: "13px", flex: 1, display: "flex", alignItems: "center", gap: "4px" }}>
                   {user.displayName}
                   {canvasOwnerId && user.uid === canvasOwnerId && (
-                    <span style={{ fontSize: "15px", color: "#2c2e33", fontWeight: "600" }} title="Canvas Owner">♔</span>
+                    <span style={{ fontSize: "15px", color: theme.text.primary, fontWeight: "600" }} title="Canvas Owner">♔</span>
                   )}
                 </span>
                 <div 
@@ -155,10 +159,10 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                     right: "calc(100% + 12px)",
                     top: 0,
                     width: "320px",
-                    background: "white",
+                    background: theme.background.card,
                     borderRadius: "12px",
-                    boxShadow: "0 4px 16px rgba(0, 0, 0, 0.12)",
-                    border: "1px solid rgba(0, 0, 0, 0.1)",
+                    boxShadow: theme.shadow.xl,
+                    border: `1px solid ${theme.border.normal}`,
                     zIndex: 10000,
                     maxHeight: "500px",
                     overflowY: "auto"
@@ -169,7 +173,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                       style={{
                         padding: "40px 20px",
                         textAlign: "center",
-                        color: "#9ca3af",
+                        color: theme.text.tertiary,
                         fontSize: "14px"
                       }}
                     >
@@ -184,7 +188,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                           display: "flex",
                           flexDirection: "column",
                           alignItems: "center",
-                          borderBottom: "1px solid rgba(0, 0, 0, 0.06)"
+                          borderBottom: `1px solid ${theme.border.normal}`
                         }}
                       >
                         {/* Large Avatar */}
@@ -208,7 +212,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                           style={{
                             fontSize: "18px",
                             fontWeight: "600",
-                            color: "#1a1a1a",
+                            color: theme.text.primary,
                             margin: "0 0 4px 0",
                             textAlign: "center"
                           }}
@@ -239,7 +243,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                       <div
                         style={{
                           padding: "16px 20px",
-                          borderBottom: "1px solid rgba(0, 0, 0, 0.06)"
+                          borderBottom: `1px solid ${theme.border.normal}`
                         }}
                       >
                         <label
@@ -247,7 +251,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                             display: "block",
                             fontSize: "12px",
                             fontWeight: "500",
-                            color: "#374151",
+                            color: theme.text.primary,
                             marginBottom: "8px"
                           }}
                         >
@@ -256,7 +260,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                         <p
                           style={{
                             fontSize: "14px",
-                            color: userProfile?.bio ? "#1f2937" : "#9ca3af",
+                            color: userProfile?.bio ? theme.text.primary : theme.text.tertiary,
                             fontStyle: userProfile?.bio ? "normal" : "italic",
                             lineHeight: "1.5",
                             margin: 0,
@@ -304,7 +308,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                           <p
                             style={{
                               fontSize: "13px",
-                              color: "#6b7280",
+                              color: theme.text.secondary,
                               margin: 0
                             }}
                           >

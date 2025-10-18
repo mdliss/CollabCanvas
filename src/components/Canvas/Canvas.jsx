@@ -191,8 +191,8 @@ export default function Canvas() {
   const { user } = useAuth();
   const { theme } = useTheme();
   
-  // Theme-aware grid color
-  const GRID_COLOR = theme.isDark ? 'rgba(255, 255, 255, 0.08)' : "#e0e0e0";
+  // Theme-aware grid color - increased opacity for visibility in dark themes
+  const GRID_COLOR = theme.isDark ? 'rgba(255, 255, 255, 0.15)' : "#e0e0e0";
   const { canvasId } = useParams();
   const navigate = useNavigate();
   
@@ -3436,24 +3436,24 @@ export default function Canvas() {
           showFeedback('View centered');
         }}
         onMouseDown={(e) => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)';
+          e.currentTarget.style.background = theme.gradient.active;
           e.currentTarget.style.transform = 'scale(0.96)';
-          e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.1) inset';
+          e.currentTarget.style.boxShadow = theme.shadow.inset;
         }}
         onMouseUp={(e) => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+          e.currentTarget.style.background = theme.gradient.hover;
           e.currentTarget.style.transform = 'translateY(-1px)';
-          e.currentTarget.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.12)';
+          e.currentTarget.style.boxShadow = theme.shadow.lg;
         }}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+          e.currentTarget.style.background = theme.gradient.hover;
           e.currentTarget.style.transform = 'translateY(-1px)';
-          e.currentTarget.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.12)';
+          e.currentTarget.style.boxShadow = theme.shadow.lg;
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+          e.currentTarget.style.background = theme.gradient.button;
           e.currentTarget.style.transform = 'translateY(0)';
-          e.currentTarget.style.boxShadow = '0 2px 4px rgba(0, 0, 0, 0.08)';
+          e.currentTarget.style.boxShadow = theme.shadow.md;
         }}
         style={{
           position: 'fixed',
@@ -3464,11 +3464,11 @@ export default function Canvas() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          background: theme.gradient.button,
+          border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
           cursor: 'pointer',
-          boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+          boxShadow: theme.shadow.md,
           zIndex: 1001,
           transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s',
           padding: 0,
@@ -3482,7 +3482,7 @@ export default function Canvas() {
           height="20" 
           viewBox="0 0 24 24" 
           fill="none" 
-          stroke="#374151" 
+          stroke={theme.text.primary}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -3492,7 +3492,7 @@ export default function Canvas() {
           <line x1="12" y1="14" x2="12" y2="22" />
           <line x1="2" y1="12" x2="10" y2="12" />
           <line x1="14" y1="12" x2="22" y2="12" />
-          <circle cx="12" cy="12" r="2" fill="#374151" />
+          <circle cx="12" cy="12" r="2" fill={theme.text.primary} />
         </svg>
       </button>
 

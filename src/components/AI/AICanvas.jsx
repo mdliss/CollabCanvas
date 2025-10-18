@@ -236,6 +236,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { ref, onValue, push, set, query, limitToLast, get } from 'firebase/database';
 import { rtdb } from '../../services/firebase';
 import { useUndo } from '../../contexts/UndoContext';
@@ -310,6 +311,7 @@ export default function AICanvas({
   isVisible = true
 }) {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { registerAIOperation } = useUndo();
   
   // Listen for Design Suggestions open/close
@@ -985,26 +987,26 @@ export default function AICanvas({
     if (isOpen) {
       // Active state: panel is open
       return {
-        background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
-        color: '#111827',
+        background: theme.gradient.active,
+        color: theme.text.primary,
         transform: 'scale(0.96)',
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1) inset'
+        boxShadow: theme.shadow.inset
       };
     }
     if (hoveredButton === 'ai') {
       // Hover state
       return {
-        background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-        color: '#111827',
+        background: theme.gradient.hover,
+        color: theme.text.primary,
         transform: 'translateY(-1px)',
-        boxShadow: '0 3px 8px rgba(0, 0, 0, 0.12)'
+        boxShadow: theme.shadow.lg
       };
     }
     // Default state
     return {
-      background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-      color: '#374151',
-      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)'
+      background: theme.gradient.button,
+      color: theme.text.primary,
+      boxShadow: theme.shadow.md
     };
   };
 
@@ -1025,7 +1027,7 @@ export default function AICanvas({
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '22px',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
           cursor: 'pointer',
           transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s',
@@ -1048,12 +1050,12 @@ export default function AICanvas({
           right: `${panelRight}px`, // Slides left when Design Suggestions opens
           width: '380px',
           maxHeight: '600px',
-          // EXACT TOOLBAR STYLING:
-          background: 'rgba(255, 255, 255, 0.98)',
+          // EXACT TOOLBAR STYLING WITH THEME:
+          background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : 'rgba(255, 255, 255, 0.98)',
           borderRadius: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
+          boxShadow: `${theme.shadow.xl}, ${theme.shadow.md}`,
           backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          border: `1px solid ${theme.border.normal}`,
           display: 'flex',
           flexDirection: 'column',
           zIndex: 1001,
@@ -1069,7 +1071,7 @@ export default function AICanvas({
           <div
             style={{
               padding: '14px',
-              borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+              borderBottom: `1px solid ${theme.border.normal}`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
@@ -1078,10 +1080,10 @@ export default function AICanvas({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '20px' }}>✨</span>
               <div>
-                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+                <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: theme.text.primary }}>
                   AI Assistant
                 </h3>
-                <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>
+                <p style={{ margin: 0, fontSize: '11px', color: theme.text.secondary }}>
                   Natural language control
                 </p>
               </div>
@@ -1090,26 +1092,26 @@ export default function AICanvas({
               <button
                 onClick={clearChat}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+                  e.currentTarget.style.background = theme.gradient.hover;
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+                  e.currentTarget.style.background = theme.gradient.button;
                 }}
                 style={{
                   padding: '6px',
-                  background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                  background: theme.gradient.button,
+                  border: `1px solid ${theme.border.normal}`,
                   borderRadius: '8px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                  boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+                  boxShadow: theme.shadow.sm,
                 }}
                 title="Clear conversation"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={theme.text.primary} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
                 </svg>
               </button>
@@ -1139,14 +1141,14 @@ export default function AICanvas({
                 }}
               >
                 <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.2 }}>✨</div>
-                <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+                <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: theme.text.primary }}>
                   AI Canvas Assistant
                 </h4>
-                <p style={{ margin: '0 0 16px 0', fontSize: '12px', lineHeight: '1.5', color: '#6b7280' }}>
+                <p style={{ margin: '0 0 16px 0', fontSize: '12px', lineHeight: '1.5', color: theme.text.secondary }}>
                   Create and modify shapes with natural language
                 </p>
-                <div style={{ textAlign: 'left', fontSize: '12px', lineHeight: '1.6', color: '#6b7280' }}>
-                  <p style={{ margin: '0 0 6px 0', fontWeight: '600', color: '#374151' }}>Examples:</p>
+                <div style={{ textAlign: 'left', fontSize: '12px', lineHeight: '1.6', color: theme.text.secondary }}>
+                  <p style={{ margin: '0 0 6px 0', fontWeight: '600', color: theme.text.primary }}>Examples:</p>
                   <ul style={{ margin: 0, paddingLeft: '18px' }}>
                     <li>"Create a red circle"</li>
                     <li>"Make a login form"</li>
@@ -1172,13 +1174,13 @@ export default function AICanvas({
                     padding: '10px 12px',
                     borderRadius: '10px',
                     background: message.role === 'user' 
-                      ? 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)'
-                      : 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-                    color: '#111827',
+                      ? theme.gradient.active
+                      : theme.gradient.hover,
+                    color: theme.text.primary,
                     fontSize: '13px',
                     lineHeight: '1.5',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-                    border: '1px solid rgba(0, 0, 0, 0.04)',
+                    boxShadow: theme.shadow.sm,
+                    border: `1px solid ${theme.border.light}`,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                   }}
@@ -1201,12 +1203,12 @@ export default function AICanvas({
                     maxWidth: '85%',
                     padding: '10px 12px',
                     borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-                    color: '#111827',
+                    background: theme.gradient.hover,
+                    color: theme.text.primary,
                     fontSize: '13px',
                     lineHeight: '1.5',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-                    border: '1px solid rgba(0, 0, 0, 0.04)',
+                    boxShadow: theme.shadow.sm,
+                    border: `1px solid ${theme.border.light}`,
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                   }}
@@ -1216,7 +1218,7 @@ export default function AICanvas({
                     display: 'inline-block',
                     width: '2px',
                     height: '14px',
-                    background: '#374151',
+                    background: theme.text.primary,
                     marginLeft: '2px',
                     animation: 'blink 1s step-end infinite',
                     verticalAlign: 'text-bottom'
@@ -1237,20 +1239,20 @@ export default function AICanvas({
                   style={{
                     padding: '10px 12px',
                     borderRadius: '10px',
-                    background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-                    color: '#6b7280',
+                    background: theme.gradient.hover,
+                    color: theme.text.secondary,
                     fontSize: '13px',
-                    boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
-                    border: '1px solid rgba(0, 0, 0, 0.04)',
+                    boxShadow: theme.shadow.sm,
+                    border: `1px solid ${theme.border.light}`,
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
                   }}
                 >
                   <div style={{ display: 'flex', gap: '3px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#9ca3af', animation: 'pulse 1.5s ease-in-out infinite' }} />
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#9ca3af', animation: 'pulse 1.5s ease-in-out infinite 0.2s' }} />
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#9ca3af', animation: 'pulse 1.5s ease-in-out infinite 0.4s' }} />
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: theme.text.tertiary, animation: 'pulse 1.5s ease-in-out infinite' }} />
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: theme.text.tertiary, animation: 'pulse 1.5s ease-in-out infinite 0.2s' }} />
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: theme.text.tertiary, animation: 'pulse 1.5s ease-in-out infinite 0.4s' }} />
                   </div>
                   <span>Thinking...</span>
                 </div>
@@ -1263,12 +1265,12 @@ export default function AICanvas({
                 style={{
                   padding: '10px 12px',
                   borderRadius: '10px',
-                  background: 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
-                  color: '#991b1b',
+                  background: theme.isDark ? '#3f1e1e' : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
+                  color: theme.isDark ? '#f87171' : '#991b1b',
                   fontSize: '12px',
                   marginBottom: '10px',
-                  border: '1px solid rgba(153, 27, 27, 0.1)',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+                  border: theme.isDark ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid rgba(153, 27, 27, 0.1)',
+                  boxShadow: theme.shadow.sm,
                   lineHeight: '1.4',
                 }}
               >
@@ -1283,7 +1285,7 @@ export default function AICanvas({
           <div
             style={{
               padding: '14px',
-              borderTop: '1px solid rgba(0, 0, 0, 0.06)',
+              borderTop: `1px solid ${theme.border.normal}`,
             }}
           >
             <div style={{ display: 'flex', gap: '6px' }}>
@@ -1301,29 +1303,31 @@ export default function AICanvas({
                   flex: 1,
                   padding: '10px 12px',
                   border: isStreaming 
-                    ? '1px solid rgba(139, 92, 246, 0.3)' 
-                    : '1px solid rgba(0, 0, 0, 0.06)',
+                    ? `2px solid ${theme.accent.purple}` 
+                    : `1px solid ${theme.border.medium}`,
                   borderRadius: '8px',
                   fontSize: '13px',
                   outline: 'none',
                   transition: 'all 0.2s',
                   background: isStreaming 
-                    ? 'rgba(245, 243, 255, 0.5)' 
-                    : '#ffffff',
+                    ? (theme.isDark ? 'rgba(139, 92, 246, 0.1)' : 'rgba(245, 243, 255, 0.5)') 
+                    : theme.background.inputFocus,
+                  color: theme.text.primary,
                   boxShadow: isStreaming 
-                    ? '0 0 0 3px rgba(139, 92, 246, 0.1)' 
+                    ? `0 0 0 3px ${theme.isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.1)'}` 
                     : 'none',
                 }}
                 onFocus={(e) => {
                   if (!isStreaming) {
-                    e.currentTarget.style.borderColor = '#9ca3af';
-                    e.currentTarget.style.boxShadow = '0 0 0 3px rgba(156, 163, 175, 0.1)';
+                    e.currentTarget.style.borderColor = theme.border.focus;
+                    e.currentTarget.style.boxShadow = theme.isDark 
+                      ? '0 0 0 3px rgba(99, 102, 241, 0.2)' 
+                      : '0 0 0 3px rgba(156, 163, 175, 0.1)';
                   }
                 }}
                 onBlur={(e) => {
                   if (!isStreaming) {
-                    // Allow blur so user can interact with canvas
-                    e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.06)';
+                    e.currentTarget.style.borderColor = theme.border.medium;
                     e.currentTarget.style.boxShadow = 'none';
                   }
                 }}
@@ -1333,21 +1337,21 @@ export default function AICanvas({
                 disabled={!inputValue.trim() || isLoading}
                 onMouseEnter={(e) => {
                   if (inputValue.trim() && !isLoading) {
-                    e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+                    e.currentTarget.style.background = theme.gradient.hover;
                     e.currentTarget.style.transform = 'translateY(-1px)';
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+                  e.currentTarget.style.background = inputValue.trim() && !isLoading ? theme.gradient.button : theme.gradient.active;
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
                 style={{
                   padding: '10px 14px',
                   background: !inputValue.trim() || isLoading
-                    ? 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)'
-                    : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-                  color: !inputValue.trim() || isLoading ? '#9ca3af' : '#374151',
-                  border: '1px solid rgba(0, 0, 0, 0.06)',
+                    ? theme.gradient.active
+                    : theme.gradient.button,
+                  color: !inputValue.trim() || isLoading ? theme.text.tertiary : theme.text.primary,
+                  border: `1px solid ${theme.border.normal}`,
                   borderRadius: '8px',
                   fontSize: '20px',
                   cursor: !inputValue.trim() || isLoading ? 'not-allowed' : 'pointer',
@@ -1355,7 +1359,7 @@ export default function AICanvas({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+                  boxShadow: theme.shadow.md,
                   width: '44px',
                   height: '40px',
                 }}

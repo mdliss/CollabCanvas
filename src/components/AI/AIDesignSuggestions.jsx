@@ -41,6 +41,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useUndo } from '../../contexts/UndoContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { ref, get } from 'firebase/database';
 import { rtdb } from '../../services/firebase';
 
@@ -91,6 +92,7 @@ export default function AIDesignSuggestions({
   isVisible = true
 }) {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const { registerAIOperation, undo: undoFromContext } = useUndo();
   
   const [isOpen, setIsOpen] = useState(false);
@@ -611,24 +613,24 @@ export default function AIDesignSuggestions({
   const getButtonStyle = () => {
     if (isOpen) {
       return {
-        background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
-        color: '#111827',
+        background: theme.gradient.active,
+        color: theme.text.primary,
         transform: 'scale(0.96)',
-        boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1) inset'
+        boxShadow: theme.shadow.inset
       };
     }
     if (hoveredButton === 'suggest') {
       return {
-        background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-        color: '#111827',
+        background: theme.gradient.hover,
+        color: theme.text.primary,
         transform: 'translateY(-1px)',
-        boxShadow: '0 3px 8px rgba(0, 0, 0, 0.12)'
+        boxShadow: theme.shadow.lg
       };
     }
     return {
-      background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-      color: '#374151',
-      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)'
+      background: theme.gradient.button,
+      color: theme.text.primary,
+      boxShadow: theme.shadow.md
     };
   };
 
@@ -660,7 +662,7 @@ export default function AIDesignSuggestions({
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '22px',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
           cursor: 'pointer',
           transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s',
@@ -683,11 +685,11 @@ export default function AIDesignSuggestions({
           right: `${panelRight}px`, // Slides left when AI opens
           width: '420px',
           maxHeight: '550px',
-          background: 'rgba(255, 255, 255, 0.98)',
+          background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : 'rgba(255, 255, 255, 0.98)',
           borderRadius: '16px',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
+          boxShadow: `${theme.shadow.xl}, ${theme.shadow.md}`,
           backdropFilter: 'blur(10px)',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          border: `1px solid ${theme.border.normal}`,
           display: 'flex',
           flexDirection: 'column',
           zIndex: 1001,
@@ -702,7 +704,7 @@ export default function AIDesignSuggestions({
         <div
           style={{
             padding: '14px',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+            borderBottom: `1px solid ${theme.border.normal}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -711,10 +713,10 @@ export default function AIDesignSuggestions({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontSize: '20px' }}>💡</span>
             <div>
-              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: '600', color: theme.text.primary }}>
                 Design Suggestions
               </h3>
-              <p style={{ margin: 0, fontSize: '11px', color: '#6b7280' }}>
+              <p style={{ margin: 0, fontSize: '11px', color: theme.text.secondary }}>
                 AI-powered improvements
               </p>
             </div>
@@ -730,9 +732,9 @@ export default function AIDesignSuggestions({
             style={{
               padding: '6px 12px',
               background: isAnalyzing 
-                ? 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)'
-                : 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-              color: isAnalyzing ? '#9ca3af' : '#111827',
+                ? theme.gradient.active
+                : theme.gradient.button,
+              color: isAnalyzing ? theme.text.tertiary : theme.text.primary,
               border: '1px solid rgba(0, 0, 0, 0.06)',
               borderRadius: '8px',
               cursor: isAnalyzing ? 'not-allowed' : 'pointer',
@@ -746,12 +748,12 @@ export default function AIDesignSuggestions({
             }}
             onMouseEnter={(e) => {
               if (!isAnalyzing) {
-                e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+                e.currentTarget.style.background = theme.gradient.hover;
                 e.currentTarget.style.transform = 'translateY(-1px)';
               }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+              e.currentTarget.style.background = theme.gradient.button;
               e.currentTarget.style.transform = 'translateY(0)';
             }}
           >
@@ -910,8 +912,8 @@ export default function AIDesignSuggestions({
                         color: '#9ca3af',
                         transition: 'color 0.2s'
                       }}
-                      onMouseEnter={(e) => e.currentTarget.style.color = '#111827'}
-                      onMouseLeave={(e) => e.currentTarget.style.color = '#9ca3af'}
+                      onMouseEnter={(e) => e.currentTarget.style.color = theme.text.primary}
+                      onMouseLeave={(e) => e.currentTarget.style.color = theme.text.tertiary}
                       title="Dismiss suggestion"
                     >
                       ✕
@@ -932,9 +934,9 @@ export default function AIDesignSuggestions({
                     style={{
                       flex: 1,
                       padding: '8px 12px',
-                      background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-                      color: isApplying ? '#9ca3af' : '#111827',
-                      border: '1px solid rgba(0, 0, 0, 0.06)',
+                      background: theme.gradient.button,
+                      color: isApplying ? theme.text.tertiary : theme.text.primary,
+                      border: `1px solid ${theme.border.normal}`,
                       borderRadius: '8px',
                       cursor: (isApplied || isApplying) ? 'not-allowed' : 'pointer',
                       fontSize: '12px',
@@ -946,17 +948,17 @@ export default function AIDesignSuggestions({
                       gap: '4px',
                       textDecoration: isApplied ? 'line-through' : 'none',
                       opacity: isApplied ? 0.6 : 1,
-                      boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
+                      boxShadow: theme.shadow.md,
                     }}
                     onMouseEnter={(e) => {
                       if (!isApplied && !isApplying) {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)';
+                        e.currentTarget.style.background = theme.gradient.hover;
                         e.currentTarget.style.transform = 'translateY(-1px)';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isApplied && !isApplying) {
-                        e.currentTarget.style.background = 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)';
+                        e.currentTarget.style.background = theme.gradient.button;
                         e.currentTarget.style.transform = 'translateY(0)';
                       }
                     }}
@@ -985,12 +987,12 @@ export default function AIDesignSuggestions({
                   <div
                     style={{
                       padding: '8px 10px',
-                      background: '#f9fafb',
+                      background: theme.background.elevated,
                       borderRadius: '8px',
                       fontSize: '11px',
                       fontWeight: '600',
-                      color: '#6b7280',
-                      border: '1px solid rgba(0, 0, 0, 0.06)',
+                      color: theme.text.secondary,
+                      border: `1px solid ${theme.border.normal}`,
                       whiteSpace: 'nowrap'
                     }}
                     title={`Affects ${suggestion.affectedShapeIds?.length || 0} shape(s)`}
