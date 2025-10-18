@@ -189,10 +189,27 @@ const GRID_SIZE = 50;
 
 export default function Canvas() {
   const { user } = useAuth();
-  const { theme } = useTheme();
+  const { theme, currentThemeId } = useTheme();
   
-  // Theme-aware grid color - increased opacity for visibility in dark themes
-  const GRID_COLOR = theme.isDark ? 'rgba(255, 255, 255, 0.15)' : "#e0e0e0";
+  // Theme-aware grid color - optimized per theme for visibility
+  const getGridColor = () => {
+    switch (currentThemeId) {
+      case 'light':
+        return '#d0d0d0'; // Medium gray - clearly visible on white
+      case 'dark':
+        return 'rgba(255, 255, 255, 0.12)'; // White with moderate opacity
+      case 'midnight':
+        return 'rgba(165, 180, 252, 0.15)'; // Indigo tint
+      case 'ocean':
+        return 'rgba(125, 211, 252, 0.15)'; // Cyan tint
+      case 'forest':
+        return 'rgba(110, 231, 183, 0.15)'; // Green tint
+      default:
+        return theme.isDark ? 'rgba(255, 255, 255, 0.12)' : '#d0d0d0';
+    }
+  };
+  
+  const GRID_COLOR = getGridColor();
   const { canvasId } = useParams();
   const navigate = useNavigate();
   
@@ -3263,14 +3280,14 @@ export default function Canvas() {
         onMouseLeave={handleStageMouseLeave}
       >
         <Layer>
-          {/* Canvas background - let clicks pass through to Stage handler */}
+          {/* Canvas background - themed to match app background */}
           <Rect
             name="canvas-background"
             x={0} 
             y={0} 
             width={CANVAS_WIDTH} 
             height={CANVAS_HEIGHT} 
-            fill="#ffffff" 
+            fill={theme.isDark ? theme.background.elevated : "#ffffff"} 
             listening={false}
           />
           

@@ -793,9 +793,11 @@ export default function AIDesignSuggestions({
                 padding: '12px',
                 borderRadius: '10px',
                 background: error.includes('looks great') 
-                  ? 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)'
-                  : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)',
-                color: error.includes('looks great') ? '#065f46' : '#991b1b',
+                  ? (theme.isDark ? 'rgba(16, 185, 129, 0.2)' : 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)')
+                  : (theme.isDark ? 'rgba(239, 68, 68, 0.2)' : 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)'),
+                color: error.includes('looks great') 
+                  ? (theme.isDark ? '#34d399' : '#065f46')
+                  : (theme.isDark ? '#f87171' : '#991b1b'),
                 fontSize: '13px',
                 marginBottom: '10px',
                 border: `1px solid ${error.includes('looks great') ? '#6ee7b7' : 'rgba(153, 27, 27, 0.1)'}`,
@@ -817,11 +819,11 @@ export default function AIDesignSuggestions({
                 justifyContent: 'center',
                 textAlign: 'center',
                 padding: '40px 20px',
-                color: '#6b7280',
+                color: theme.text.secondary,
               }}
             >
               <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.3 }}>💡</div>
-              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
+              <h4 style={{ margin: '0 0 8px 0', fontSize: '14px', fontWeight: '600', color: theme.text.primary }}>
                 No Analysis Yet
               </h4>
               <p style={{ margin: 0, fontSize: '12px', lineHeight: '1.5' }}>
@@ -843,11 +845,11 @@ export default function AIDesignSuggestions({
                   marginBottom: '10px',
                   padding: '12px',
                   borderRadius: '10px',
-                  background: '#ffffff',
-                  border: '1px solid rgba(0, 0, 0, 0.08)',
+                  background: theme.background.card,
+                  border: `1px solid ${theme.border.medium}`,
                   opacity: isApplied ? 0.6 : 1,
                   transition: 'all 0.2s',
-                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.06)',
+                  boxShadow: theme.shadow.sm,
                 }}
               >
                 {/* Header Row */}
@@ -873,7 +875,7 @@ export default function AIDesignSuggestions({
                         style={{
                           fontSize: '10px',
                           fontWeight: '600',
-                          color: '#9ca3af',
+                          color: theme.text.tertiary,
                           textTransform: 'capitalize'
                         }}
                       >
@@ -884,7 +886,7 @@ export default function AIDesignSuggestions({
                       margin: '0 0 6px 0', 
                       fontSize: '13px', 
                       fontWeight: '600',
-                      color: '#111827',
+                      color: theme.text.primary,
                       lineHeight: '1.4'
                     }}>
                       {suggestion.issue}
@@ -892,7 +894,7 @@ export default function AIDesignSuggestions({
                     <p style={{ 
                       margin: 0, 
                       fontSize: '12px', 
-                      color: '#6b7280',
+                      color: theme.text.secondary,
                       lineHeight: '1.5'
                     }}>
                       {suggestion.suggestion}
@@ -909,7 +911,7 @@ export default function AIDesignSuggestions({
                         cursor: 'pointer',
                         fontSize: '14px',
                         padding: '2px',
-                        color: '#9ca3af',
+                        color: theme.text.tertiary,
                         transition: 'color 0.2s'
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.color = theme.text.primary}

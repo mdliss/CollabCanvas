@@ -308,11 +308,11 @@ export default function HistoryTimeline({ isVisible = true }) {
                 style={styles.trashButton}
                 onClick={handleClearHistory}
                 onMouseOver={(e) => {
-                  e.currentTarget.style.color = '#ef4444';
-                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                  e.currentTarget.style.color = theme.button.danger;
+                  e.currentTarget.style.background = theme.isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)';
                 }}
                 onMouseOut={(e) => {
-                  e.currentTarget.style.color = '#9ca3af';
+                  e.currentTarget.style.color = theme.text.tertiary;
                   e.currentTarget.style.background = 'transparent';
                 }}
                 title="Clear history"
@@ -357,24 +357,22 @@ export default function HistoryTimeline({ isVisible = true }) {
                       ...styles.historyItem(idx),
                       ...(isCurrent ? styles.historyItemCurrent : {}),
                       ...(isAIAction ? {
-                        background: '#fafafa',
-                        borderLeft: '3px solid #2c2e33'
+                        background: theme.background.elevated,
+                        borderLeft: `3px solid ${theme.button.primary}`
                       } : {})
                     }}
                     onClick={() => handleHistoryItemClick(item)}
                     onMouseOver={(e) => {
                       if (!isCurrent) {
-                        e.currentTarget.style.background = isAIAction 
-                          ? '#f3f4f6'
+                        e.currentTarget.style.background = theme.isDark 
+                          ? 'rgba(255, 255, 255, 0.05)'
                           : '#f3f4f6';
                         e.currentTarget.style.transform = 'translateX(4px)';
                       }
                     }}
                     onMouseOut={(e) => {
                       if (!isCurrent) {
-                        e.currentTarget.style.background = isAIAction
-                          ? '#fafafa'
-                          : '#f9fafb';
+                        e.currentTarget.style.background = theme.background.elevated;
                         e.currentTarget.style.transform = 'translateX(0)';
                       }
                     }}
