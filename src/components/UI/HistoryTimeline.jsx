@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useUndo } from '../../contexts/UndoContext';
 import ConfirmationModal from './ConfirmationModal';
 
-export default function HistoryTimeline() {
+export default function HistoryTimeline({ isVisible = true }) {
   const { getStackSizes, undoStackSize, redoStackSize, clear } = useUndo();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -104,7 +104,10 @@ export default function HistoryTimeline() {
       left: '16px',
       zIndex: 9999,
       fontFamily: "'Roboto Mono', monospace",
-      transformOrigin: 'bottom left'
+      transformOrigin: 'bottom left',
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'translateX(0)' : 'translateX(-20px)',
+      transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
     },
     collapsed: {
       width: isExpanded ? '320px' : '140px',

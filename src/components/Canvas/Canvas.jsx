@@ -216,6 +216,9 @@ export default function Canvas() {
   const [isLayersPanelVisible, setIsLayersPanelVisible] = useState(false);
   const [copiedShapes, setCopiedShapes] = useState([]);
   
+  // UI entrance animations
+  const [isUIVisible, setIsUIVisible] = useState(false);
+  
   // FIX #6: Professional inline text editor state
   const [editingTextId, setEditingTextId] = useState(null);
   const [textEditorPosition, setTextEditorPosition] = useState({ x: 0, y: 0, width: 200, height: 40 });
@@ -431,6 +434,16 @@ export default function Canvas() {
     
     checkExistingRequest();
   }, [isViewer, canvasOwnerId, user, CANVAS_ID]);
+
+  // Trigger UI entrance animations
+  useEffect(() => {
+    // Wait a brief moment for the canvas to load, then animate UI in
+    const timer = setTimeout(() => {
+      setIsUIVisible(true);
+    }, 150); // Small delay for smoother transition
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   // Initialize performance monitoring
   useEffect(() => {
@@ -2956,12 +2969,14 @@ export default function Canvas() {
           fontWeight: '500',
           color: '#2c2e33',
           cursor: 'pointer',
-          transition: 'all 0.2s ease',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
           zIndex: 10000,
           display: 'flex',
           alignItems: 'center',
-          gap: '8px'
+          gap: '8px',
+          opacity: isUIVisible ? 1 : 0,
+          transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)'
         }}
         onMouseEnter={(e) => {
           e.target.style.background = '#fafafa';
@@ -3096,7 +3111,7 @@ export default function Canvas() {
       )}
       
       {/* History Timeline - Hidden for viewers */}
-      {canEdit && <HistoryTimeline />}
+      {canEdit && <HistoryTimeline isVisible={isUIVisible} />}
       
       <DebugNote 
         projectId={import.meta.env.VITE_FB_PROJECT_ID} 
@@ -3107,10 +3122,11 @@ export default function Canvas() {
         presenceCount={onlineUsers.length}
         cursorCount={Object.keys(cursors).length}
       />
-      <PresenceList users={onlineUsers} canvasOwnerId={canvasOwnerId} />
+      <PresenceList users={onlineUsers} canvasOwnerId={canvasOwnerId} isVisible={isUIVisible} />
       {/* Toolbar - Hidden for viewers */}
       {canEdit && (
         <ShapeToolbar 
+          isVisible={isUIVisible}
           onAddShape={handleAddShape}
           onUndo={async () => {
             if (canUndo) {
@@ -3156,6 +3172,7 @@ export default function Canvas() {
           onColorSelect={handleColorChange}
           onGradientSelect={handleGradientChange}
           selectedCount={selectedIds.length}
+          isVisible={isUIVisible}
         />
       )}
       
@@ -3430,8 +3447,10 @@ export default function Canvas() {
           cursor: 'pointer',
           boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)',
           zIndex: 1001,
-          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-          padding: 0
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s',
+          padding: 0,
+          opacity: isUIVisible ? 1 : 0,
+          transform: isUIVisible ? 'translateY(0)' : 'translateY(10px)'
         }}
         title="Center View (0 or Home)"
       >
@@ -3466,6 +3485,7 @@ export default function Canvas() {
           isOpen={isAIChatOpen}
           onOpenChange={setIsAIChatOpen}
           isLayersPanelVisible={isLayersPanelVisible}
+          isVisible={isUIVisible}
         />
       )}
     </div>

@@ -12,7 +12,7 @@ import GradientPicker from '../UI/GradientPicker';
  * - Custom color picker button (full spectrum + opacity)
  * - Gradient picker button
  */
-export default function ColorPalette({ onColorSelect, onGradientSelect, selectedCount }) {
+export default function ColorPalette({ onColorSelect, onGradientSelect, selectedCount, isVisible = true }) {
   const [scrollIndex, setScrollIndex] = useState(0);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showGradientPicker, setShowGradientPicker] = useState(false);
@@ -128,7 +128,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           position: 'fixed',
           bottom: '0',
           left: '50%',
-          transform: 'translateX(-50%)',
+          transform: isVisible ? 'translateX(-50%)' : 'translate(-50%, 10px)',
           background: 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
           borderRadius: '12px 12px 0 0',
@@ -140,7 +140,8 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           zIndex: 9998,
           border: '1px solid rgba(0, 0, 0, 0.1)',
           borderBottom: 'none',
-          animation: 'fadeIn 0.2s ease-in-out',
+          opacity: isVisible ? 1 : 0,
+          transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s',
           maxWidth: '90vw'
         }}
       >

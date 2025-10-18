@@ -306,7 +306,8 @@ export default function AICanvas({
   stageRef = null,
   isOpen: externalIsOpen = null,
   onOpenChange = null,
-  isLayersPanelVisible = false
+  isLayersPanelVisible = false,
+  isVisible = true
 }) {
   const { user } = useAuth();
   const { registerAIOperation } = useUndo();
@@ -1055,10 +1056,12 @@ export default function AICanvas({
           border: '1px solid rgba(0, 0, 0, 0.06)',
           borderRadius: '10px',
           cursor: 'pointer',
-          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.25s',
           fontWeight: '600',
           zIndex: 1001,
-          ...getAIButtonStyle()
+          opacity: isVisible ? 1 : 0,
+          ...getAIButtonStyle(),
+          transform: !isVisible ? 'translateY(10px)' : getAIButtonStyle().transform || 'translateY(0)'
         }}
         title="AI Assistant (Shift+A)"
       >

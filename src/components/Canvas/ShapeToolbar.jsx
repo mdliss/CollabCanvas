@@ -15,7 +15,8 @@ export default function ShapeToolbar({
   onSendBackward,
   onDuplicate,
   hasSelection = false,
-  isLayersPanelVisible = false
+  isLayersPanelVisible = false,
+  isVisible = true
 }) {
   const [activeTool, setActiveTool] = useState(null);
   const [hoveredTool, setHoveredTool] = useState(null);
@@ -150,7 +151,7 @@ export default function ShapeToolbar({
         position: 'fixed',
         left: '16px', // Moved to left side of screen
         top: '50%',
-        transform: 'translateY(-50%)',
+        transform: isVisible ? 'translateY(-50%)' : 'translate(-20px, -50%)',
         display: 'flex',
         flexDirection: 'column',
         gap: '10px',
@@ -161,7 +162,8 @@ export default function ShapeToolbar({
         boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
         backdropFilter: 'blur(10px)',
         border: '1px solid rgba(0, 0, 0, 0.06)',
-        transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth animation
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s, left 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
       }}
     >
       {/* Undo/Redo Buttons */}

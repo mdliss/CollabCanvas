@@ -7,7 +7,7 @@ import { getUserProfile } from '../../services/userProfile';
  * Click on a user to see their profile popup
  * Shows crown next to canvas owner
  */
-export default function PresenceList({ users, canvasOwnerId = null }) {
+export default function PresenceList({ users, canvasOwnerId = null, isVisible = true }) {
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -85,7 +85,10 @@ export default function PresenceList({ users, canvasOwnerId = null }) {
         borderRadius: "8px",
         boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
         fontSize: "14px",
-        zIndex: 9998
+        zIndex: 9998,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'translateX(0)' : 'translateX(20px)',
+        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
       }}
     >
       <div style={{ marginBottom: "8px", fontWeight: "600", color: "#333" }}>
@@ -129,7 +132,7 @@ export default function PresenceList({ users, canvasOwnerId = null }) {
                 <span style={{ color: "#555", fontSize: "13px", flex: 1, display: "flex", alignItems: "center", gap: "4px" }}>
                   {user.displayName}
                   {canvasOwnerId && user.uid === canvasOwnerId && (
-                    <span style={{ fontSize: "11px", opacity: 0.7 }} title="Canvas Owner">♔</span>
+                    <span style={{ fontSize: "15px", color: "#2c2e33", fontWeight: "600" }} title="Canvas Owner">♔</span>
                   )}
                 </span>
                 <div 

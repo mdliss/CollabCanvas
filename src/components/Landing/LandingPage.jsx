@@ -45,6 +45,7 @@ export default function LandingPage() {
   const [renamingProject, setRenamingProject] = useState(null);
   const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [deletingProjectId, setDeletingProjectId] = useState(null);
 
   // Load projects and subscription status
   useEffect(() => {
@@ -79,8 +80,9 @@ export default function LandingPage() {
         
         console.log('[LandingPage] Calling listSharedCanvases with email:', userEmail);
         
+        let shared = [];
         if (userEmail) {
-          const shared = await listSharedCanvases(userEmail);
+          shared = await listSharedCanvases(userEmail);
           setSharedProjects(shared);
         } else {
           console.error('[LandingPage] No email found for user!', user);
@@ -116,6 +118,15 @@ export default function LandingPage() {
     : filter === 'shared' 
       ? sharedProjects 
       : allProjects;
+
+  // Debug: Log when filteredProjects changes
+  useEffect(() => {
+    console.log('[LandingPage] 📊 filteredProjects updated:', {
+      count: filteredProjects.length,
+      deletingId: deletingProjectId,
+      projectIds: filteredProjects.map(p => ({ id: p.id, name: p.name }))
+    });
+  }, [filteredProjects, deletingProjectId]);
 
   const handleCreateProject = () => {
     if (!user) return;
@@ -157,11 +168,36 @@ export default function LandingPage() {
       return;
     }
 
+    console.log('[LandingPage] 🗑️ Delete started for project:', project.id, project.name);
+    console.log('[LandingPage] Current allProjects count:', allProjects.length);
+    
+    // Set deleting state to show animation
+    setDeletingProjectId(project.id);
+    console.log('[LandingPage] ⏳ Deleting state set, starting fade-out animation');
+
     try {
+      // Wait for fade-out animation (600ms)
+      console.log('[LandingPage] ⏱️ Waiting 600ms for fade-out animation...');
+      await new Promise(resolve => setTimeout(resolve, 600));
+      
+      console.log('[LandingPage] ✅ Fade-out complete, calling deleteProject API...');
+      // Delete the project
       await deleteProject(user.uid, project.id, project.canvasId);
+      
+      console.log('[LandingPage] ✅ Firebase deletion complete');
+      
+      // Immediately remove from local state to prevent flicker
+      console.log('[LandingPage] 🗑️ Removing project from local state immediately');
+      setOwnedProjects(prev => prev.filter(p => p.id !== project.id));
+      setSharedProjects(prev => prev.filter(p => p.id !== project.id));
+      
+      // Clear deleting state
+      setDeletingProjectId(null);
+      console.log('[LandingPage] 🎉 Delete complete, project removed from UI');
     } catch (error) {
-      console.error('[LandingPage] Failed to delete project:', error);
+      console.error('[LandingPage] ❌ Failed to delete project:', error);
       alert('Failed to delete project');
+      setDeletingProjectId(null);
     }
   };
 
@@ -216,6 +252,14 @@ export default function LandingPage() {
 
   return (
     <div style={styles.container}>
+      {/* Spinner Animation */}
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
+      
       {/* Header */}
       <div style={styles.header}>
         <div style={styles.headerLeft}>
@@ -294,7 +338,13 @@ export default function LandingPage() {
       </div>
 
       {/* Filter Toggle */}
-      {allProjects.length > 0 && (
+      <div style={{
+        opacity: allProjects.length > 0 ? 1 : 0,
+        maxHeight: allProjects.length > 0 ? '100px' : '0',
+        overflow: 'hidden',
+        transition: 'opacity 0.6s ease, max-height 0.6s ease',
+        marginBottom: allProjects.length > 0 ? '28px' : '0'
+      }}>
         <div style={styles.filterContainer}>
           <button
             onClick={() => setFilter('all')}
@@ -354,7 +404,7 @@ export default function LandingPage() {
             Shared ({sharedProjects.length})
           </button>
         </div>
-      )}
+      </div>
 
       {/* Project Grid */}
       <div style={styles.gridContainer}>
@@ -391,23 +441,90 @@ export default function LandingPage() {
         </button>
 
         {/* Project Cards */}
-        {filteredProjects.map((project) => (
-          <div
-            key={project.id}
-            onClick={() => handleOpenProject(project)}
-            style={{
-              ...styles.projectCard,
-              ...(project.isShared ? { borderLeftWidth: '3px', borderLeftColor: '#3b82f6', borderLeftStyle: 'solid' } : {})
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.1)';
-              e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.12)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.06)';
-              e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.06)';
-            }}
-          >
+        {filteredProjects.map((project) => {
+          const isDeleting = deletingProjectId === project.id;
+          
+          if (isDeleting) {
+            console.log('[LandingPage] 🔄 Rendering DELETING card for:', project.id, project.name);
+          }
+          
+          // Completely hide the card once deletion starts (prevents flash)
+          if (isDeleting) {
+            return (
+              <div
+                key={project.id}
+                style={{
+                  ...styles.projectCard,
+                  opacity: 0,
+                  transform: 'scale(0.92)',
+                  transition: 'opacity 0.6s ease, transform 0.6s ease',
+                  pointerEvents: 'none',
+                  position: 'relative'
+                }}
+              >
+                {/* Loading Spinner Overlay */}
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(255, 255, 255, 0.95)',
+                  borderRadius: '10px',
+                  zIndex: 10
+                }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    border: '3px solid #f5f5f5',
+                    borderTop: '3px solid #2c2e33',
+                    borderRadius: '50%',
+                    animation: 'spin 0.8s linear infinite'
+                  }} />
+                  <div style={{
+                    marginTop: '12px',
+                    fontSize: '13px',
+                    fontWeight: '500',
+                    color: '#2c2e33',
+                    fontFamily: "'Roboto Mono', monospace"
+                  }}>
+                    Deleting...
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          
+          return (
+            <div
+              key={project.id}
+              onClick={() => !isDeleting && handleOpenProject(project)}
+              style={{
+                ...styles.projectCard,
+                ...(project.isShared ? { borderLeftWidth: '3px', borderLeftColor: '#3b82f6', borderLeftStyle: 'solid' } : {}),
+                opacity: isDeleting ? 0 : 1,
+                transform: isDeleting ? 'scale(0.92)' : 'scale(1)',
+                transition: 'opacity 0.6s ease, transform 0.6s ease',
+                position: 'relative',
+                pointerEvents: isDeleting ? 'none' : 'auto'
+              }}
+              onMouseEnter={(e) => {
+                if (!isDeleting) {
+                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.1)';
+                  e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!isDeleting) {
+                  e.currentTarget.style.boxShadow = '0 2px 12px rgba(0, 0, 0, 0.06)';
+                  e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.06)';
+                }
+              }}
+            >
             {/* Thumbnail/Preview */}
             <div style={styles.thumbnail}>
               {project.thumbnail ? (
@@ -471,22 +588,32 @@ export default function LandingPage() {
               </div>
             )}
           </div>
-        ))}
+        );
+        })}
       </div>
 
       {/* Empty State */}
-      {filteredProjects.length === 0 && (
-        <div style={styles.emptyState}>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '500', color: '#2c2e33' }}>
-            {filter === 'shared' ? 'No Shared Canvases' : filter === 'owned' ? 'No Projects Yet' : 'No Canvases'}
-          </h2>
-          <p style={{ margin: '0', fontSize: '14px', color: '#646669', fontWeight: '400' }}>
-            {filter === 'shared' 
-              ? 'Canvases shared with you will appear here' 
-              : 'Create your first canvas to get started'}
-          </p>
-        </div>
-      )}
+      <div style={{
+        opacity: filteredProjects.length === 0 ? 1 : 0,
+        transform: filteredProjects.length === 0 ? 'translateY(0)' : 'translateY(-20px)',
+        transition: 'opacity 0.8s ease 0.3s, transform 0.8s ease 0.3s',
+        pointerEvents: filteredProjects.length === 0 ? 'auto' : 'none',
+        position: filteredProjects.length === 0 ? 'relative' : 'absolute',
+        top: filteredProjects.length === 0 ? 'auto' : '-9999px'
+      }}>
+        {filteredProjects.length === 0 && (
+          <div style={styles.emptyState}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '500', color: '#2c2e33' }}>
+              {filter === 'shared' ? 'No Shared Canvases' : filter === 'owned' ? 'No Projects Yet' : 'No Canvases'}
+            </h2>
+            <p style={{ margin: '0', fontSize: '14px', color: '#646669', fontWeight: '400' }}>
+              {filter === 'shared' 
+                ? 'Canvases shared with you will appear here' 
+                : 'Create your first canvas to get started'}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Modals */}
       {showTemplateModal && (
@@ -637,7 +764,7 @@ const styles = {
   filterContainer: {
     maxWidth: '1200px',
     width: '100%',
-    margin: '0 auto 28px auto',
+    margin: '0 auto',
     display: 'flex',
     gap: '10px',
     justifyContent: 'center'
