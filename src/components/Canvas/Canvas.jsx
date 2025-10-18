@@ -236,6 +236,40 @@ export default function Canvas() {
         return 'rgba(225, 29, 72, 0.15)';
       case 'mint':
         return 'rgba(5, 150, 105, 0.15)';
+      case 'vscode':
+        return 'rgba(78, 201, 176, 0.15)';
+      case 'abyss':
+        return 'rgba(88, 166, 255, 0.15)';
+      case 'coffee':
+        return 'rgba(218, 165, 32, 0.15)';
+      case 'neon':
+        return 'rgba(57, 255, 20, 0.2)';
+      case 'slate':
+        return 'rgba(148, 163, 184, 0.15)';
+      case 'twilight':
+        return 'rgba(207, 106, 76, 0.15)';
+      case 'palenight':
+        return 'rgba(199, 146, 234, 0.15)';
+      case 'horizon':
+        return 'rgba(233, 86, 120, 0.15)';
+      case 'panda':
+        return 'rgba(255, 117, 181, 0.15)';
+      case 'matrix':
+        return 'rgba(0, 255, 65, 0.2)';
+      case 'serika':
+        return 'rgba(226, 183, 20, 0.15)';
+      case 'arctic':
+        return 'rgba(2, 132, 199, 0.15)';
+      case 'vaporwave':
+        return 'rgba(255, 113, 206, 0.2)';
+      case 'amber':
+        return 'rgba(217, 119, 6, 0.15)';
+      case 'blueberry':
+        return 'rgba(37, 99, 235, 0.15)';
+      case 'grape':
+        return 'rgba(168, 85, 247, 0.15)';
+      case 'aqua':
+        return 'rgba(6, 182, 212, 0.15)';
       default:
         return theme.isDark ? 'rgba(255, 255, 255, 0.12)' : '#d0d0d0';
     }

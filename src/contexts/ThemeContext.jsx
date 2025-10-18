@@ -98,7 +98,7 @@ const THEMES = {
   dark: {
     name: 'Dark',
     id: 'dark',
-    isPremium: false,
+    isPremium: true,
   // Page backgrounds
   background: {
     page: '#0f1117',
@@ -292,7 +292,7 @@ const THEMES = {
   forest: {
     name: 'Forest',
     id: 'forest',
-    isPremium: false,
+    isPremium: true,
     background: {
       page: '#0f1f14',
       card: '#1a2e23',
@@ -1289,6 +1289,1009 @@ const THEMES = {
       purple: '#8b5cf6'
     },
     backdrop: 'rgba(5, 150, 105, 0.3)',
+    isDark: false
+  },
+  
+  vscode: {
+    name: 'VS Code',
+    id: 'vscode',
+    isPremium: true,
+    background: {
+      page: '#1e1e1e',
+      card: '#252526',
+      elevated: '#2d2d30',
+      input: '#3c3c3c',
+      inputFocus: '#454545'
+    },
+    text: {
+      primary: '#d4d4d4',
+      secondary: '#4ec9b0',
+      tertiary: '#6a6a6a',
+      disabled: '#5a5a5a',
+      inverse: '#1e1e1e'
+    },
+    border: {
+      light: 'rgba(78, 201, 176, 0.1)',
+      normal: 'rgba(78, 201, 176, 0.15)',
+      medium: 'rgba(78, 201, 176, 0.2)',
+      strong: 'rgba(78, 201, 176, 0.3)',
+      focus: '#4ec9b0'
+    },
+    button: {
+      primary: '#0e639c',
+      primaryHover: '#1177bb',
+      secondary: '#2d2d30',
+      secondaryHover: '#3c3c3c',
+      danger: '#f48771',
+      dangerHover: '#e27762'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.6)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.7)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.8)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.9)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.7) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #252526 0%, #2d2d30 100%)',
+      button: 'linear-gradient(135deg, #2d2d30 0%, #3c3c3c 100%)',
+      hover: 'linear-gradient(135deg, #3c3c3c 0%, #454545 100%)',
+      active: 'linear-gradient(135deg, #454545 0%, #4e4e4e 100%)',
+      header: 'linear-gradient(180deg, #252526 0%, #2d2d30 100%)',
+      tooltip: 'linear-gradient(135deg, #0e639c 0%, #1177bb 100%)'
+    },
+    accent: {
+      blue: '#569cd6',
+      green: '#4ec9b0',
+      yellow: '#dcdcaa',
+      red: '#f48771',
+      purple: '#c586c0'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.85)',
+    isDark: true
+  },
+  
+  abyss: {
+    name: 'Abyss',
+    id: 'abyss',
+    isPremium: true,
+    background: {
+      page: '#000c18',
+      card: '#0d1117',
+      elevated: '#161b22',
+      input: '#161b22',
+      inputFocus: '#1f242d'
+    },
+    text: {
+      primary: '#c9d1d9',
+      secondary: '#58a6ff',
+      tertiary: '#484f58',
+      disabled: '#484f58',
+      inverse: '#000c18'
+    },
+    border: {
+      light: 'rgba(88, 166, 255, 0.1)',
+      normal: 'rgba(88, 166, 255, 0.15)',
+      medium: 'rgba(88, 166, 255, 0.2)',
+      strong: 'rgba(88, 166, 255, 0.3)',
+      focus: '#58a6ff'
+    },
+    button: {
+      primary: '#58a6ff',
+      primaryHover: '#3886df',
+      secondary: '#161b22',
+      secondaryHover: '#1f242d',
+      danger: '#f85149',
+      dangerHover: '#d83129'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.8)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.9)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.95)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.98)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.9) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #0d1117 0%, #161b22 100%)',
+      button: 'linear-gradient(135deg, #161b22 0%, #1f242d 100%)',
+      hover: 'linear-gradient(135deg, #1f242d 0%, #282e38 100%)',
+      active: 'linear-gradient(135deg, #282e38 0%, #313843 100%)',
+      header: 'linear-gradient(180deg, #0d1117 0%, #161b22 100%)',
+      tooltip: 'linear-gradient(135deg, #58a6ff 0%, #3886df 100%)'
+    },
+    accent: {
+      blue: '#58a6ff',
+      green: '#3fb950',
+      yellow: '#d29922',
+      red: '#f85149',
+      purple: '#bc8cff'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.95)',
+    isDark: true
+  },
+  
+  coffee: {
+    name: 'Coffee',
+    id: 'coffee',
+    isPremium: true,
+    background: {
+      page: '#2b1d0e',
+      card: '#3d2817',
+      elevated: '#4f3320',
+      input: '#4f3320',
+      inputFocus: '#613e29'
+    },
+    text: {
+      primary: '#f5deb3',
+      secondary: '#daa520',
+      tertiary: '#8b6f47',
+      disabled: '#7a5c3a',
+      inverse: '#2b1d0e'
+    },
+    border: {
+      light: 'rgba(218, 165, 32, 0.1)',
+      normal: 'rgba(218, 165, 32, 0.15)',
+      medium: 'rgba(218, 165, 32, 0.2)',
+      strong: 'rgba(218, 165, 32, 0.3)',
+      focus: '#daa520'
+    },
+    button: {
+      primary: '#cd853f',
+      primaryHover: '#b8752e',
+      secondary: '#4f3320',
+      secondaryHover: '#613e29',
+      danger: '#d2691e',
+      dangerHover: '#c2590e'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.7)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.8)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.9)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.95)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.8) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #3d2817 0%, #4f3320 100%)',
+      button: 'linear-gradient(135deg, #4f3320 0%, #613e29 100%)',
+      hover: 'linear-gradient(135deg, #613e29 0%, #734932 100%)',
+      active: 'linear-gradient(135deg, #734932 0%, #85543b 100%)',
+      header: 'linear-gradient(180deg, #3d2817 0%, #4f3320 100%)',
+      tooltip: 'linear-gradient(135deg, #cd853f 0%, #b8752e 100%)'
+    },
+    accent: {
+      blue: '#87ceeb',
+      green: '#90ee90',
+      yellow: '#daa520',
+      red: '#d2691e',
+      purple: '#dda0dd'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.9)',
+    isDark: true
+  },
+  
+  neon: {
+    name: 'Neon',
+    id: 'neon',
+    isPremium: true,
+    background: {
+      page: '#000000',
+      card: '#0a0a0a',
+      elevated: '#141414',
+      input: '#141414',
+      inputFocus: '#1e1e1e'
+    },
+    text: {
+      primary: '#39ff14',
+      secondary: '#ff00ff',
+      tertiary: '#555555',
+      disabled: '#444444',
+      inverse: '#000000'
+    },
+    border: {
+      light: 'rgba(57, 255, 20, 0.15)',
+      normal: 'rgba(57, 255, 20, 0.2)',
+      medium: 'rgba(57, 255, 20, 0.25)',
+      strong: 'rgba(57, 255, 20, 0.35)',
+      focus: '#39ff14'
+    },
+    button: {
+      primary: '#39ff14',
+      primaryHover: '#2df00d',
+      secondary: '#141414',
+      secondaryHover: '#1e1e1e',
+      danger: '#ff0055',
+      dangerHover: '#ef0045'
+    },
+    shadow: {
+      sm: '0 1px 4px rgba(57, 255, 20, 0.3)',
+      md: '0 2px 8px rgba(57, 255, 20, 0.4)',
+      lg: '0 4px 20px rgba(57, 255, 20, 0.5)',
+      xl: '0 8px 32px rgba(57, 255, 20, 0.6)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.95) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #0a0a0a 0%, #141414 100%)',
+      button: 'linear-gradient(135deg, #141414 0%, #1e1e1e 100%)',
+      hover: 'linear-gradient(135deg, #1e1e1e 0%, #282828 100%)',
+      active: 'linear-gradient(135deg, #282828 0%, #323232 100%)',
+      header: 'linear-gradient(180deg, #0a0a0a 0%, #141414 100%)',
+      tooltip: 'linear-gradient(135deg, #39ff14 0%, #2df00d 100%)'
+    },
+    accent: {
+      blue: '#00ffff',
+      green: '#39ff14',
+      yellow: '#ffff00',
+      red: '#ff0055',
+      purple: '#ff00ff'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.98)',
+    isDark: true
+  },
+  
+  slate: {
+    name: 'Slate',
+    id: 'slate',
+    isPremium: true,
+    background: {
+      page: '#0f172a',
+      card: '#1e293b',
+      elevated: '#334155',
+      input: '#334155',
+      inputFocus: '#475569'
+    },
+    text: {
+      primary: '#f1f5f9',
+      secondary: '#94a3b8',
+      tertiary: '#64748b',
+      disabled: '#475569',
+      inverse: '#0f172a'
+    },
+    border: {
+      light: 'rgba(148, 163, 184, 0.1)',
+      normal: 'rgba(148, 163, 184, 0.15)',
+      medium: 'rgba(148, 163, 184, 0.2)',
+      strong: 'rgba(148, 163, 184, 0.3)',
+      focus: '#94a3b8'
+    },
+    button: {
+      primary: '#3b82f6',
+      primaryHover: '#2563eb',
+      secondary: '#334155',
+      secondaryHover: '#475569',
+      danger: '#ef4444',
+      dangerHover: '#dc2626'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.6)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.7)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.8)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.9)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.7) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)',
+      button: 'linear-gradient(135deg, #334155 0%, #475569 100%)',
+      hover: 'linear-gradient(135deg, #475569 0%, #5b667d 100%)',
+      active: 'linear-gradient(135deg, #5b667d 0%, #6f7791 100%)',
+      header: 'linear-gradient(180deg, #1e293b 0%, #334155 100%)',
+      tooltip: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+    },
+    accent: {
+      blue: '#60a5fa',
+      green: '#34d399',
+      yellow: '#fbbf24',
+      red: '#f87171',
+      purple: '#a78bfa'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.85)',
+    isDark: true
+  },
+  
+  twilight: {
+    name: 'Twilight',
+    id: 'twilight',
+    isPremium: true,
+    background: {
+      page: '#141414',
+      card: '#1e1e1e',
+      elevated: '#282828',
+      input: '#282828',
+      inputFocus: '#323232'
+    },
+    text: {
+      primary: '#f8f8f8',
+      secondary: '#cf6a4c',
+      tertiary: '#7587a6',
+      disabled: '#5f5a60',
+      inverse: '#141414'
+    },
+    border: {
+      light: 'rgba(207, 106, 76, 0.1)',
+      normal: 'rgba(207, 106, 76, 0.15)',
+      medium: 'rgba(207, 106, 76, 0.2)',
+      strong: 'rgba(207, 106, 76, 0.3)',
+      focus: '#cf6a4c'
+    },
+    button: {
+      primary: '#cf6a4c',
+      primaryHover: '#bf5a3c',
+      secondary: '#282828',
+      secondaryHover: '#323232',
+      danger: '#cda869',
+      dangerHover: '#bd9859'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.7)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.8)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.9)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.95)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.8) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #1e1e1e 0%, #282828 100%)',
+      button: 'linear-gradient(135deg, #282828 0%, #323232 100%)',
+      hover: 'linear-gradient(135deg, #323232 0%, #3c3c3c 100%)',
+      active: 'linear-gradient(135deg, #3c3c3c 0%, #464646 100%)',
+      header: 'linear-gradient(180deg, #1e1e1e 0%, #282828 100%)',
+      tooltip: 'linear-gradient(135deg, #cf6a4c 0%, #bf5a3c 100%)'
+    },
+    accent: {
+      blue: '#7587a6',
+      green: '#8f9d6a',
+      yellow: '#cda869',
+      red: '#cf6a4c',
+      purple: '#9b859d'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.9)',
+    isDark: true
+  },
+  
+  palenight: {
+    name: 'Palenight',
+    id: 'palenight',
+    isPremium: true,
+    background: {
+      page: '#292d3e',
+      card: '#32364a',
+      elevated: '#3b3f58',
+      input: '#3b3f58',
+      inputFocus: '#444866'
+    },
+    text: {
+      primary: '#a6accd',
+      secondary: '#c792ea',
+      tertiary: '#676e95',
+      disabled: '#5a607a',
+      inverse: '#292d3e'
+    },
+    border: {
+      light: 'rgba(199, 146, 234, 0.1)',
+      normal: 'rgba(199, 146, 234, 0.15)',
+      medium: 'rgba(199, 146, 234, 0.2)',
+      strong: 'rgba(199, 146, 234, 0.3)',
+      focus: '#c792ea'
+    },
+    button: {
+      primary: '#c792ea',
+      primaryHover: '#b772da',
+      secondary: '#3b3f58',
+      secondaryHover: '#444866',
+      danger: '#f07178',
+      dangerHover: '#e05158'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.6)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.7)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.8)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.9)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.7) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #32364a 0%, #3b3f58 100%)',
+      button: 'linear-gradient(135deg, #3b3f58 0%, #444866 100%)',
+      hover: 'linear-gradient(135deg, #444866 0%, #4d5174 100%)',
+      active: 'linear-gradient(135deg, #4d5174 0%, #565a82 100%)',
+      header: 'linear-gradient(180deg, #32364a 0%, #3b3f58 100%)',
+      tooltip: 'linear-gradient(135deg, #c792ea 0%, #b772da 100%)'
+    },
+    accent: {
+      blue: '#82aaff',
+      green: '#c3e88d',
+      yellow: '#ffcb6b',
+      red: '#f07178',
+      purple: '#c792ea'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.85)',
+    isDark: true
+  },
+  
+  horizon: {
+    name: 'Horizon',
+    id: 'horizon',
+    isPremium: true,
+    background: {
+      page: '#1c1e26',
+      card: '#232530',
+      elevated: '#2e303e',
+      input: '#2e303e',
+      inputFocus: '#393b4c'
+    },
+    text: {
+      primary: '#fac29a',
+      secondary: '#e95678',
+      tertiary: '#6c6f93',
+      disabled: '#5b5e7e',
+      inverse: '#1c1e26'
+    },
+    border: {
+      light: 'rgba(233, 86, 120, 0.1)',
+      normal: 'rgba(233, 86, 120, 0.15)',
+      medium: 'rgba(233, 86, 120, 0.2)',
+      strong: 'rgba(233, 86, 120, 0.3)',
+      focus: '#e95678'
+    },
+    button: {
+      primary: '#e95678',
+      primaryHover: '#d94668',
+      secondary: '#2e303e',
+      secondaryHover: '#393b4c',
+      danger: '#ec5f67',
+      dangerHover: '#dc4f57'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.6)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.7)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.8)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.9)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.7) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #232530 0%, #2e303e 100%)',
+      button: 'linear-gradient(135deg, #2e303e 0%, #393b4c 100%)',
+      hover: 'linear-gradient(135deg, #393b4c 0%, #44465a 100%)',
+      active: 'linear-gradient(135deg, #44465a 0%, #4f5168 100%)',
+      header: 'linear-gradient(180deg, #232530 0%, #2e303e 100%)',
+      tooltip: 'linear-gradient(135deg, #e95678 0%, #d94668 100%)'
+    },
+    accent: {
+      blue: '#25b0bc',
+      green: '#29d398',
+      yellow: '#fab795',
+      red: '#e95678',
+      purple: '#b877db'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.9)',
+    isDark: true
+  },
+  
+  panda: {
+    name: 'Panda',
+    id: 'panda',
+    isPremium: true,
+    background: {
+      page: '#292a2b',
+      card: '#31353a',
+      elevated: '#3a3f47',
+      input: '#3a3f47',
+      inputFocus: '#434954'
+    },
+    text: {
+      primary: '#e6e6e6',
+      secondary: '#ff75b5',
+      tertiary: '#676b79',
+      disabled: '#5a5e6a',
+      inverse: '#292a2b'
+    },
+    border: {
+      light: 'rgba(255, 117, 181, 0.1)',
+      normal: 'rgba(255, 117, 181, 0.15)',
+      medium: 'rgba(255, 117, 181, 0.2)',
+      strong: 'rgba(255, 117, 181, 0.3)',
+      focus: '#ff75b5'
+    },
+    button: {
+      primary: '#ff75b5',
+      primaryHover: '#ff55a5',
+      secondary: '#3a3f47',
+      secondaryHover: '#434954',
+      danger: '#ff2c6d',
+      dangerHover: '#ef1c5d'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.6)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.7)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.8)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.9)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.7) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #31353a 0%, #3a3f47 100%)',
+      button: 'linear-gradient(135deg, #3a3f47 0%, #434954 100%)',
+      hover: 'linear-gradient(135deg, #434954 0%, #4c5361 100%)',
+      active: 'linear-gradient(135deg, #4c5361 0%, #555d6e 100%)',
+      header: 'linear-gradient(180deg, #31353a 0%, #3a3f47 100%)',
+      tooltip: 'linear-gradient(135deg, #ff75b5 0%, #ff55a5 100%)'
+    },
+    accent: {
+      blue: '#6fc1ff',
+      green: '#19f9d8',
+      yellow: '#ffb86c',
+      red: '#ff2c6d',
+      purple: '#ff75b5'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.85)',
+    isDark: true
+  },
+  
+  matrix: {
+    name: 'Matrix',
+    id: 'matrix',
+    isPremium: true,
+    background: {
+      page: '#0d0208',
+      card: '#003b00',
+      elevated: '#005200',
+      input: '#005200',
+      inputFocus: '#006900'
+    },
+    text: {
+      primary: '#00ff41',
+      secondary: '#00ff41',
+      tertiary: '#008f11',
+      disabled: '#006900',
+      inverse: '#0d0208'
+    },
+    border: {
+      light: 'rgba(0, 255, 65, 0.15)',
+      normal: 'rgba(0, 255, 65, 0.2)',
+      medium: 'rgba(0, 255, 65, 0.25)',
+      strong: 'rgba(0, 255, 65, 0.35)',
+      focus: '#00ff41'
+    },
+    button: {
+      primary: '#00ff41',
+      primaryHover: '#00ef31',
+      secondary: '#005200',
+      secondaryHover: '#006900',
+      danger: '#00ff41',
+      dangerHover: '#00ef31'
+    },
+    shadow: {
+      sm: '0 1px 4px rgba(0, 255, 65, 0.3)',
+      md: '0 2px 8px rgba(0, 255, 65, 0.4)',
+      lg: '0 4px 20px rgba(0, 255, 65, 0.5)',
+      xl: '0 8px 32px rgba(0, 255, 65, 0.6)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.9) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #003b00 0%, #005200 100%)',
+      button: 'linear-gradient(135deg, #005200 0%, #006900 100%)',
+      hover: 'linear-gradient(135deg, #006900 0%, #008000 100%)',
+      active: 'linear-gradient(135deg, #008000 0%, #009700 100%)',
+      header: 'linear-gradient(180deg, #003b00 0%, #005200 100%)',
+      tooltip: 'linear-gradient(135deg, #00ff41 0%, #00ef31 100%)'
+    },
+    accent: {
+      blue: '#00ff41',
+      green: '#00ff41',
+      yellow: '#00ff41',
+      red: '#00ff41',
+      purple: '#00ff41'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.95)',
+    isDark: true
+  },
+  
+  serika: {
+    name: 'Serika',
+    id: 'serika',
+    isPremium: true,
+    background: {
+      page: '#fffaf0',
+      card: '#ffffff',
+      elevated: '#fefbf5',
+      input: '#fefbf5',
+      inputFocus: '#ffffff'
+    },
+    text: {
+      primary: '#323437',
+      secondary: '#e2b714',
+      tertiary: '#9a9a9a',
+      disabled: '#d4d4d4',
+      inverse: '#ffffff'
+    },
+    border: {
+      light: 'rgba(226, 183, 20, 0.1)',
+      normal: 'rgba(226, 183, 20, 0.15)',
+      medium: 'rgba(226, 183, 20, 0.2)',
+      strong: 'rgba(226, 183, 20, 0.3)',
+      focus: '#e2b714'
+    },
+    button: {
+      primary: '#e2b714',
+      primaryHover: '#d2a704',
+      secondary: '#ffffff',
+      secondaryHover: '#fefbf5',
+      danger: '#dc2626',
+      dangerHover: '#b91c1c'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(226, 183, 20, 0.1)',
+      md: '0 2px 8px rgba(226, 183, 20, 0.15)',
+      lg: '0 4px 20px rgba(226, 183, 20, 0.2)',
+      xl: '0 8px 32px rgba(226, 183, 20, 0.25)',
+      inset: '0 1px 2px rgba(226, 183, 20, 0.15) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #ffffff 0%, #fefbf5 100%)',
+      button: 'linear-gradient(135deg, #fefbf5 0%, #fffaf0 100%)',
+      hover: 'linear-gradient(135deg, #fffaf0 0%, #fff5e6 100%)',
+      active: 'linear-gradient(135deg, #fff5e6 0%, #fff0dc 100%)',
+      header: 'linear-gradient(180deg, #ffffff 0%, #fefbf5 100%)',
+      tooltip: 'linear-gradient(135deg, #e2b714 0%, #d2a704 100%)'
+    },
+    accent: {
+      blue: '#3b82f6',
+      green: '#10b981',
+      yellow: '#e2b714',
+      red: '#ef4444',
+      purple: '#8b5cf6'
+    },
+    backdrop: 'rgba(226, 183, 20, 0.2)',
+    isDark: false
+  },
+  
+  arctic: {
+    name: 'Arctic',
+    id: 'arctic',
+    isPremium: true,
+    background: {
+      page: '#f0f9ff',
+      card: '#ffffff',
+      elevated: '#f5faff',
+      input: '#f5faff',
+      inputFocus: '#ffffff'
+    },
+    text: {
+      primary: '#0c4a6e',
+      secondary: '#0284c7',
+      tertiary: '#7dd3fc',
+      disabled: '#bae6fd',
+      inverse: '#ffffff'
+    },
+    border: {
+      light: 'rgba(2, 132, 199, 0.08)',
+      normal: 'rgba(2, 132, 199, 0.12)',
+      medium: 'rgba(2, 132, 199, 0.16)',
+      strong: 'rgba(2, 132, 199, 0.24)',
+      focus: '#0284c7'
+    },
+    button: {
+      primary: '#0ea5e9',
+      primaryHover: '#0284c7',
+      secondary: '#ffffff',
+      secondaryHover: '#f5faff',
+      danger: '#dc2626',
+      dangerHover: '#b91c1c'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(2, 132, 199, 0.08)',
+      md: '0 2px 8px rgba(2, 132, 199, 0.12)',
+      lg: '0 4px 20px rgba(2, 132, 199, 0.16)',
+      xl: '0 8px 32px rgba(2, 132, 199, 0.2)',
+      inset: '0 1px 2px rgba(2, 132, 199, 0.15) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #ffffff 0%, #f5faff 100%)',
+      button: 'linear-gradient(135deg, #f5faff 0%, #f0f9ff 100%)',
+      hover: 'linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%)',
+      active: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)',
+      header: 'linear-gradient(180deg, #ffffff 0%, #f5faff 100%)',
+      tooltip: 'linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%)'
+    },
+    accent: {
+      blue: '#0ea5e9',
+      green: '#10b981',
+      yellow: '#f59e0b',
+      red: '#ef4444',
+      purple: '#8b5cf6'
+    },
+    backdrop: 'rgba(2, 132, 199, 0.3)',
+    isDark: false
+  },
+  
+  vaporwave: {
+    name: 'Vaporwave',
+    id: 'vaporwave',
+    isPremium: true,
+    background: {
+      page: '#1a0033',
+      card: '#2d0055',
+      elevated: '#400077',
+      input: '#400077',
+      inputFocus: '#530099'
+    },
+    text: {
+      primary: '#ff71ce',
+      secondary: '#01cdfe',
+      tertiary: '#7700bb',
+      disabled: '#660099',
+      inverse: '#1a0033'
+    },
+    border: {
+      light: 'rgba(255, 113, 206, 0.15)',
+      normal: 'rgba(255, 113, 206, 0.2)',
+      medium: 'rgba(255, 113, 206, 0.25)',
+      strong: 'rgba(255, 113, 206, 0.35)',
+      focus: '#ff71ce'
+    },
+    button: {
+      primary: '#ff71ce',
+      primaryHover: '#ff51be',
+      secondary: '#400077',
+      secondaryHover: '#530099',
+      danger: '#ff006e',
+      dangerHover: '#ef005e'
+    },
+    shadow: {
+      sm: '0 1px 4px rgba(255, 113, 206, 0.3)',
+      md: '0 2px 8px rgba(255, 113, 206, 0.4)',
+      lg: '0 4px 20px rgba(255, 113, 206, 0.5)',
+      xl: '0 8px 32px rgba(255, 113, 206, 0.6)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.9) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #2d0055 0%, #400077 100%)',
+      button: 'linear-gradient(135deg, #400077 0%, #530099 100%)',
+      hover: 'linear-gradient(135deg, #530099 0%, #6600bb 100%)',
+      active: 'linear-gradient(135deg, #6600bb 0%, #7900dd 100%)',
+      header: 'linear-gradient(180deg, #2d0055 0%, #400077 100%)',
+      tooltip: 'linear-gradient(135deg, #ff71ce 0%, #ff51be 100%)'
+    },
+    accent: {
+      blue: '#01cdfe',
+      green: '#05ffa1',
+      yellow: '#fffb96',
+      red: '#ff006e',
+      purple: '#ff71ce'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.95)',
+    isDark: true
+  },
+  
+  amber: {
+    name: 'Amber',
+    id: 'amber',
+    isPremium: true,
+    background: {
+      page: '#fffbeb',
+      card: '#ffffff',
+      elevated: '#fef3c7',
+      input: '#fef3c7',
+      inputFocus: '#ffffff'
+    },
+    text: {
+      primary: '#78350f',
+      secondary: '#d97706',
+      tertiary: '#fbbf24',
+      disabled: '#fcd34d',
+      inverse: '#ffffff'
+    },
+    border: {
+      light: 'rgba(217, 119, 6, 0.1)',
+      normal: 'rgba(217, 119, 6, 0.15)',
+      medium: 'rgba(217, 119, 6, 0.2)',
+      strong: 'rgba(217, 119, 6, 0.3)',
+      focus: '#d97706'
+    },
+    button: {
+      primary: '#f59e0b',
+      primaryHover: '#d97706',
+      secondary: '#ffffff',
+      secondaryHover: '#fef3c7',
+      danger: '#dc2626',
+      dangerHover: '#b91c1c'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(217, 119, 6, 0.1)',
+      md: '0 2px 8px rgba(217, 119, 6, 0.15)',
+      lg: '0 4px 20px rgba(217, 119, 6, 0.2)',
+      xl: '0 8px 32px rgba(217, 119, 6, 0.25)',
+      inset: '0 1px 2px rgba(217, 119, 6, 0.15) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #ffffff 0%, #fef3c7 100%)',
+      button: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+      hover: 'linear-gradient(135deg, #fde68a 0%, #fcd34d 100%)',
+      active: 'linear-gradient(135deg, #fcd34d 0%, #fbbf24 100%)',
+      header: 'linear-gradient(180deg, #ffffff 0%, #fef3c7 100%)',
+      tooltip: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+    },
+    accent: {
+      blue: '#3b82f6',
+      green: '#10b981',
+      yellow: '#f59e0b',
+      red: '#ef4444',
+      purple: '#8b5cf6'
+    },
+    backdrop: 'rgba(217, 119, 6, 0.25)',
+    isDark: false
+  },
+  
+  blueberry: {
+    name: 'Blueberry',
+    id: 'blueberry',
+    isPremium: true,
+    background: {
+      page: '#f0f4ff',
+      card: '#ffffff',
+      elevated: '#f5f8ff',
+      input: '#f5f8ff',
+      inputFocus: '#ffffff'
+    },
+    text: {
+      primary: '#1e3a8a',
+      secondary: '#2563eb',
+      tertiary: '#60a5fa',
+      disabled: '#93c5fd',
+      inverse: '#ffffff'
+    },
+    border: {
+      light: 'rgba(37, 99, 235, 0.08)',
+      normal: 'rgba(37, 99, 235, 0.12)',
+      medium: 'rgba(37, 99, 235, 0.16)',
+      strong: 'rgba(37, 99, 235, 0.24)',
+      focus: '#2563eb'
+    },
+    button: {
+      primary: '#3b82f6',
+      primaryHover: '#2563eb',
+      secondary: '#ffffff',
+      secondaryHover: '#f5f8ff',
+      danger: '#dc2626',
+      dangerHover: '#b91c1c'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(37, 99, 235, 0.08)',
+      md: '0 2px 8px rgba(37, 99, 235, 0.12)',
+      lg: '0 4px 20px rgba(37, 99, 235, 0.16)',
+      xl: '0 8px 32px rgba(37, 99, 235, 0.2)',
+      inset: '0 1px 2px rgba(37, 99, 235, 0.15) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #ffffff 0%, #f5f8ff 100%)',
+      button: 'linear-gradient(135deg, #f5f8ff 0%, #eff6ff 100%)',
+      hover: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+      active: 'linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%)',
+      header: 'linear-gradient(180deg, #ffffff 0%, #f5f8ff 100%)',
+      tooltip: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)'
+    },
+    accent: {
+      blue: '#3b82f6',
+      green: '#10b981',
+      yellow: '#f59e0b',
+      red: '#ef4444',
+      purple: '#8b5cf6'
+    },
+    backdrop: 'rgba(37, 99, 235, 0.3)',
+    isDark: false
+  },
+  
+  grape: {
+    name: 'Grape',
+    id: 'grape',
+    isPremium: true,
+    background: {
+      page: '#1a0a2e',
+      card: '#2d1550',
+      elevated: '#3f2072',
+      input: '#3f2072',
+      inputFocus: '#512b94'
+    },
+    text: {
+      primary: '#e9d5ff',
+      secondary: '#a855f7',
+      tertiary: '#6b4ca8',
+      disabled: '#5a3c8a',
+      inverse: '#1a0a2e'
+    },
+    border: {
+      light: 'rgba(168, 85, 247, 0.1)',
+      normal: 'rgba(168, 85, 247, 0.15)',
+      medium: 'rgba(168, 85, 247, 0.2)',
+      strong: 'rgba(168, 85, 247, 0.3)',
+      focus: '#a855f7'
+    },
+    button: {
+      primary: '#a855f7',
+      primaryHover: '#9333ea',
+      secondary: '#3f2072',
+      secondaryHover: '#512b94',
+      danger: '#f472b6',
+      dangerHover: '#e252a6'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(0, 0, 0, 0.7)',
+      md: '0 2px 8px rgba(0, 0, 0, 0.8)',
+      lg: '0 4px 20px rgba(0, 0, 0, 0.9)',
+      xl: '0 8px 32px rgba(0, 0, 0, 0.95)',
+      inset: '0 1px 2px rgba(0, 0, 0, 0.8) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #2d1550 0%, #3f2072 100%)',
+      button: 'linear-gradient(135deg, #3f2072 0%, #512b94 100%)',
+      hover: 'linear-gradient(135deg, #512b94 0%, #6336b6 100%)',
+      active: 'linear-gradient(135deg, #6336b6 0%, #7541d8 100%)',
+      header: 'linear-gradient(180deg, #2d1550 0%, #3f2072 100%)',
+      tooltip: 'linear-gradient(135deg, #a855f7 0%, #9333ea 100%)'
+    },
+    accent: {
+      blue: '#60a5fa',
+      green: '#34d399',
+      yellow: '#fbbf24',
+      red: '#f472b6',
+      purple: '#a855f7'
+    },
+    backdrop: 'rgba(0, 0, 0, 0.9)',
+    isDark: true
+  },
+  
+  aqua: {
+    name: 'Aqua',
+    id: 'aqua',
+    isPremium: true,
+    background: {
+      page: '#ecfeff',
+      card: '#ffffff',
+      elevated: '#f0fdff',
+      input: '#f0fdff',
+      inputFocus: '#ffffff'
+    },
+    text: {
+      primary: '#164e63',
+      secondary: '#06b6d4',
+      tertiary: '#67e8f9',
+      disabled: '#a5f3fc',
+      inverse: '#ffffff'
+    },
+    border: {
+      light: 'rgba(6, 182, 212, 0.08)',
+      normal: 'rgba(6, 182, 212, 0.12)',
+      medium: 'rgba(6, 182, 212, 0.16)',
+      strong: 'rgba(6, 182, 212, 0.24)',
+      focus: '#06b6d4'
+    },
+    button: {
+      primary: '#06b6d4',
+      primaryHover: '#0891b2',
+      secondary: '#ffffff',
+      secondaryHover: '#f0fdff',
+      danger: '#dc2626',
+      dangerHover: '#b91c1c'
+    },
+    shadow: {
+      sm: '0 1px 2px rgba(6, 182, 212, 0.08)',
+      md: '0 2px 8px rgba(6, 182, 212, 0.12)',
+      lg: '0 4px 20px rgba(6, 182, 212, 0.16)',
+      xl: '0 8px 32px rgba(6, 182, 212, 0.2)',
+      inset: '0 1px 2px rgba(6, 182, 212, 0.15) inset'
+    },
+    gradient: {
+      card: 'linear-gradient(135deg, #ffffff 0%, #f0fdff 100%)',
+      button: 'linear-gradient(135deg, #f0fdff 0%, #cffafe 100%)',
+      hover: 'linear-gradient(135deg, #cffafe 0%, #a5f3fc 100%)',
+      active: 'linear-gradient(135deg, #a5f3fc 0%, #67e8f9 100%)',
+      header: 'linear-gradient(180deg, #ffffff 0%, #f0fdff 100%)',
+      tooltip: 'linear-gradient(135deg, #06b6d4 0%, #0891b2 100%)'
+    },
+    accent: {
+      blue: '#06b6d4',
+      green: '#10b981',
+      yellow: '#f59e0b',
+      red: '#ef4444',
+      purple: '#8b5cf6'
+    },
+    backdrop: 'rgba(6, 182, 212, 0.3)',
     isDark: false
   }
 };

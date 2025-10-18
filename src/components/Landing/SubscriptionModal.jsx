@@ -139,6 +139,7 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
           <div style={styles.features}>
             <div style={styles.feature}>Unlimited canvas projects</div>
             <div style={styles.feature}>Share canvases with others</div>
+            <div style={styles.feature}>Access to 20+ exclusive color themes</div>
             <div style={styles.feature}>Priority support</div>
             <div style={styles.feature}>Cancel anytime</div>
           </div>

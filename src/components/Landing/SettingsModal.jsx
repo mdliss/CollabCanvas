@@ -87,9 +87,12 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
     modal: {
       background: theme.background.card,
       borderRadius: '16px',
-      padding: '36px',
-      maxWidth: '480px',
-      width: '90%',
+      padding: '32px',
+      maxWidth: '800px',
+      width: '95%',
+      maxHeight: '95vh',
+      display: 'flex',
+      flexDirection: 'column',
       boxShadow: theme.shadow.xl,
       border: `1px solid ${theme.border.normal}`,
       position: 'relative',
@@ -134,7 +137,10 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
     },
     
     section: {
-      marginBottom: '28px'
+      flex: 1,
+      overflowY: 'auto',
+      marginBottom: '16px',
+      paddingRight: '8px'
     },
     
     sectionTitle: {
@@ -179,9 +185,10 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
     
     themeOptions: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(2, 1fr)',
+      gridTemplateColumns: 'repeat(3, 1fr)',
       gap: '12px',
-      marginTop: '16px'
+      marginTop: '16px',
+      paddingRight: '8px'
     },
     
     themeOption: (isActive, isLocked) => ({
@@ -242,18 +249,20 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
     },
     
     previewBox: (bg) => ({
-      flex: 1,
-      background: bg,
-      borderRadius: '4px'
-    }),
+        flex: 1,
+        background: bg,
+        borderRadius: '4px',
+        border: `1px solid ${theme.isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.15)'}`, // Stronger border
+        minHeight: '38px'
+      }),
 
     footer: {
-      marginTop: '24px',
-      paddingTop: '20px',
+      paddingTop: '16px',
       borderTop: `1px solid ${theme.border.normal}`,
       fontSize: '12px',
       color: theme.text.tertiary,
-      textAlign: 'center'
+      textAlign: 'center',
+      flexShrink: 0
     }
   };
 
@@ -276,10 +285,12 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
           ×
         </button>
 
-        <h3 style={styles.title}>Settings</h3>
-        <p style={styles.subtitle}>Customize your CollabCanvas experience</p>
+        <div style={{ marginBottom: '24px' }}>
+          <h3 style={styles.title}>Settings</h3>
+          <p style={styles.subtitle}>Customize your CollabCanvas experience</p>
+        </div>
 
-        {/* Theme Section */}
+        {/* Theme Section - Scrollable */}
         <div style={styles.section}>
           <div style={styles.sectionTitle}>
             <span>Appearance</span>
@@ -287,6 +298,7 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
           
           {/* Theme Options Grid */}
           <div style={styles.themeOptions}>
+            {console.log('[SETTINGS MODAL] Rendering', availableThemes.length, 'themes:', availableThemes.map(t => t.name).join(', '))}
             {availableThemes.map((themeOption) => {
               const isActive = currentThemeId === themeOption.id;
               const isLocked = themeOption.isPremium && !isPremium;
