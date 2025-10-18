@@ -34,6 +34,7 @@
 import { rtdb, db } from "./firebase";
 import { ref, set, update, remove, onValue, get, query, orderByChild } from "firebase/database";
 import { doc, getDoc } from "firebase/firestore";
+import { TEMPLATES } from "../utils/templates";
 
 /**
  * Get User's Subscription Status
@@ -175,7 +176,7 @@ export const subscribeToProjects = (userId, callback) => {
  * @param {string} name - Project name
  * @returns {Promise<Object>} Created project object with canvasId
  */
-export const createProject = async (userId, name = 'Untitled Canvas') => {
+export const createProject = async (userId, name = 'Untitled Canvas', templateId = 'blank') => {
   // Check subscription limits
   const subscription = await getUserSubscription(userId);
   const existingProjects = await listProjects(userId);
@@ -196,7 +197,8 @@ export const createProject = async (userId, name = 'Untitled Canvas') => {
     updatedAt: timestamp,
     createdBy: userId,
     isStarred: false,
-    tags: []
+    tags: [],
+    template: templateId // Track which template was used
   };
   
   // Create project metadata
@@ -210,10 +212,31 @@ export const createProject = async (userId, name = 'Untitled Canvas') => {
     createdBy: userId,
     lastUpdated: timestamp,
     projectId,
-    projectName: project.name
+    projectName: project.name,
+    template: templateId
   });
   
-  console.log('[Projects] Created project:', projectId, 'with canvas:', canvasId);
+  // Apply template shapes if not blank
+  if (templateId && templateId !== 'blank' && TEMPLATES[templateId]) {
+    const template = TEMPLATES[templateId];
+    const shapes = template.shapes(userId);
+    
+    console.log(`[Projects] Applying template "${templateId}" with ${shapes.length} shapes`);
+    
+    // Write all template shapes to canvas
+    for (const shape of shapes) {
+      const shapeRef = ref(rtdb, `canvas/${canvasId}/shapes/${shape.id}`);
+      await set(shapeRef, shape);
+    }
+    
+    // Update canvas metadata with shape count
+    await update(canvasMetadataRef, {
+      lastUpdated: Date.now(),
+      shapeCount: shapes.length
+    });
+  }
+  
+  console.log('[Projects] Created project:', projectId, 'with canvas:', canvasId, 'using template:', templateId);
   
   return project;
 };

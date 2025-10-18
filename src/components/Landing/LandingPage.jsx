@@ -28,6 +28,8 @@ import RenameModal from './RenameModal';
 import CouponModal from './CouponModal';
 import ShareModal from './ShareModal';
 import NotificationBell from './NotificationBell';
+import TemplateSelectionModal from './TemplateSelectionModal';
+import { TEMPLATES } from '../../utils/templates';
 
 export default function LandingPage() {
   const { user, logout } = useAuth();
@@ -39,6 +41,7 @@ export default function LandingPage() {
   const [loading, setLoading] = useState(true);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [renamingProject, setRenamingProject] = useState(null);
   const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
@@ -114,7 +117,7 @@ export default function LandingPage() {
       ? sharedProjects 
       : allProjects;
 
-  const handleCreateProject = async () => {
+  const handleCreateProject = () => {
     if (!user) return;
 
     // Check if at free tier limit (only count owned projects)
@@ -123,16 +126,23 @@ export default function LandingPage() {
       return;
     }
 
+    // Show template selection modal
+    setShowTemplateModal(true);
+  };
+
+  const handleTemplateSelect = async (templateId) => {
     setCreatingProject(true);
     try {
-      const project = await createProject(user.uid, 'Untitled Canvas');
+      // Get template name for canvas title
+      const templateName = TEMPLATES[templateId]?.name || 'Untitled Canvas';
+      const project = await createProject(user.uid, templateName, templateId);
       // Navigate to the new canvas
       navigate(`/canvas/${project.canvasId}`);
     } catch (error) {
       console.error('[LandingPage] Failed to create project:', error);
       alert(error.message);
-    } finally {
       setCreatingProject(false);
+      setShowTemplateModal(false);
     }
   };
 
@@ -479,6 +489,17 @@ export default function LandingPage() {
       )}
 
       {/* Modals */}
+      {showTemplateModal && (
+        <TemplateSelectionModal
+          onSelect={handleTemplateSelect}
+          onClose={() => {
+            setShowTemplateModal(false);
+            setCreatingProject(false);
+          }}
+          isPremium={subscription.isPremium}
+        />
+      )}
+      
       {showSubscriptionModal && (
         <SubscriptionModal
           onClose={() => setShowSubscriptionModal(false)}
