@@ -4,7 +4,7 @@
  * Allows users to enter coupon codes for lifetime premium access.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../../services/firebase';
 
@@ -15,6 +15,24 @@ export default function CouponModal({ onClose, onSuccess }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Trigger entrance animation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Trigger fade out when success
+  useEffect(() => {
+    if (success) {
+      setTimeout(() => {
+        setIsVisible(false);
+      }, 1200);
+    }
+  }, [success]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -51,18 +69,37 @@ export default function CouponModal({ onClose, onSuccess }) {
     }
   };
 
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 400);
+  };
+
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget && !loading) {
-      onClose();
+      handleClose();
     }
   };
 
   return (
-    <div onClick={handleBackdropClick} style={styles.backdrop}>
-      <div style={styles.modal}>
+    <div 
+      onClick={handleBackdropClick} 
+      style={{
+        ...styles.backdrop,
+        opacity: isVisible ? 1 : 0,
+        transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}
+    >
+      <div style={{
+        ...styles.modal,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(20px)',
+        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         {!loading && !success && (
           <button
-            onClick={onClose}
+            onClick={handleClose}
             style={styles.closeButton}
             onMouseEnter={(e) => e.target.style.color = '#2c2e33'}
             onMouseLeave={(e) => e.target.style.color = '#9ca3af'}

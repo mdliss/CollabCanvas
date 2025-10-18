@@ -46,6 +46,26 @@ export default function LandingPage() {
   const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
   const [deletingProjectId, setDeletingProjectId] = useState(null);
+  const [isPageVisible, setIsPageVisible] = useState(false);
+  const [cardsVisible, setCardsVisible] = useState(true);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [triggerReflow, setTriggerReflow] = useState(false);
+
+  // Trigger logout confirmation entrance animation
+  useEffect(() => {
+    if (showLogoutConfirm) {
+      setTimeout(() => setLogoutConfirmVisible(true), 50);
+    } else {
+      setLogoutConfirmVisible(false);
+    }
+  }, [showLogoutConfirm]);
+
+  // Handle logout confirmation close with animation
+  const handleCloseLogoutConfirm = () => {
+    setLogoutConfirmVisible(false);
+    setTimeout(() => setShowLogoutConfirm(false), 300);
+  };
 
   // Load projects and subscription status
   useEffect(() => {
@@ -128,6 +148,33 @@ export default function LandingPage() {
     });
   }, [filteredProjects, deletingProjectId]);
 
+  // Trigger entrance animations after page loads
+  useEffect(() => {
+    if (!loading) {
+      const timer = setTimeout(() => {
+        setIsPageVisible(true);
+      }, 100); // Small delay for smoother transition
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
+
+  // Handle filter change with fade animation
+  const handleFilterChange = (newFilter) => {
+    if (newFilter === filter) return;
+    
+    // Fade out
+    setCardsVisible(false);
+    
+    // Change filter and fade in after animation
+    setTimeout(() => {
+      setFilter(newFilter);
+      setTimeout(() => {
+        setCardsVisible(true);
+      }, 50);
+    }, 300);
+  };
+
   const handleCreateProject = () => {
     if (!user) return;
 
@@ -193,6 +240,11 @@ export default function LandingPage() {
       
       // Clear deleting state
       setDeletingProjectId(null);
+      
+      // Trigger reflow animation for remaining cards
+      setTriggerReflow(true);
+      setTimeout(() => setTriggerReflow(false), 600);
+      
       console.log('[LandingPage] 🎉 Delete complete, project removed from UI');
     } catch (error) {
       console.error('[LandingPage] ❌ Failed to delete project:', error);
@@ -252,16 +304,37 @@ export default function LandingPage() {
 
   return (
     <div style={styles.container}>
-      {/* Spinner Animation */}
+      {/* Animations */}
       <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
         }
+        
+        /* Grid reflow animation */
+        @keyframes gridSettle {
+          0% {
+            opacity: 0.7;
+            transform: translateY(-5px) scale(0.98);
+          }
+          60% {
+            opacity: 1;
+            transform: translateY(2px) scale(1.01);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+        }
       `}</style>
       
       {/* Header */}
-      <div style={styles.header}>
+      <div style={{
+        ...styles.header,
+        opacity: isPageVisible ? 1 : 0,
+        transform: isPageVisible ? 'translateY(0)' : 'translateY(-20px)',
+        transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         <div style={styles.headerLeft}>
           <h1 style={styles.title}>
             CollabCanvas
@@ -321,7 +394,7 @@ export default function LandingPage() {
           )}
           
           <button
-            onClick={logout}
+            onClick={() => setShowLogoutConfirm(true)}
             style={styles.logoutButton}
             onMouseEnter={(e) => {
               e.target.style.background = '#fafafa';
@@ -339,15 +412,14 @@ export default function LandingPage() {
 
       {/* Filter Toggle */}
       <div style={{
-        opacity: allProjects.length > 0 ? 1 : 0,
-        maxHeight: allProjects.length > 0 ? '100px' : '0',
-        overflow: 'hidden',
-        transition: 'opacity 0.6s ease, max-height 0.6s ease',
-        marginBottom: allProjects.length > 0 ? '28px' : '0'
+        opacity: isPageVisible ? 1 : 0,
+        transform: isPageVisible ? 'translateY(0)' : 'translateY(-10px)',
+        transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.6s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
+        marginBottom: '28px'
       }}>
         <div style={styles.filterContainer}>
           <button
-            onClick={() => setFilter('all')}
+            onClick={() => handleFilterChange('all')}
             style={{
               ...styles.filterButton,
               ...(filter === 'all' ? styles.filterButtonActive : {})
@@ -366,7 +438,7 @@ export default function LandingPage() {
             All ({allProjects.length})
           </button>
           <button
-            onClick={() => setFilter('owned')}
+            onClick={() => handleFilterChange('owned')}
             style={{
               ...styles.filterButton,
               ...(filter === 'owned' ? styles.filterButtonActive : {})
@@ -385,7 +457,7 @@ export default function LandingPage() {
             Owned ({ownedProjects.length})
           </button>
           <button
-            onClick={() => setFilter('shared')}
+            onClick={() => handleFilterChange('shared')}
             style={{
               ...styles.filterButton,
               ...(filter === 'shared' ? styles.filterButtonActive : {})
@@ -407,7 +479,14 @@ export default function LandingPage() {
       </div>
 
       {/* Project Grid */}
-      <div style={styles.gridContainer}>
+      <div style={{
+        ...styles.gridContainer,
+        opacity: (isPageVisible && cardsVisible) ? 1 : 0,
+        transform: isPageVisible ? 'translateY(0)' : 'translateY(20px)',
+        transition: cardsVisible 
+          ? 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
+          : 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         {/* Create New Project Card */}
         <button
           onClick={handleCreateProject}
@@ -416,7 +495,8 @@ export default function LandingPage() {
             ...styles.projectCard,
             ...styles.createCard,
             opacity: !canCreateMore ? 0.6 : 1,
-            cursor: !canCreateMore ? 'not-allowed' : 'pointer'
+            cursor: !canCreateMore ? 'not-allowed' : 'pointer',
+            animation: triggerReflow ? 'gridSettle 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
           }}
           onMouseEnter={(e) => {
             if (canCreateMore) {
@@ -510,7 +590,8 @@ export default function LandingPage() {
                 transform: isDeleting ? 'scale(0.92)' : 'scale(1)',
                 transition: 'opacity 0.6s ease, transform 0.6s ease',
                 position: 'relative',
-                pointerEvents: isDeleting ? 'none' : 'auto'
+                pointerEvents: isDeleting ? 'none' : 'auto',
+                animation: triggerReflow && !isDeleting ? 'gridSettle 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
               }}
               onMouseEnter={(e) => {
                 if (!isDeleting) {
@@ -656,6 +737,127 @@ export default function LandingPage() {
           isPremium={subscription.isPremium}
           onClose={() => setSharingProject(null)}
         />
+      )}
+
+      {/* Logout Confirmation */}
+      {showLogoutConfirm && (
+        <div
+          onClick={handleCloseLogoutConfirm}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: `rgba(0, 0, 0, ${logoutConfirmVisible ? 0.5 : 0})`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            transition: 'background 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              padding: '32px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+              fontFamily: "'Roboto Mono', monospace",
+              opacity: logoutConfirmVisible ? 1 : 0,
+              transform: logoutConfirmVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+              transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+          >
+            <h3 style={{
+              margin: '0 0 12px 0',
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#2c2e33'
+            }}>
+              Sign Out?
+            </h3>
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '14px',
+              color: '#6b7280',
+              lineHeight: '1.5'
+            }}>
+              Are you sure you want to sign out?
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={handleCloseLogoutConfirm}
+                style={{
+                  padding: '10px 20px',
+                  background: '#ffffff',
+                  border: '1px solid rgba(0, 0, 0, 0.1)',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#2c2e33',
+                  cursor: 'pointer',
+                  fontFamily: "'Roboto Mono', monospace",
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#fafafa';
+                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#ffffff';
+                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.1)';
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>✕</span>
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setLogoutConfirmVisible(false);
+                  setTimeout(() => {
+                    setShowLogoutConfirm(false);
+                    logout();
+                  }, 300);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#2c2e33',
+                  border: '1px solid #2c2e33',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontFamily: "'Roboto Mono', monospace",
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#1a1c1f';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#2c2e33';
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>✓</span>
+                Sign Out
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -804,7 +1006,7 @@ const styles = {
     border: '1px solid rgba(0, 0, 0, 0.06)',
     boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
     cursor: 'pointer',
-    transition: 'all 0.2s ease',
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     overflow: 'hidden',
     position: 'relative'
   },

@@ -154,7 +154,6 @@ import { subscribeToShapes, createShape, updateShape, deleteShape, tryLockShape,
 import { CANVAS_WIDTH, CANVAS_HEIGHT, LOCK_TTL_MS, DEFAULT_SHAPE_DIMENSIONS } from "./constants";
 import ShapeRenderer from "./ShapeRenderer";
 import ShapeToolbar from "./ShapeToolbar";
-import DebugNote from "./DebugNote";
 import PresenceList from "../Collaboration/PresenceList";
 import Cursor from "../Collaboration/Cursor";
 import SelectionBadge from "../Collaboration/SelectionBadge";
@@ -3113,15 +3112,6 @@ export default function Canvas() {
       {/* History Timeline - Hidden for viewers */}
       {canEdit && <HistoryTimeline isVisible={isUIVisible} />}
       
-      <DebugNote 
-        projectId={import.meta.env.VITE_FB_PROJECT_ID} 
-        docPath={`canvas/${CANVAS_ID}`} 
-        count={shapes.length} 
-        error={lastError}
-        rtdbUrl={import.meta.env.VITE_FB_DB_URL}
-        presenceCount={onlineUsers.length}
-        cursorCount={Object.keys(cursors).length}
-      />
       <PresenceList users={onlineUsers} canvasOwnerId={canvasOwnerId} isVisible={isUIVisible} />
       {/* Toolbar - Hidden for viewers */}
       {canEdit && (
@@ -3200,13 +3190,13 @@ export default function Canvas() {
         </div>
       )}
       
-      {/* Mouse Position HUD */}
+      {/* Mouse Position HUD - Positioned to the left of presence list */}
       {mousePos && (
         <div
           style={{
             position: 'fixed',
-            top: '60px',
-            right: '20px',
+            top: '8px',
+            right: onlineUsers.length > 0 ? 'calc(8px + 220px + 12px)' : '8px',
             background: 'rgba(0, 0, 0, 0.75)',
             color: '#fff',
             padding: '8px 12px',
@@ -3216,7 +3206,14 @@ export default function Canvas() {
             fontWeight: '600',
             zIndex: 9998,
             pointerEvents: 'none',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+            boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+            transition: 'right 0.3s ease',
+            opacity: isUIVisible ? 1 : 0,
+            transform: isUIVisible ? 'translateX(0)' : 'translateX(20px)',
+            transitionProperty: 'right, opacity, transform',
+            transitionDuration: '0.3s, 0.4s, 0.4s',
+            transitionDelay: '0s, 0.15s, 0.15s',
+            transitionTimingFunction: 'ease, cubic-bezier(0.4, 0, 0.2, 1), cubic-bezier(0.4, 0, 0.2, 1)'
           }}
         >
           x: {mousePos.x} , y: {mousePos.y}

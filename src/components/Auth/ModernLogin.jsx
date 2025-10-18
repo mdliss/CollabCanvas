@@ -20,7 +20,7 @@
  * - Professional polish
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function ModernLogin() {
@@ -33,6 +33,22 @@ export default function ModernLogin() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { login, signup } = useAuth();
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [contentVisible, setContentVisible] = useState(true);
+
+  // Handle smooth transitions between auth modes
+  const toggleEmailLogin = (show) => {
+    setContentVisible(false);
+    setIsTransitioning(true);
+    
+    setTimeout(() => {
+      setShowEmailLogin(show);
+      setTimeout(() => {
+        setContentVisible(true);
+        setIsTransitioning(false);
+      }, 50);
+    }, 300);
+  };
 
   const handleGoogleLogin = async () => {
     try {
@@ -83,7 +99,11 @@ export default function ModernLogin() {
         </div>
 
         {!showEmailLogin ? (
-          <>
+          <div style={{
+            opacity: contentVisible ? 1 : 0,
+            transform: contentVisible ? 'translateY(0)' : 'translateY(10px)',
+            transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}>
             {/* Google Sign-In (Primary) */}
             <button
               onClick={handleGoogleLogin}
@@ -115,7 +135,7 @@ export default function ModernLogin() {
 
             {/* Email Sign-In (Secondary) */}
             <button
-              onClick={() => setShowEmailLogin(true)}
+              onClick={() => toggleEmailLogin(true)}
               style={styles.emailButton}
               onMouseEnter={(e) => {
                 e.target.style.background = '#fafafa';
@@ -132,9 +152,13 @@ export default function ModernLogin() {
               </svg>
               Sign in with Email
             </button>
-          </>
+          </div>
         ) : (
-          <>
+          <div style={{
+            opacity: contentVisible ? 1 : 0,
+            transform: contentVisible ? 'translateY(0)' : 'translateY(10px)',
+            transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}>
             {/* Email Login Form */}
             <form onSubmit={handleEmailSubmit} style={styles.form}>
               {isSignup && (
@@ -244,7 +268,7 @@ export default function ModernLogin() {
               <button
                 type="button"
                 onClick={() => {
-                  setShowEmailLogin(false);
+                  toggleEmailLogin(false);
                   setError('');
                 }}
                 style={styles.backButton}
@@ -254,7 +278,7 @@ export default function ModernLogin() {
                 ← Back to options
               </button>
             </form>
-          </>
+          </div>
         )}
 
         {/* Features */}

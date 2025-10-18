@@ -6,35 +6,79 @@
  * Premium templates gated for free users.
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TEMPLATES } from '../../utils/templates';
 
 export default function TemplateSelectionModal({ onSelect, onClose, isPremium }) {
   const [selectedTemplate, setSelectedTemplate] = useState('blank');
   const [isCreating, setIsCreating] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Trigger entrance animation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(true);
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleCreate = () => {
     setIsCreating(true);
     onSelect(selectedTemplate);
   };
 
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => {
+      onClose();
+    }, 400);
+  };
+
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget && !isCreating) {
-      onClose();
+      handleClose();
     }
   };
 
   const handleKeyDown = (e) => {
     if (e.key === 'Escape' && !isCreating) {
-      onClose();
+      handleClose();
     }
   };
 
   return (
-    <div onClick={handleBackdropClick} onKeyDown={handleKeyDown} style={styles.backdrop}>
-      <div style={styles.modal}>
+    <>
+      {/* Animation Keyframes */}
+      <style>{`
+        @keyframes fadeInScale {
+          0% {
+            opacity: 0;
+            transform: scale(0.8);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+      `}</style>
+      
+      <div 
+        onClick={handleBackdropClick} 
+        onKeyDown={handleKeyDown} 
+        style={{
+          ...styles.backdrop,
+          opacity: isVisible ? 1 : 0,
+          transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+        }}
+      >
+        <div style={{
+        ...styles.modal,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(20px)',
+        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         <button
-          onClick={onClose}
+          onClick={handleClose}
           disabled={isCreating}
           style={{
             ...styles.closeButton,
@@ -95,7 +139,10 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
                   {isLocked ? 'Premium membership required' : template.description}
                 </div>
                 {selectedTemplate === key && !isLocked && (
-                  <div style={styles.selectedBadge}>Selected</div>
+                  <div style={{
+                    ...styles.selectedBadge,
+                    animation: 'fadeInScale 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                  }}>Selected</div>
                 )}
                 {isLocked && (
                   <div style={styles.lockBadge}>🔒</div>
@@ -153,6 +200,7 @@ export default function TemplateSelectionModal({ onSelect, onClose, isPremium })
         </div>
       </div>
     </div>
+    </>
   );
 }
 
