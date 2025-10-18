@@ -22,10 +22,12 @@
 import { useState, useEffect } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../../services/firebase';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const functions = getFunctions(app);
 
 export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) {
+  const { theme } = useTheme();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isVisible, setIsVisible] = useState(false);
@@ -81,6 +83,8 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
     }
   };
 
+  const styles = getStyles(theme);
+
   return (
     <div 
       onClick={handleBackdropClick} 
@@ -101,8 +105,8 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
           <button
             onClick={handleClose}
             style={styles.closeButton}
-            onMouseEnter={(e) => e.target.style.color = '#2c2e33'}
-            onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+            onMouseEnter={(e) => e.target.style.color = theme.text.primary}
+            onMouseLeave={(e) => e.target.style.color = theme.text.tertiary}
           >
             ×
           </button>
@@ -149,16 +153,16 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
             opacity: loading ? 0.6 : 1,
             cursor: loading ? 'not-allowed' : 'pointer'
           }}
-          onMouseEnter={(e) => {
-            if (!loading) {
-              e.target.style.background = '#1a1c1f';
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!loading) {
-              e.target.style.background = '#2c2e33';
-            }
-          }}
+            onMouseEnter={(e) => {
+              if (!loading) {
+                e.target.style.background = theme.button.primaryHover;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) {
+                e.target.style.background = theme.button.primary;
+              }
+            }}
         >
           {loading ? 'Opening Stripe Checkout...' : 'Subscribe Now'}
         </button>
@@ -179,14 +183,14 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
   );
 }
 
-const styles = {
+const getStyles = (theme) => ({
   backdrop: {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
+    background: theme.backdrop,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -195,14 +199,14 @@ const styles = {
   },
   
   modal: {
-    background: '#ffffff',
+    background: theme.background.card,
     borderRadius: '16px',
     padding: '40px',
     maxWidth: '440px',
     width: '90%',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
+    boxShadow: theme.shadow.xl,
     position: 'relative',
-    border: '1px solid rgba(0, 0, 0, 0.06)'
+    border: `1px solid ${theme.border.normal}`
   },
   
   closeButton: {
@@ -212,7 +216,7 @@ const styles = {
     background: 'transparent',
     border: 'none',
     fontSize: '28px',
-    color: '#9ca3af',
+    color: theme.text.tertiary,
     cursor: 'pointer',
     width: '32px',
     height: '32px',
@@ -232,14 +236,14 @@ const styles = {
     margin: '0 0 8px 0',
     fontSize: '22px',
     fontWeight: '600',
-    color: '#2c2e33',
+    color: theme.text.primary,
     letterSpacing: '-0.02em'
   },
   
   subtitle: {
     margin: 0,
     fontSize: '14px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400',
     lineHeight: '1.5'
   },
@@ -255,17 +259,17 @@ const styles = {
   },
   
   pricingCard: {
-    background: '#fafafa',
+    background: theme.background.elevated,
     borderRadius: '12px',
     padding: '28px',
     marginBottom: '24px',
-    border: '1px solid rgba(0, 0, 0, 0.06)'
+    border: `1px solid ${theme.border.normal}`
   },
   
   price: {
     textAlign: 'center',
     marginBottom: '24px',
-    color: '#2c2e33'
+    color: theme.text.primary
   },
   
   currency: {
@@ -281,7 +285,7 @@ const styles = {
   
   period: {
     fontSize: '16px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400'
   },
   
@@ -293,15 +297,15 @@ const styles = {
   
   feature: {
     fontSize: '14px',
-    color: '#2c2e33',
+    color: theme.text.primary,
     fontWeight: '400',
     textAlign: 'center'
   },
   
   subscribeButton: {
     width: '100%',
-    background: '#2c2e33',
-    color: '#ffffff',
+    background: theme.button.primary,
+    color: theme.text.inverse,
     border: 'none',
     padding: '14px',
     borderRadius: '8px',
@@ -313,21 +317,21 @@ const styles = {
   },
   
   error: {
-    background: '#fee2e2',
-    color: '#991b1b',
+    background: theme.isDark ? '#3f1e1e' : '#fee2e2',
+    color: theme.isDark ? '#f87171' : '#991b1b',
     padding: '12px 16px',
     borderRadius: '8px',
     fontSize: '13px',
     marginBottom: '16px',
-    border: '1px solid rgba(153, 27, 27, 0.15)',
+    border: theme.isDark ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid rgba(153, 27, 27, 0.15)',
     textAlign: 'center'
   },
   
   securityNotice: {
     textAlign: 'center',
     fontSize: '12px',
-    color: '#9ca3af',
+    color: theme.text.tertiary,
     fontWeight: '400'
   }
-};
+});
 

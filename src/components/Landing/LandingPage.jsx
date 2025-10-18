@@ -802,6 +802,11 @@ export default function LandingPage() {
       
       {showSettingsModal && (
         <SettingsModal
+          isPremium={subscription.isPremium}
+          onShowUpgrade={() => {
+            setShowSettingsModal(false);
+            setShowSubscriptionModal(true);
+          }}
           onClose={() => {
             console.log('[SETTINGS] Modal onClose called');
             setShowSettingsModal(false);

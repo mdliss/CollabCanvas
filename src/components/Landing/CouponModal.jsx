@@ -7,10 +7,12 @@
 import { useState, useEffect } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app } from '../../services/firebase';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const functions = getFunctions(app);
 
 export default function CouponModal({ onClose, onSuccess }) {
+  const { theme } = useTheme();
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -82,6 +84,8 @@ export default function CouponModal({ onClose, onSuccess }) {
     }
   };
 
+  const styles = getStyles(theme);
+
   return (
     <div 
       onClick={handleBackdropClick} 
@@ -101,8 +105,8 @@ export default function CouponModal({ onClose, onSuccess }) {
           <button
             onClick={handleClose}
             style={styles.closeButton}
-            onMouseEnter={(e) => e.target.style.color = '#2c2e33'}
-            onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
+            onMouseEnter={(e) => e.target.style.color = theme.text.primary}
+            onMouseLeave={(e) => e.target.style.color = theme.text.tertiary}
           >
             ×
           </button>
@@ -129,12 +133,12 @@ export default function CouponModal({ onClose, onSuccess }) {
               letterSpacing: '0.1em'
             }}
             onFocus={(e) => {
-              e.target.style.borderColor = '#2c2e33';
-              e.target.style.background = '#ffffff';
+              e.target.style.borderColor = theme.border.focus;
+              e.target.style.background = theme.background.inputFocus;
             }}
             onBlur={(e) => {
-              e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
-              e.target.style.background = '#fafafa';
+              e.target.style.borderColor = theme.border.medium;
+              e.target.style.background = theme.background.input;
             }}
           />
 
@@ -161,12 +165,12 @@ export default function CouponModal({ onClose, onSuccess }) {
               }}
               onMouseEnter={(e) => {
                 if (code.trim() && !loading) {
-                  e.target.style.background = '#1a1c1f';
+                  e.target.style.background = theme.button.primaryHover;
                 }
               }}
               onMouseLeave={(e) => {
                 if (code.trim() && !loading) {
-                  e.target.style.background = '#2c2e33';
+                  e.target.style.background = theme.button.primary;
                 }
               }}
             >
@@ -183,14 +187,14 @@ export default function CouponModal({ onClose, onSuccess }) {
   );
 }
 
-const styles = {
+const getStyles = (theme) => ({
   backdrop: {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
+    background: theme.backdrop,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -199,13 +203,13 @@ const styles = {
   },
   
   modal: {
-    background: '#ffffff',
+    background: theme.background.card,
     borderRadius: '16px',
     padding: '36px',
     maxWidth: '420px',
     width: '90%',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-    border: '1px solid rgba(0, 0, 0, 0.06)',
+    boxShadow: theme.shadow.xl,
+    border: `1px solid ${theme.border.normal}`,
     position: 'relative'
   },
   
@@ -216,7 +220,7 @@ const styles = {
     background: 'transparent',
     border: 'none',
     fontSize: '28px',
-    color: '#9ca3af',
+    color: theme.text.tertiary,
     cursor: 'pointer',
     width: '32px',
     height: '32px',
@@ -231,7 +235,7 @@ const styles = {
     margin: '0 0 8px 0',
     fontSize: '20px',
     fontWeight: '600',
-    color: '#2c2e33',
+    color: theme.text.primary,
     textAlign: 'center',
     letterSpacing: '-0.02em'
   },
@@ -239,7 +243,7 @@ const styles = {
   subtitle: {
     margin: '0 0 28px 0',
     fontSize: '14px',
-    color: '#646669',
+    color: theme.text.secondary,
     textAlign: 'center',
     fontWeight: '400'
   },
@@ -252,39 +256,40 @@ const styles = {
   
   input: {
     padding: '14px 16px',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    border: `1px solid ${theme.border.medium}`,
     borderRadius: '8px',
     fontSize: '16px',
     outline: 'none',
     transition: 'all 0.2s ease',
-    background: '#fafafa',
+    background: theme.background.input,
+    color: theme.text.primary,
     fontWeight: '600'
   },
   
   error: {
-    background: '#fee2e2',
-    color: '#991b1b',
+    background: theme.isDark ? '#3f1e1e' : '#fee2e2',
+    color: theme.isDark ? '#f87171' : '#991b1b',
     padding: '12px',
     borderRadius: '8px',
     fontSize: '13px',
     textAlign: 'center',
-    border: '1px solid rgba(153, 27, 27, 0.15)'
+    border: theme.isDark ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid rgba(153, 27, 27, 0.15)'
   },
   
   success: {
-    background: '#d1fae5',
-    color: '#065f46',
+    background: theme.isDark ? 'rgba(16, 185, 129, 0.2)' : '#d1fae5',
+    color: theme.isDark ? '#34d399' : '#065f46',
     padding: '12px',
     borderRadius: '8px',
     fontSize: '14px',
     textAlign: 'center',
     fontWeight: '500',
-    border: '1px solid rgba(6, 95, 70, 0.15)'
+    border: theme.isDark ? '1px solid rgba(52, 211, 153, 0.2)' : '1px solid rgba(6, 95, 70, 0.15)'
   },
   
   submitButton: {
-    background: '#2c2e33',
-    color: '#ffffff',
+    background: theme.button.primary,
+    color: theme.text.inverse,
     border: 'none',
     padding: '14px',
     borderRadius: '8px',
@@ -297,9 +302,9 @@ const styles = {
   hint: {
     marginTop: '20px',
     fontSize: '12px',
-    color: '#9ca3af',
+    color: theme.text.tertiary,
     textAlign: 'center',
     fontWeight: '400'
   }
-};
+});
 

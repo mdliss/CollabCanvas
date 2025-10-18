@@ -195,15 +195,47 @@ export default function Canvas() {
   const getGridColor = () => {
     switch (currentThemeId) {
       case 'light':
-        return '#d0d0d0'; // Medium gray - clearly visible on white
+        return '#d0d0d0';
       case 'dark':
-        return 'rgba(255, 255, 255, 0.12)'; // White with moderate opacity
+        return 'rgba(255, 255, 255, 0.12)';
       case 'midnight':
-        return 'rgba(165, 180, 252, 0.15)'; // Indigo tint
+        return 'rgba(165, 180, 252, 0.15)';
       case 'ocean':
-        return 'rgba(125, 211, 252, 0.15)'; // Cyan tint
+        return 'rgba(125, 211, 252, 0.15)';
       case 'forest':
-        return 'rgba(110, 231, 183, 0.15)'; // Green tint
+        return 'rgba(110, 231, 183, 0.15)';
+      case 'dracula':
+        return 'rgba(189, 147, 249, 0.15)';
+      case 'monokai':
+        return 'rgba(166, 226, 46, 0.15)';
+      case 'nord':
+        return 'rgba(136, 192, 208, 0.15)';
+      case 'gruvbox':
+        return 'rgba(250, 189, 47, 0.15)';
+      case 'solarized':
+        return 'rgba(42, 161, 152, 0.15)';
+      case 'tokyonight':
+        return 'rgba(122, 162, 247, 0.15)';
+      case 'catppuccin':
+        return 'rgba(245, 194, 231, 0.15)';
+      case 'rosepine':
+        return 'rgba(196, 167, 231, 0.15)';
+      case 'sunset':
+        return 'rgba(255, 173, 188, 0.15)';
+      case 'cyberpunk':
+        return 'rgba(0, 255, 159, 0.15)';
+      case 'cherry':
+        return 'rgba(255, 107, 157, 0.15)';
+      case 'synthwave':
+        return 'rgba(255, 126, 219, 0.15)';
+      case 'aurora':
+        return 'rgba(93, 218, 180, 0.15)';
+      case 'lavender':
+        return 'rgba(124, 58, 237, 0.15)';
+      case 'coral':
+        return 'rgba(225, 29, 72, 0.15)';
+      case 'mint':
+        return 'rgba(5, 150, 105, 0.15)';
       default:
         return theme.isDark ? 'rgba(255, 255, 255, 0.12)' : '#d0d0d0';
     }

@@ -15,10 +15,10 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-export default function SettingsModal({ onClose }) {
+export default function SettingsModal({ onClose, isPremium = false, onShowUpgrade }) {
   console.log('[SETTINGS MODAL] Component rendering');
   const { theme, currentThemeId, setTheme, availableThemes } = useTheme();
-  console.log('[SETTINGS MODAL] Theme loaded:', { currentThemeId, themeCount: availableThemes?.length });
+  console.log('[SETTINGS MODAL] Theme loaded:', { currentThemeId, themeCount: availableThemes?.length, isPremium });
   const [isVisible, setIsVisible] = useState(false);
   
   // Trigger entrance animation
@@ -51,10 +51,20 @@ export default function SettingsModal({ onClose }) {
     }, 300);
   };
 
-  const handleThemeChange = (themeId) => {
-    console.log('[SETTINGS MODAL] Theme change requested:', themeId);
-    setTheme(themeId);
-    console.log('[SETTINGS MODAL] setTheme called with:', themeId);
+  const handleThemeChange = (themeOption) => {
+    console.log('[SETTINGS MODAL] Theme change requested:', themeOption.id);
+    
+    // Check if theme is locked (premium only)
+    if (themeOption.isPremium && !isPremium) {
+      console.log('[SETTINGS MODAL] Theme is premium and user is not premium - showing upgrade prompt');
+      if (onShowUpgrade) {
+        onShowUpgrade();
+      }
+      return;
+    }
+    
+    setTheme(themeOption.id);
+    console.log('[SETTINGS MODAL] setTheme called with:', themeOption.id);
   };
 
   const styles = {
@@ -174,7 +184,7 @@ export default function SettingsModal({ onClose }) {
       marginTop: '16px'
     },
     
-    themeOption: (isActive) => ({
+    themeOption: (isActive, isLocked) => ({
       padding: '14px',
       borderRadius: '10px',
       border: `2px solid ${isActive ? theme.button.primary : theme.border.medium}`,
@@ -185,7 +195,8 @@ export default function SettingsModal({ onClose }) {
       transition: 'all 0.2s ease',
       textAlign: 'center',
       position: 'relative',
-      transform: 'scale(1)'
+      transform: 'scale(1)',
+      opacity: isLocked ? 0.6 : 1
     }),
     
     themeOptionLabel: {
@@ -210,6 +221,13 @@ export default function SettingsModal({ onClose }) {
       justifyContent: 'center',
       fontSize: '12px',
       fontWeight: '700'
+    },
+    
+    lockIndicator: {
+      position: 'absolute',
+      top: '8px',
+      right: '8px',
+      fontSize: '16px'
     },
     
     themePreview: {
@@ -271,6 +289,7 @@ export default function SettingsModal({ onClose }) {
           <div style={styles.themeOptions}>
             {availableThemes.map((themeOption) => {
               const isActive = currentThemeId === themeOption.id;
+              const isLocked = themeOption.isPremium && !isPremium;
               const colors = [
                 themeOption.background.page,
                 themeOption.background.card,
@@ -280,11 +299,14 @@ export default function SettingsModal({ onClose }) {
               return (
                 <div
                   key={themeOption.id}
-                  onClick={() => handleThemeChange(themeOption.id)}
-                  style={styles.themeOption(isActive)}
+                  onClick={() => handleThemeChange(themeOption)}
+                  style={{
+                    ...styles.themeOption(isActive, isLocked),
+                    cursor: isLocked ? 'pointer' : 'pointer'
+                  }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.borderColor = theme.border.strong;
+                      e.currentTarget.style.borderColor = isLocked ? theme.border.medium : theme.border.strong;
                       e.currentTarget.style.transform = 'scale(1.02)';
                     }
                   }}
@@ -303,8 +325,11 @@ export default function SettingsModal({ onClose }) {
                   <div style={styles.themeOptionLabel}>
                     {themeOption.name}
                   </div>
-                  {isActive && (
+                  {isActive && !isLocked && (
                     <div style={styles.activeIndicator}>✓</div>
+                  )}
+                  {isLocked && (
+                    <div style={styles.lockIndicator}>🔒</div>
                   )}
                 </div>
               );
@@ -313,6 +338,16 @@ export default function SettingsModal({ onClose }) {
         </div>
 
         <div style={styles.footer}>
+          {!isPremium && (
+            <div style={{
+              marginBottom: '12px',
+              fontSize: '12px',
+              color: theme.text.secondary,
+              textAlign: 'center'
+            }}>
+              🔒 Premium themes available with subscription
+            </div>
+          )}
           Theme changes apply immediately across all pages
         </div>
       </div>
