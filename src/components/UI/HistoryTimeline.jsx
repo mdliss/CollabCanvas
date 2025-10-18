@@ -39,7 +39,19 @@ export default function HistoryTimeline({ isVisible = true }) {
   };
 
   const handleHistoryItemClick = (item) => {
-    if (item.status === 'done' && !item.isCurrent) {
+    console.log('[HistoryTimeline] Item clicked:', item);
+    console.log('[HistoryTimeline] Item index:', item.index);
+    console.log('[HistoryTimeline] Is current:', item.isCurrent);
+    console.log('[HistoryTimeline] Status:', item.status);
+    
+    // Allow clicking on any item to revert to that point in history
+    if (item.status === 'done') {
+      // Clicking on item takes you to the state AFTER that action
+      setSelectedHistoryIndex(item.index);
+      setSelectedHistoryItem(item);
+      setShowConfirmModal(true);
+    } else if (item.status === 'undone') {
+      // Clicking on undone item redoes to that point
       setSelectedHistoryIndex(item.index);
       setSelectedHistoryItem(item);
       setShowConfirmModal(true);

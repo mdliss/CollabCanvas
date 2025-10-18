@@ -316,24 +316,40 @@ class UndoManager {
    * Redo the last undone command
    */
   async redo() {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('[UndoManager] 🔄 REDO called');
+    console.log('[UndoManager] Redo stack size:', this.redoStack.length);
+    console.log('[UndoManager] Undo stack size:', this.undoStack.length);
+    
     if (!this.canRedo()) {
-      console.warn('[UndoManager] Nothing to redo');
+      console.warn('[UndoManager] ❌ Cannot redo: redo stack is empty');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return null;
     }
 
     const command = this.redoStack.pop();
-    console.log('[UndoManager] Redoing:', command.getDescription(), 'Remaining in redo stack:', this.redoStack.length);
+    console.log('[UndoManager] Redoing command:', command.getDescription());
+    console.log('[UndoManager] Command type:', command.constructor.name);
+    console.log('[UndoManager] Remaining in redo stack:', this.redoStack.length);
     
     try {
+      const startTime = performance.now();
       await command.redo();
+      const redoTime = performance.now() - startTime;
+      
       this.undoStack.push(command);
       this.notifyListeners();
-      console.log('[UndoManager] Redo successful, added to undo stack. Undo stack size:', this.undoStack.length);
+      
+      console.log(`[UndoManager] ✅ Redo successful in ${redoTime.toFixed(0)}ms`);
+      console.log('[UndoManager] New undo stack size:', this.undoStack.length);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return command.getDescription();
     } catch (error) {
-      console.error('[UndoManager] Redo failed:', error);
+      console.error('[UndoManager] ❌ Redo failed:', error);
+      console.error('[UndoManager] Error stack:', error.stack);
       // Re-add to redo stack if redo failed
       this.redoStack.push(command);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       throw error;
     }
   }
@@ -447,8 +463,28 @@ class UndoManager {
    * @param {number} index - The index in the undo stack to revert to (0 = oldest, length-1 = newest)
    */
   async revertToPoint(index) {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('[UndoManager] 🎯 REVERT TO POINT called');
+    console.log('[UndoManager] Target index:', index);
+    console.log('[UndoManager] Current undo stack size:', this.undoStack.length);
+    console.log('[UndoManager] Current index:', this.undoStack.length - 1);
+    
+    // Special case: index -1 means revert to empty state (undo everything)
+    if (index === -1) {
+      console.log('[UndoManager] Reverting to empty state (undoing all)');
+      const undoCount = this.undoStack.length;
+      for (let i = 0; i < undoCount; i++) {
+        await this.undo();
+      }
+      console.log('[UndoManager] ✅ Reverted to empty state');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      return true;
+    }
+    
     if (index < 0 || index >= this.undoStack.length) {
-      console.error('[UndoManager] Invalid index for revert:', index);
+      console.error('[UndoManager] ❌ Invalid index for revert:', index);
+      console.error('[UndoManager] Valid range: -1 (empty) to', this.undoStack.length - 1);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return false;
     }
 
@@ -458,20 +494,30 @@ class UndoManager {
       if (index < currentIndex) {
         // We need to undo commands
         const stepsToUndo = currentIndex - index;
+        console.log(`[UndoManager] Need to UNDO ${stepsToUndo} steps to reach index ${index}`);
         for (let i = 0; i < stepsToUndo; i++) {
+          console.log(`[UndoManager] Undo step ${i + 1}/${stepsToUndo}`);
           await this.undo();
         }
       } else if (index > currentIndex) {
         // We need to redo commands
         const stepsToRedo = index - currentIndex;
+        console.log(`[UndoManager] Need to REDO ${stepsToRedo} steps to reach index ${index}`);
         for (let i = 0; i < stepsToRedo; i++) {
+          console.log(`[UndoManager] Redo step ${i + 1}/${stepsToRedo}`);
           await this.redo();
         }
+      } else {
+        console.log('[UndoManager] Already at target index - no action needed');
       }
       
+      console.log('[UndoManager] ✅ Revert complete - now at index', this.undoStack.length - 1);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return true;
     } catch (error) {
-      console.error('[UndoManager] Revert to point failed:', error);
+      console.error('[UndoManager] ❌ Revert to point failed:', error);
+      console.error('[UndoManager] Error stack:', error.stack);
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       return false;
     }
   }
@@ -516,11 +562,13 @@ class UndoManager {
     }
     aiCommand.metadata.timestamp = Date.now();
     aiCommand.metadata.isAI = true;
+    aiCommand.metadata.user = aiCommand.user; // Copy user from command for getUserName()
     
     // Add to undo stack (operation already executed by Cloud Function)
     this.undoStack.push(aiCommand);
     console.log('[UndoManager] AI operation registered:', aiCommand.getDescription(), 
-                'Shapes:', aiCommand.affectedShapeIds.length);
+                'Shapes:', aiCommand.affectedShapeIds.length,
+                'User:', aiCommand.user?.displayName || aiCommand.user?.email || 'Unknown');
     
     // Clear redo stack (new action invalidates redo history)
     this.redoStack = [];
@@ -580,7 +628,7 @@ class UndoManager {
         user: cmd.metadata?.user,
         status: 'done',
         isCurrent: idx === currentIndex,
-        isAI: cmd.metadata?.isAIAction || false
+        isAI: cmd.metadata?.isAI || cmd.metadata?.isAIAction || false // Check both for compatibility
       })),
       ...this.redoStack.slice().reverse().map((cmd, idx) => ({
         id: `redo-${idx}`,
@@ -590,7 +638,7 @@ class UndoManager {
         user: cmd.metadata?.user,
         status: 'undone',
         isCurrent: false,
-        isAI: cmd.metadata?.isAIAction || false
+        isAI: cmd.metadata?.isAI || cmd.metadata?.isAIAction || false // Check both for compatibility
       }))
     ];
   }
