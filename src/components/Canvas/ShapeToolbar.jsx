@@ -106,12 +106,12 @@ export default function ShapeToolbar({
           {config.icon}
         </button>
         
-        {/* Tooltip on hover */}
+        {/* Tooltip on hover - Positioned on RIGHT side of toolbar */}
         {isHovered && !isDisabled && (
           <div
             style={{
               position: 'absolute',
-              right: '60px',
+              left: '60px', // Changed from right to left - shows on right side
               top: '50%',
               transform: 'translateY(-50%)',
               background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
@@ -125,7 +125,7 @@ export default function ShapeToolbar({
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
               zIndex: 10000,
               border: '1px solid rgba(255, 255, 255, 0.1)',
-              transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth animation
+              transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth animation
             }}
           >
             <div style={{ marginBottom: '2px' }}>{config.label}</div>

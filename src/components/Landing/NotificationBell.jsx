@@ -21,7 +21,6 @@ export default function NotificationBell({ onApprove }) {
 
     const unsubscribe = subscribeToRequests(user.uid, (pendingRequests) => {
       setRequests(pendingRequests);
-      console.log('[Notifications] Pending requests:', pendingRequests.length);
     });
 
     return () => unsubscribe();

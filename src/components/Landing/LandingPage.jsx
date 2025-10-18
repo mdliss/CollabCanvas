@@ -73,11 +73,6 @@ export default function LandingPage() {
 
     const loadData = async () => {
       try {
-        console.log('[LandingPage] Loading data for user:', {
-          uid: user.uid,
-          email: user.email,
-          displayName: user.displayName
-        });
         
         // Load subscription status
         const sub = await getUserSubscription(user.uid);
@@ -92,13 +87,6 @@ export default function LandingPage() {
                          user.providerData?.[0]?.email || 
                          (user.reloadUserInfo && user.reloadUserInfo.email);
         
-        console.log('[LandingPage] User email sources:', {
-          'user.email': user.email,
-          'providerData[0].email': user.providerData?.[0]?.email,
-          'final': userEmail
-        });
-        
-        console.log('[LandingPage] Calling listSharedCanvases with email:', userEmail);
         
         let shared = [];
         if (userEmail) {
@@ -110,12 +98,6 @@ export default function LandingPage() {
         }
         
         setLoading(false);
-        
-        console.log('[LandingPage] Loaded:', {
-          owned: owned.length,
-          shared: shared.length,
-          email: userEmail
-        });
         
       } catch (error) {
         console.error('[LandingPage] Failed to load data:', error);
@@ -139,14 +121,6 @@ export default function LandingPage() {
       ? sharedProjects 
       : allProjects;
 
-  // Debug: Log when filteredProjects changes
-  useEffect(() => {
-    console.log('[LandingPage] 📊 filteredProjects updated:', {
-      count: filteredProjects.length,
-      deletingId: deletingProjectId,
-      projectIds: filteredProjects.map(p => ({ id: p.id, name: p.name }))
-    });
-  }, [filteredProjects, deletingProjectId]);
 
   // Trigger entrance animations after page loads
   useEffect(() => {
@@ -215,37 +189,26 @@ export default function LandingPage() {
       return;
     }
 
-    console.log('[LandingPage] 🗑️ Delete started for project:', project.id, project.name);
-    console.log('[LandingPage] Current allProjects count:', allProjects.length);
-    
     // Set deleting state to show animation
     setDeletingProjectId(project.id);
-    console.log('[LandingPage] ⏳ Deleting state set, starting fade-out animation');
 
     try {
       // Wait for fade-out animation (600ms)
-      console.log('[LandingPage] ⏱️ Waiting 600ms for fade-out animation...');
       await new Promise(resolve => setTimeout(resolve, 600));
-      
-      console.log('[LandingPage] ✅ Fade-out complete, calling deleteProject API...');
+
       // Delete the project
       await deleteProject(user.uid, project.id, project.canvasId);
-      
-      console.log('[LandingPage] ✅ Firebase deletion complete');
-      
+
       // Immediately remove from local state to prevent flicker
-      console.log('[LandingPage] 🗑️ Removing project from local state immediately');
       setOwnedProjects(prev => prev.filter(p => p.id !== project.id));
       setSharedProjects(prev => prev.filter(p => p.id !== project.id));
-      
+
       // Clear deleting state
       setDeletingProjectId(null);
-      
+
       // Trigger reflow animation for remaining cards
       setTriggerReflow(true);
       setTimeout(() => setTriggerReflow(false), 600);
-      
-      console.log('[LandingPage] 🎉 Delete complete, project removed from UI');
     } catch (error) {
       console.error('[LandingPage] ❌ Failed to delete project:', error);
       alert('Failed to delete project');
@@ -524,9 +487,6 @@ export default function LandingPage() {
         {filteredProjects.map((project) => {
           const isDeleting = deletingProjectId === project.id;
           
-          if (isDeleting) {
-            console.log('[LandingPage] 🔄 Rendering DELETING card for:', project.id, project.name);
-          }
           
           // Completely hide the card once deletion starts (prevents flash)
           if (isDeleting) {

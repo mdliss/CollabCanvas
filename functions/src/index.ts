@@ -1993,3 +1993,511 @@ Be helpful, creative, and produce professional-looking results.`;
   }
 });
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * AI Canvas Design Analysis & Suggestions
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * FEATURE: Intelligent Design Critique
+ * - Analyzes canvas for design issues
+ * - Suggests improvements across multiple dimensions
+ * - Returns actionable fixes with specific parameters
+ * 
+ * ANALYSIS DIMENSIONS:
+ * 1. Typography: font sizes, readability, consistency
+ * 2. Spacing: gaps between elements, overlaps, distribution
+ * 3. Color Contrast: text readability, accessibility (WCAG)
+ * 4. Alignment: visual consistency, grid adherence
+ * 5. Visual Hierarchy: size relationships, importance
+ * 6. General Design: best practices, common patterns
+ * 
+ * SUGGESTION STRUCTURE:
+ * {
+ *   id: string,
+ *   category: 'typography' | 'spacing' | 'color' | 'alignment' | 'hierarchy',
+ *   severity: 'low' | 'medium' | 'high',
+ *   issue: string (user-friendly description),
+ *   suggestion: string (what to do),
+ *   affectedShapeIds: string[],
+ *   fixes: Array<{
+ *     shapeId: string,
+ *     changes: { fontSize?: number, fill?: string, x?: number, ... }
+ *   }>
+ * }
+ * 
+ * PERFORMANCE:
+ * - Analysis: 1-3 seconds (OpenAI call)
+ * - Shape data fetch: <500ms for 500 shapes
+ * - Total: <5 seconds for most canvases
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const analyzeCanvasDesign = functions
+  .runWith({
+    timeoutSeconds: 60,   // 1 minute should be plenty
+    memory: '512MB',
+    maxInstances: 10
+  })
+  .https.onRequest(async (req, res) => {
+  // CORS configuration
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const startTime = Date.now();
+
+  try {
+    // Verify authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Unauthorized: Missing token' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    let decodedToken;
+
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (error) {
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      return;
+    }
+
+    const userId = decodedToken.uid;
+
+    // Check rate limiting
+    if (!checkRateLimit(userId)) {
+      res.status(429).json({
+        error: 'Rate limit exceeded. Maximum 20 requests per minute.',
+      });
+      return;
+    }
+
+    // Parse request body
+    const { canvasId } = req.body;
+
+    if (!canvasId) {
+      res.status(400).json({ error: 'Invalid request: canvasId required' });
+      return;
+    }
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 [DESIGN ANALYSIS] CLOUD FUNCTION STARTED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('User ID:', userId);
+    console.log('Canvas ID:', canvasId);
+
+    // Fetch all shapes from canvas
+    console.log('[Design Analysis] 📥 Fetching shapes from RTDB...');
+    const shapesRef = rtdb.ref(`canvas/${canvasId}/shapes`);
+    const shapesSnapshot = await shapesRef.once('value');
+    const shapesData = shapesSnapshot.val() || {};
+    
+    const shapes = Object.values(shapesData);
+    
+    console.log('[Design Analysis] 📦 Shapes fetched:', shapes.length);
+    
+    if (shapes.length === 0) {
+      console.log('[Design Analysis] ⚠️  Canvas is empty - no analysis possible');
+      res.status(200).json({
+        suggestions: [],
+        message: 'Canvas is empty - no suggestions available yet.',
+        responseTime: Date.now() - startTime
+      });
+      return;
+    }
+
+    console.log(`[Design Analysis] Analyzing ${shapes.length} shapes...`);
+    console.log('  Shape types:', [...new Set(shapes.map((s: any) => s.type))].join(', '));
+    console.log('  Sample shapes:', shapes.slice(0, 3).map((s: any) => ({
+      id: s.id,
+      type: s.type,
+      x: s.x,
+      y: s.y,
+      fontSize: s.fontSize,
+      fill: s.fill
+    })));
+
+    // Prepare canvas data for AI analysis
+    // Only send essential shape properties to reduce token usage
+    const canvasAnalysisData = shapes.map((shape: any) => ({
+      id: shape.id,
+      type: shape.type,
+      x: Math.round(shape.x),
+      y: Math.round(shape.y),
+      width: Math.round(shape.width || 0),
+      height: Math.round(shape.height || 0),
+      fill: shape.fill,
+      text: shape.text,
+      fontSize: shape.fontSize,
+      rotation: shape.rotation,
+      zIndex: shape.zIndex
+    }));
+
+    // Call OpenAI for design analysis
+    const systemPrompt = `You are an expert UI/UX designer analyzing a collaborative canvas design. Provide practical, actionable improvement suggestions.
+
+ANALYSIS RULES:
+1. **Be selective**: Only flag REAL problems. If design has < 10 shapes or looks intentional, be lenient.
+2. **Context matters**: Consider the overall composition before flagging individual elements.
+3. **Practical fixes only**: Suggest changes that genuinely improve usability or aesthetics.
+4. **Limit suggestions**: Return 3-5 high-impact suggestions max. Quality over quantity.
+
+FOCUS AREAS (in priority order):
+
+1. **Typography & Readability** (HIGH PRIORITY)
+   - Text < 14px: hard to read (suggest 14-16px for body, 18-24px for headings)
+   - Inconsistent sizes: if multiple text elements, check they follow hierarchy
+   - Labels vs content: labels should be 12-14px, content 14-16px
+
+2. **Color Contrast** (HIGH PRIORITY)
+   - Text on backgrounds: WCAG AA requires 4.5:1 ratio
+   - Calculate: relative luminance formula
+   - Common fixes: #888 text → #333, light backgrounds → white
+   - Only flag if actually hard to read
+
+3. **Spacing & Layout** (MEDIUM PRIORITY)
+   - Cramped: elements < 12px apart (suggest 16-24px)
+   - Overlapping: unintentional overlaps (check z-index context)
+   - Grouping: related items should be closer than unrelated items
+
+4. **Alignment** (LOW PRIORITY unless severe)
+   - Nearly aligned (2-10px off): suggest grid coordinates
+   - Only flag if creates visual tension
+   - Ignore intentional offsets (like staggered layouts)
+
+5. **Visual Hierarchy** (CONTEXT DEPENDENT)
+   - Important elements should be larger/bolder
+   - All same size = no hierarchy (only if 5+ similar elements)
+   - Buttons should stand out from backgrounds
+
+SEVERITY GUIDELINES:
+- HIGH: Breaks usability (unreadable text, poor contrast, major overlaps)
+- MEDIUM: Reduces professionalism (spacing, minor alignment)
+- LOW: Polish improvements (perfect alignment, optimal sizes)
+
+OUTPUT FORMAT (strict JSON):
+{
+  "suggestions": [
+    {
+      "id": "suggestion_001",
+      "category": "typography|spacing|color|alignment|hierarchy",
+      "severity": "low|medium|high",
+      "issue": "Short problem description (max 60 chars)",
+      "suggestion": "Action to take (e.g., 'Increase font size to 16px')",
+      "affectedShapeIds": ["shape_123"],
+      "fixes": [
+        {
+          "shapeId": "shape_123",
+          "changes": { "fontSize": 16 }
+        }
+      ]
+    }
+  ]
+}
+
+CRITICAL:
+- Return empty array if design is good (don't force suggestions)
+- Each fix must have exact values (not "larger", say "fontSize": 18)
+- Max 5 suggestions total
+- Valid JSON only, no markdown
+- If < 5 shapes on canvas, be very conservative with suggestions`;
+
+    const userPrompt = `Analyze this canvas design and suggest improvements:\n\n${JSON.stringify(canvasAnalysisData, null, 2)}`;
+
+    console.log('[Design Analysis] 🤖 Calling OpenAI for analysis...');
+    console.log('  Model: gpt-4o');
+    console.log('  Temperature: 0.7');
+    console.log('  Response format: JSON');
+    console.log('  Canvas data size:', JSON.stringify(canvasAnalysisData).length, 'chars');
+
+    const aiStartTime = Date.now();
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',  // Use GPT-4 for better design analysis
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      response_format: { type: 'json_object' }  // Ensure JSON response
+    });
+    
+    const aiTime = Date.now() - aiStartTime;
+    console.log(`[Design Analysis] ✅ OpenAI response received in ${aiTime}ms`);
+    console.log('  Finish reason:', completion.choices[0].finish_reason);
+    console.log('  Token usage:', completion.usage);
+
+    const responseContent = completion.choices[0].message.content;
+    console.log('[Design Analysis] 📝 Raw AI response:');
+    console.log(responseContent);
+    
+    let analysisResult;
+
+    try {
+      console.log('[Design Analysis] 📦 Parsing JSON response...');
+      analysisResult = JSON.parse(responseContent || '{"suggestions":[]}');
+      console.log('[Design Analysis] ✅ JSON parsed successfully');
+    } catch (parseError) {
+      console.error('[Design Analysis] ❌ Failed to parse AI response');
+      console.error('  Parse error:', parseError);
+      console.error('  Response content:', responseContent);
+      res.status(500).json({ error: 'Failed to parse AI analysis' });
+      return;
+    }
+
+    const suggestions = analysisResult.suggestions || [];
+    const responseTime = Date.now() - startTime;
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ [DESIGN ANALYSIS] COMPLETE');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`Suggestions generated: ${suggestions.length}`);
+    console.log(`Total response time: ${responseTime}ms`);
+    console.log(`OpenAI time: ${aiTime}ms`);
+    console.log(`Tokens used: ${completion.usage?.total_tokens || 0}`);
+    
+    if (suggestions.length > 0) {
+      console.log('');
+      console.log('📋 SUGGESTIONS:');
+      suggestions.forEach((s: any, idx: number) => {
+        console.log(`${idx + 1}. [${s.severity}] ${s.category}: ${s.issue}`);
+        console.log(`   Fix: ${s.suggestion}`);
+        console.log(`   Affects ${s.affectedShapeIds?.length || 0} shapes:`, s.affectedShapeIds);
+        console.log(`   Changes:`, s.fixes);
+      });
+    } else {
+      console.log('🎉 No suggestions - design is good!');
+    }
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    res.status(200).json({
+      suggestions,
+      message: suggestions.length > 0 
+        ? `Found ${suggestions.length} improvement suggestion${suggestions.length === 1 ? '' : 's'}`
+        : 'Your design looks great! No major improvements needed.',
+      responseTime,
+      tokenUsage: completion.usage?.total_tokens || 0
+    });
+
+  } catch (error: any) {
+    console.error('[Design Analysis] Error:', error);
+
+    const responseTime = Date.now() - startTime;
+
+    res.status(500).json({
+      error: 'Failed to analyze design',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      responseTime,
+    });
+  }
+});
+
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Apply Design Suggestion
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 
+ * FEATURE: One-Click Suggestion Application
+ * - Applies design fixes from analysis
+ * - Batches all shape updates for suggestion
+ * - Returns operation ID for undo/redo integration
+ * 
+ * REQUEST:
+ * {
+ *   canvasId: string,
+ *   suggestion: { (same structure as returned from analyzeCanvasDesign) }
+ * }
+ * 
+ * RESPONSE:
+ * {
+ *   success: true,
+ *   affectedShapeIds: string[],
+ *   operationId: string,  // For undo/redo
+ *   message: "Applied: [suggestion description]"
+ * }
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+export const applySuggestion = functions
+  .runWith({
+    timeoutSeconds: 60,
+    memory: '512MB',
+    maxInstances: 10
+  })
+  .https.onRequest(async (req, res) => {
+  // CORS configuration
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+
+  if (req.method !== 'POST') {
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
+  }
+
+  const startTime = Date.now();
+
+  try {
+    // Verify authentication
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Unauthorized: Missing token' });
+      return;
+    }
+
+    const token = authHeader.split('Bearer ')[1];
+    let decodedToken;
+
+    try {
+      decodedToken = await admin.auth().verifyIdToken(token);
+    } catch (error) {
+      res.status(401).json({ error: 'Unauthorized: Invalid token' });
+      return;
+    }
+
+    const userId = decodedToken.uid;
+
+    // Parse request body
+    const { canvasId, suggestion } = req.body;
+
+    if (!canvasId || !suggestion) {
+      res.status(400).json({ error: 'Invalid request: canvasId and suggestion required' });
+      return;
+    }
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔧 [APPLY SUGGESTION] CLOUD FUNCTION STARTED');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('User ID:', userId);
+    console.log('Canvas ID:', canvasId);
+    console.log('Suggestion ID:', suggestion.id);
+    console.log('Issue:', suggestion.issue);
+    console.log('Fix:', suggestion.suggestion);
+    console.log('Category:', suggestion.category);
+    console.log('Severity:', suggestion.severity);
+    console.log('Fixes to apply:', suggestion.fixes?.length || 0);
+    console.log('Affected shape IDs:', suggestion.affectedShapeIds);
+    console.log('Full suggestion object:', JSON.stringify(suggestion, null, 2));
+
+    // Generate operation ID for undo/redo
+    const operationId = `suggestion-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    console.log('[Apply Suggestion] Generated operation ID:', operationId);
+    
+    const affectedShapeIds: string[] = [];
+
+    // Apply all fixes in the suggestion
+    console.log('[Apply Suggestion] 📝 Starting to apply fixes...');
+    const shapesRef = rtdb.ref(`canvas/${canvasId}/shapes`);
+    
+    for (let i = 0; i < (suggestion.fixes || []).length; i++) {
+      const fix = suggestion.fixes[i];
+      console.log(`  ${i + 1}/${suggestion.fixes.length} Processing fix for shape ${fix.shapeId}`);
+      console.log('    Changes to apply:', fix.changes);
+      
+      const shapeRef = shapesRef.child(fix.shapeId);
+      
+      // Check if shape exists
+      console.log('    Checking if shape exists...');
+      const shapeSnapshot = await shapeRef.once('value');
+      if (!shapeSnapshot.exists()) {
+        console.warn(`[Apply Suggestion] ⚠️  Shape ${fix.shapeId} not found, skipping`);
+        continue;
+      }
+      
+      const currentShape = shapeSnapshot.val();
+      console.log('    Current shape data:', {
+        type: currentShape.type,
+        fontSize: currentShape.fontSize,
+        fill: currentShape.fill,
+        x: currentShape.x,
+        y: currentShape.y
+      });
+
+      // Apply changes
+      console.log('    Applying update to RTDB...');
+      const updateData = {
+        ...fix.changes,
+        lastModifiedBy: userId,
+        lastModifiedAt: Date.now()
+      };
+      console.log('    Update data:', updateData);
+      
+      await shapeRef.update(updateData);
+      console.log(`    ✅ Shape ${fix.shapeId} updated successfully`);
+
+      affectedShapeIds.push(fix.shapeId);
+    }
+
+    console.log('[Apply Suggestion] 📊 Update summary:');
+    console.log(`  Fixes requested: ${suggestion.fixes?.length || 0}`);
+    console.log(`  Shapes updated: ${affectedShapeIds.length}`);
+    console.log(`  Affected shape IDs:`, affectedShapeIds);
+
+    // Store operation data for undo/redo
+    console.log('[Apply Suggestion] 💾 Storing operation data for undo/redo...');
+    const operationData = {
+      operationId,
+      userId,
+      timestamp: Date.now(),
+      type: 'suggestion_applied',
+      suggestion: {
+        id: suggestion.id,
+        category: suggestion.category,
+        issue: suggestion.issue
+      },
+      affectedShapeIds,
+      reversible: true
+    };
+    
+    const operationPath = `ai-operations/${userId}/operations/${operationId}`;
+    console.log('  Path:', operationPath);
+    console.log('  Data:', JSON.stringify(operationData, null, 2));
+
+    await rtdb.ref(operationPath).set(operationData);
+    console.log('  ✅ Operation data stored');
+
+    const responseTime = Date.now() - startTime;
+
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ [APPLY SUGGESTION] COMPLETE');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`Shapes updated: ${affectedShapeIds.length}`);
+    console.log(`Response time: ${responseTime}ms`);
+    console.log(`Operation ID: ${operationId}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    res.status(200).json({
+      success: true,
+      affectedShapeIds,
+      operationId,
+      message: `Applied: ${suggestion.suggestion}`,
+      responseTime
+    });
+
+  } catch (error: any) {
+    console.error('[Apply Suggestion] Error:', error);
+
+    const responseTime = Date.now() - startTime;
+
+    res.status(500).json({
+      error: 'Failed to apply suggestion',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
+      responseTime,
+    });
+  }
+});
+

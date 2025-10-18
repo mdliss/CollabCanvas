@@ -312,16 +312,45 @@ export default function AICanvas({
   const { user } = useAuth();
   const { registerAIOperation } = useUndo();
   
-  const LAYER_PANEL_WIDTH = 340;
-  const baseRight = 78; // Swapped with center button - AI now further left
-  const dynamicRight = isLayersPanelVisible ? baseRight + LAYER_PANEL_WIDTH : baseRight;
+  // Listen for Design Suggestions open/close
+  const [isDesignSuggestionsOpen, setIsDesignSuggestionsOpen] = useState(false);
   
-  console.log('[AICanvas] Initialized with canvasId:', canvasId);
+  useEffect(() => {
+    const handleDesignToggle = (e) => {
+      const designIsOpen = e.detail?.isOpen || false;
+      console.log('[AICanvas] Design Suggestions toggled:', designIsOpen ? 'OPEN' : 'CLOSED');
+      setIsDesignSuggestionsOpen(designIsOpen);
+    };
+    
+    window.addEventListener('designSuggestionsToggle', handleDesignToggle);
+    return () => window.removeEventListener('designSuggestionsToggle', handleDesignToggle);
+  }, []);
   
   // Use controlled state if provided, otherwise local state
   const [localIsOpen, setLocalIsOpen] = useState(false);
   const isOpen = externalIsOpen !== null ? externalIsOpen : localIsOpen;
-  const setIsOpen = onOpenChange || setLocalIsOpen;
+  
+  const setIsOpen = (newValue) => {
+    if (onOpenChange) {
+      onOpenChange(newValue);
+    } else {
+      setLocalIsOpen(newValue);
+    }
+    
+    // Emit event for Design Suggestions to listen
+    console.log('[AICanvas] Emitting aiAssistantToggle:', newValue ? 'OPEN' : 'CLOSED');
+    window.dispatchEvent(new CustomEvent('aiAssistantToggle', { 
+      detail: { isOpen: newValue } 
+    }));
+  };
+  
+  // Calculate dynamic positioning - AI stays on far right always
+  const BASE_RIGHT = 20; // Far right edge
+  const buttonRight = 78; // Fixed position for button
+  
+  // FIXED LOGIC: AI panel ALWAYS stays at far right (never slides)
+  // This ensures when both panels are open, AI is on right, Design is on left
+  const panelRight = BASE_RIGHT; // Always far right
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -501,24 +530,22 @@ export default function AICanvas({
    */
   const cancelStreaming = () => {
     if (!isStreaming) return;
-    
-    console.log('[AI Streaming] ⚡ Stream interrupted by user - completing message immediately');
-    
+
     // Cancel animation frame
     if (streamingAnimationRef.current) {
       cancelAnimationFrame(streamingAnimationRef.current);
       streamingAnimationRef.current = null;
     }
-    
+
     // Complete the message immediately with full content
     const fullMessage = fullStreamingMessageRef.current;
     const context = streamingContextRef.current;
-    
+
     if (fullMessage && context) {
       // Clear streaming state
       setStreamingMessage('');
       setIsStreaming(false);
-      
+
       // Add complete message to conversation
       const assistantMessageObj = { role: 'assistant', content: fullMessage };
       storeMessage(assistantMessageObj);
@@ -526,10 +553,8 @@ export default function AICanvas({
         ...context.newMessages,
         assistantMessageObj,
       ]);
-      
-      console.log('[AI Streaming] ✅ Message completed and stored');
     }
-    
+
     // Clear refs
     fullStreamingMessageRef.current = '';
     streamingContextRef.current = null;
@@ -541,7 +566,6 @@ export default function AICanvas({
     // CRITICAL: If user types during streaming, interrupt the stream
     // This allows rapid-fire interaction without waiting for slow streaming
     if (isStreaming) {
-      console.log('[AI Streaming] ⚡ User interrupted stream - cancelling animation');
       cancelStreaming();
     }
 
@@ -604,9 +628,6 @@ export default function AICanvas({
         totalShapes: shapes.length
       };
 
-      // Call AI endpoint with canvas context
-      console.log('[AI Canvas] Sending request to Cloud Function with canvasId:', canvasId);
-      
       const response = await fetch(AI_ENDPOINT, {
         method: 'POST',
         headers: {
@@ -629,20 +650,6 @@ export default function AICanvas({
       }
 
       const data = await response.json();
-      
-      // ═══════════════════════════════════════════════════════════════════
-      // DETAILED LOGGING: AI Response Data
-      // ═══════════════════════════════════════════════════════════════════
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🤖 [AI RESPONSE] Received response from Cloud Function');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('Response data:', JSON.stringify(data, null, 2));
-      console.log('Response time:', data.responseTime, 'ms');
-      console.log('Tools executed:', data.toolsExecuted);
-      console.log('Token usage:', data.tokenUsage);
-      console.log('Operation ID:', data.operationId);
-      console.log('Message:', data.message);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       /**
        * Progressive Display Simulation - Faster Streaming
@@ -674,162 +681,93 @@ export default function AICanvas({
       
       setIsStreaming(true);
       setStreamingMessage('');
-      
-      console.log('[AI Streaming] 🎬 Starting stream animation:', fullMessage.length, 'chars');
-      
+
       // Animate message display character by character
       let currentIndex = 0;
       let lastFrameTime = performance.now();
       const charsPerSecond = 60; // Faster streaming (was 25) - 2.4× speed increase
       const msPerChar = 1000 / charsPerSecond; // ~16.67ms per character
-      
+
       const animateMessage = (currentTime) => {
         // Calculate how many characters to display based on elapsed time
         const elapsed = currentTime - lastFrameTime;
         const charsToAdd = Math.floor(elapsed / msPerChar);
-        
+
         if (charsToAdd > 0 && currentIndex < fullMessage.length) {
           lastFrameTime = currentTime;
           currentIndex = Math.min(currentIndex + charsToAdd, fullMessage.length);
           setStreamingMessage(fullMessage.substring(0, currentIndex));
         }
-        
+
         if (currentIndex < fullMessage.length) {
           // Store animation frame ID for cancellation
           streamingAnimationRef.current = requestAnimationFrame(animateMessage);
         } else {
           // Animation complete - add to permanent messages
-          console.log('[AI Streaming] ✅ Stream animation complete');
           streamingAnimationRef.current = null;
           setStreamingMessage('');
           setIsStreaming(false);
-          
+
           // Create assistant message object
           const assistantMessageObj = { role: 'assistant', content: fullMessage };
-          
+
           // Store assistant message in RTDB for persistence
           storeMessage(assistantMessageObj);
-          
+
           setMessages([
             ...newMessages,
             assistantMessageObj,
           ]);
-          
+
           // Clear refs
           fullStreamingMessageRef.current = '';
           streamingContextRef.current = null;
         }
       };
-      
-      streamingAnimationRef.current = requestAnimationFrame(animateMessage);
 
-      console.log(`[AI Canvas] Response time: ${data.responseTime}ms, Tools: ${data.toolsExecuted}, Tokens: ${data.tokenUsage}`);
+      streamingAnimationRef.current = requestAnimationFrame(animateMessage);
       
       /**
        * Register AI Operation with Undo Manager
-       * 
+       *
        * After AI executes operations (create shapes, templates, etc.), we register
        * them with the undo manager for proper Ctrl+Z/Ctrl+Y support.
-       * 
-       * Architecture:
-       * 1. Cloud Function returns operation ID and affected shape IDs
-       * 2. We fetch current shape data from RTDB for redo capability
-       * 3. Create AIOperationCommand with shape IDs and data
-       * 4. Register with undo manager for atomic undo/redo
-       * 
-       * Performance:
-       * - Shape data fetch: <200ms for 500 shapes
-       * - Command creation: <10ms
-       * - Registration: <5ms
-       * - Total: <250ms overhead after AI execution
-       * 
-       * Undo/Redo:
-       * - Ctrl+Z removes all shapes from this operation atomically
-       * - Ctrl+Y recreates all shapes with original properties
-       * - Appears in History Timeline with purple styling
        */
-      // ═══════════════════════════════════════════════════════════════════
-      // DETAILED LOGGING: AI Operation Registration
-      // ═══════════════════════════════════════════════════════════════════
-      console.log('🔍 [AI REGISTRATION] Starting operation registration check...');
-      console.log('   toolsExecuted:', data.toolsExecuted);
-      console.log('   operationId:', data.operationId);
-      console.log('   registerAIOperation available:', !!registerAIOperation);
-      console.log('   user.uid:', user?.uid);
-      
       if (data.toolsExecuted > 0 && data.operationId && registerAIOperation) {
-        console.log('✅ [AI REGISTRATION] Conditions met - proceeding with registration');
-        
         try {
           // Fetch AI operation data from RTDB to get affected shape IDs
           const operationPath = `ai-operations/${user.uid}/operations/${data.operationId}`;
-          console.log('📥 [AI REGISTRATION] Fetching operation data from RTDB:', operationPath);
-          
           const operationRef = ref(rtdb, operationPath);
           const operationSnapshot = await get(operationRef);
           const operationData = operationSnapshot.val();
-          
-          console.log('📦 [AI REGISTRATION] Operation data received:', operationData ? 'YES' : 'NO');
-          if (operationData) {
-            console.log('   Operation data:', JSON.stringify(operationData, null, 2));
-          }
-          
+
           if (operationData && operationData.toolCalls) {
-            console.log('🔧 [AI REGISTRATION] Processing tool calls:', operationData.toolCalls.length);
-            
             // Extract all affected shape IDs from tool calls
             const allShapeIds = [];
-            for (let i = 0; i < operationData.toolCalls.length; i++) {
-              const toolCall = operationData.toolCalls[i];
-              console.log(`   Tool call ${i}:`, toolCall.functionName);
-              console.log('   Affected shape IDs:', toolCall.affectedShapeIds);
-              
+            for (const toolCall of operationData.toolCalls) {
               if (toolCall.affectedShapeIds && Array.isArray(toolCall.affectedShapeIds)) {
                 allShapeIds.push(...toolCall.affectedShapeIds);
-                console.log(`   Added ${toolCall.affectedShapeIds.length} shape IDs`);
-              } else {
-                console.warn(`   ⚠️  No affectedShapeIds array found in tool call ${i}`);
               }
             }
-            
+
             // Deduplicate shape IDs
             const uniqueShapeIds = [...new Set(allShapeIds)];
-            console.log('📊 [AI REGISTRATION] Extracted shape IDs:');
-            console.log('   Total collected:', allShapeIds.length);
-            console.log('   Unique:', uniqueShapeIds.length);
-            console.log('   IDs:', uniqueShapeIds.join(', '));
-            
+
             if (uniqueShapeIds.length > 0) {
               // Fetch current shape data for redo capability
               const shapesPath = `canvas/${canvasId}/shapes`;
-              console.log('📥 [AI REGISTRATION] Fetching shape data from:', shapesPath);
-              
               const shapesRef = ref(rtdb, shapesPath);
               const shapesSnapshot = await get(shapesRef);
               const allShapes = shapesSnapshot.val() || {};
-              
-              console.log('📦 [AI REGISTRATION] All shapes in canvas:', Object.keys(allShapes).length);
-              
+
               // Get shape data for affected shapes only
               const shapeData = uniqueShapeIds
                 .map(id => allShapes[id])
                 .filter(Boolean); // Filter out null/undefined
-              
-              console.log('✅ [AI REGISTRATION] Fetched shape data:', shapeData.length, 'shapes');
-              console.log('   Sample shape:', shapeData[0] ? {
-                id: shapeData[0].id,
-                type: shapeData[0].type,
-                x: shapeData[0].x,
-                y: shapeData[0].y
-              } : 'NONE');
-              
+
               // Create AI operation command
               const historyDesc = `AI: ${fullMessage.substring(0, 50)}${fullMessage.length > 50 ? '...' : ''}`;
-              console.log('🏗️  [AI REGISTRATION] Creating AIOperationCommand...');
-              console.log('   Description:', historyDesc);
-              console.log('   Canvas ID:', canvasId);
-              console.log('   Affected shapes:', uniqueShapeIds.length);
-              
+
               const aiCommand = new AIOperationCommand({
                 canvasId: canvasId,
                 description: historyDesc,
@@ -839,52 +777,14 @@ export default function AICanvas({
                 deleteShapeFn: deleteShape,
                 createShapeFn: createShape
               });
-              
-              console.log('✅ [AI REGISTRATION] AIOperationCommand created successfully');
-              
+
               // Register with undo manager
-              console.log('📝 [AI REGISTRATION] Calling registerAIOperation...');
               registerAIOperation(aiCommand);
-              
-              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-              console.log('✅ [AI REGISTRATION] COMPLETE - Operation registered for undo/redo');
-              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-              console.log('   Description:', historyDesc);
-              console.log('   Shapes:', uniqueShapeIds.length);
-              console.log('   Shape IDs:', uniqueShapeIds.slice(0, 5).join(', '), uniqueShapeIds.length > 5 ? `... (+${uniqueShapeIds.length - 5} more)` : '');
-              console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-            } else {
-              console.error('❌ [AI REGISTRATION] FAILED - No affected shape IDs found');
-              console.error('   Tool calls processed:', operationData.toolCalls.length);
-              console.error('   Shape IDs extracted:', allShapeIds.length);
             }
-          } else {
-            console.error('❌ [AI REGISTRATION] FAILED - No operation data found');
-            console.error('   Operation ID:', data.operationId);
-            console.error('   Path checked:', operationPath);
-            console.error('   Operation data exists:', !!operationData);
-            console.error('   Tool calls exist:', !!(operationData && operationData.toolCalls));
           }
         } catch (error) {
-          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.error('❌ [AI REGISTRATION] EXCEPTION THROWN');
-          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-          console.error('Error:', error);
-          console.error('Error message:', error.message);
-          console.error('Error stack:', error.stack);
-          console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+          console.error('[AI REGISTRATION] Error:', error);
           // Non-critical error - shapes were created successfully, just can't undo
-        }
-      } else {
-        console.warn('⚠️  [AI REGISTRATION] Skipping registration - conditions not met:');
-        if (data.toolsExecuted === 0) {
-          console.warn('   - No tools were executed (toolsExecuted = 0)');
-        }
-        if (!data.operationId) {
-          console.warn('   - No operation ID in response');
-        }
-        if (!registerAIOperation) {
-          console.warn('   - registerAIOperation function not available');
         }
       }
       
@@ -897,7 +797,6 @@ export default function AICanvas({
       }, 200);
       
     } catch (err) {
-      console.error('[AI Canvas] Error:', err);
       let errorMessage = 'Failed to communicate with AI assistant.';
 
       if (err.message.includes('Rate limit')) {
@@ -909,10 +808,10 @@ export default function AICanvas({
       }
 
       setError(errorMessage);
-      
+
       // Remove the user message if request failed
       setMessages(messages);
-      
+
       // Re-focus input even on error for retry
       setTimeout(() => {
         if (inputRef.current && isOpen) {
@@ -1046,7 +945,7 @@ export default function AICanvas({
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: `${dynamicRight}px`, // Slides left when layer panel opens
+          right: `${buttonRight}px`, // Fixed position - doesn't slide
           width: '48px',
           height: '48px',
           display: 'flex',
@@ -1068,12 +967,12 @@ export default function AICanvas({
         ✨
       </button>
 
-      {/* Chat Panel - Dynamically positioned based on layer panel */}
+      {/* Chat Panel - Dynamically positioned, slides left when Design opens */}
       <div
         style={{
           position: 'fixed',
-          bottom: '78px', // Above the AI button with 10px gap
-          right: `${dynamicRight}px`, // Slides left when layer panel opens
+          bottom: '78px', // Above the buttons
+          right: `${panelRight}px`, // Slides left when Design Suggestions opens
           width: '380px',
           maxHeight: '600px',
           // EXACT TOOLBAR STYLING:

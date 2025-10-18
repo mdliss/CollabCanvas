@@ -90,11 +90,8 @@ export const listProjects = async (userId) => {
  */
 export const listSharedCanvases = async (userEmail) => {
   if (!userEmail) {
-    console.log('[Projects] No email provided for shared canvas lookup');
     return [];
   }
-  
-  console.log('[Projects] Looking for canvases shared with:', userEmail);
   
   try {
     // Query all canvases to find ones where user is a collaborator
@@ -102,7 +99,6 @@ export const listSharedCanvases = async (userEmail) => {
     const snapshot = await get(canvasesRef);
     
     if (!snapshot.exists()) {
-      console.log('[Projects] No canvases in database');
       return [];
     }
     
@@ -110,8 +106,6 @@ export const listSharedCanvases = async (userEmail) => {
     const sharedCanvases = [];
     const emailKey = userEmail.replace(/[@.]/g, '_');
     
-    console.log('[Projects] Email key for lookup:', emailKey);
-    console.log('[Projects] Scanning', Object.keys(allCanvases).length, 'canvases');
     
     // Check each canvas for collaborator entry
     for (const [canvasId, canvasData] of Object.entries(allCanvases)) {
@@ -119,11 +113,9 @@ export const listSharedCanvases = async (userEmail) => {
       
       const collaborators = canvasData.collaborators || {};
       
-      console.log(`[Projects] Canvas ${canvasId} collaborators:`, Object.keys(collaborators));
       
       if (collaborators[emailKey]) {
         const collab = collaborators[emailKey];
-        console.log(`[Projects] ✅ Found shared canvas ${canvasId} for ${userEmail}, role:`, collab.role);
         
         sharedCanvases.push({
           id: `shared_${canvasId}`,
@@ -141,7 +133,6 @@ export const listSharedCanvases = async (userEmail) => {
       }
     }
     
-    console.log('[Projects] Found', sharedCanvases.length, 'shared canvases for', userEmail);
     
     return sharedCanvases.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     
@@ -221,7 +212,6 @@ export const createProject = async (userId, name = 'Untitled Canvas', templateId
     const template = TEMPLATES[templateId];
     const shapes = template.shapes(userId);
     
-    console.log(`[Projects] Applying template "${templateId}" with ${shapes.length} shapes`);
     
     // Write all template shapes to canvas
     for (const shape of shapes) {
@@ -236,7 +226,6 @@ export const createProject = async (userId, name = 'Untitled Canvas', templateId
     });
   }
   
-  console.log('[Projects] Created project:', projectId, 'with canvas:', canvasId, 'using template:', templateId);
   
   return project;
 };
@@ -257,7 +246,6 @@ export const updateProject = async (userId, projectId, updates) => {
   };
   
   await update(projectRef, updateData);
-  console.log('[Projects] Updated project:', projectId);
 };
 
 /**
@@ -275,8 +263,6 @@ export const deleteProject = async (userId, projectId, canvasId) => {
   // Delete canvas data
   const canvasRef = ref(rtdb, `canvas/${canvasId}`);
   await remove(canvasRef);
-  
-  console.log('[Projects] Deleted project:', projectId, 'and canvas:', canvasId);
 };
 
 /**
@@ -353,7 +339,6 @@ export const duplicateProject = async (userId, sourceProjectId) => {
     projectName: newProject.name
   });
   
-  console.log('[Projects] Duplicated project:', sourceProjectId, '→', newProjectId);
   
   return newProject;
 };

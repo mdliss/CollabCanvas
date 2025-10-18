@@ -180,6 +180,7 @@ import { ref, remove, onValue, get } from "firebase/database";
 import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 import AICanvas from "../AI/AICanvas";
+import AIDesignSuggestions from "../AI/AIDesignSuggestions";
 import { checkCanvasAccess } from "../../services/sharing";
 import { createEditRequest, hasPendingRequest, subscribeToMessages, markMessageAsRead } from "../../services/notifications";
 
@@ -924,6 +925,27 @@ export default function Canvas() {
             } else if (canEdit) {
               e.preventDefault();
               handleAddShape('line');
+            }
+            break;
+          case 'a':
+            // Shift+A toggles AI Assistant (editors only)
+            if (e.shiftKey && canEdit) {
+              e.preventDefault();
+              const newState = !isAIChatOpen;
+              setIsAIChatOpen(newState);
+              console.log('[Keyboard] Shift+A pressed - AI Assistant:', newState ? 'OPENED' : 'CLOSED');
+              showFeedback(newState ? 'AI Assistant opened' : 'AI Assistant closed');
+            }
+            break;
+          case 'i':
+            // Shift+I toggles AI Design Suggestions (editors only)
+            if (e.shiftKey && canEdit) {
+              e.preventDefault();
+              // Toggle design suggestions panel
+              // Note: The component manages its own state, so we trigger a custom event
+              window.dispatchEvent(new CustomEvent('toggleDesignSuggestions'));
+              console.log('[Keyboard] Shift+I pressed - Toggling Design Suggestions');
+              showFeedback('Design Suggestions toggled');
             }
             break;
           case 'r':
@@ -3481,6 +3503,15 @@ export default function Canvas() {
           stageRef={stageRef}
           isOpen={isAIChatOpen}
           onOpenChange={setIsAIChatOpen}
+          isLayersPanelVisible={isLayersPanelVisible}
+          isVisible={isUIVisible}
+        />
+      )}
+
+      {/* AI Design Suggestions - Hidden for viewers */}
+      {canEdit && (
+        <AIDesignSuggestions 
+          canvasId={CANVAS_ID}
           isLayersPanelVisible={isLayersPanelVisible}
           isVisible={isUIVisible}
         />
