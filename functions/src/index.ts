@@ -105,7 +105,7 @@ const LayoutArrangeSchema = z.object({
 });
 
 const BulkCreateSchema = z.object({
-  shapes: z.array(CreateShapeSchema).max(500), // Limit to 500 shapes per call for safety
+  shapes: z.array(CreateShapeSchema).max(1000), // Support up to 1000 shapes per call
 });
 
 const BulkUpdateSchema = z.object({
@@ -817,36 +817,25 @@ interface AIOperation {
  * Enables tracking which shapes were created/modified for undo.
  */
 function extractShapeIdsFromResult(functionName: string, result: string, params: any): string[] {
-  console.log('  🔍 [extractShapeIds] Extracting from:', functionName);
-  console.log('    Result string:', result.substring(0, 200));
-  
   const shapeIds: string[] = [];
   
-  // Extract from result message
-  // Updated regex to match both formats:
-  // - Old: shape_1234567890_abc123
-  // - New: shape_1234567890_0_abc123 (with index)
+  // Extract from result message using regex
+  // Matches both formats: shape_1234567890_abc123 and shape_1234567890_0_abc123
   const idMatches = result.match(/shape_\d+(?:_\d+)?_[a-z0-9]+/g);
-  console.log('    Regex matches:', idMatches);
   if (idMatches) {
     shapeIds.push(...idMatches);
-    console.log('    Added from regex:', idMatches.length, 'IDs');
   }
   
   // Extract from params for update/delete operations
   if (params.shapeId) {
     shapeIds.push(params.shapeId);
-    console.log('    Added from params.shapeId:', params.shapeId);
   }
   if (params.shapeIds && Array.isArray(params.shapeIds)) {
     shapeIds.push(...params.shapeIds);
-    console.log('    Added from params.shapeIds:', params.shapeIds.length, 'IDs');
   }
   
-  const uniqueIds = [...new Set(shapeIds)];
-  console.log('    Final unique IDs:', uniqueIds.length, '→', uniqueIds);
-  
-  return uniqueIds; // Deduplicate
+  // Deduplicate and return
+  return [...new Set(shapeIds)];
 }
 
 /**
@@ -859,20 +848,11 @@ async function trackAIOperation(
   userId: string,
   toolCalls: Array<{ functionName: string; params: any; result: string }>
 ): Promise<string> {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('🔧 [trackAIOperation] CALLED');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('User ID:', userId);
-  console.log('Tool calls:', toolCalls.length);
-  
   const operationId = `ai-op-${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  console.log('Generated operation ID:', operationId);
   
-  console.log('Processing tool calls to extract shape IDs...');
-  const processedToolCalls = toolCalls.map((tc, idx) => {
-    console.log(`  Processing tool call ${idx}: ${tc.functionName}`);
+  // Extract shape IDs from tool results
+  const processedToolCalls = toolCalls.map((tc) => {
     const affectedShapeIds = extractShapeIdsFromResult(tc.functionName, tc.result, tc.params);
-    console.log(`    Extracted ${affectedShapeIds.length} shape IDs:`, affectedShapeIds);
     
     return {
       functionName: tc.functionName,
@@ -889,23 +869,13 @@ async function trackAIOperation(
     reversible: true
   };
   
-  console.log('Operation object to store:', JSON.stringify(operation, null, 2));
+  // Store operation and last-operation pointer in parallel for speed
+  await Promise.all([
+    rtdb.ref(`ai-operations/${userId}/operations/${operationId}`).set(operation),
+    rtdb.ref(`ai-operations/${userId}/last-operation`).set(operationId)
+  ]);
   
-  // Store operation
-  const operationPath = `ai-operations/${userId}/operations/${operationId}`;
-  console.log('Writing to RTDB path:', operationPath);
-  await rtdb.ref(operationPath).set(operation);
-  console.log('✅ Operation written to RTDB');
-  
-  // Update last operation pointer
-  const lastOpPath = `ai-operations/${userId}/last-operation`;
-  console.log('Updating last-operation pointer:', lastOpPath);
-  await rtdb.ref(lastOpPath).set(operationId);
-  console.log('✅ Last-operation pointer updated');
-  
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log(`✅ [trackAIOperation] COMPLETE - Returning: ${operationId}`);
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`✅ [AI Operation] Tracked ${operationId} with ${processedToolCalls.reduce((sum, tc) => sum + tc.affectedShapeIds.length, 0)} shapes`);
   
   return operationId;
 }
@@ -1098,6 +1068,134 @@ async function trackUsage(
  * 
  * Performance: 500 shapes in ~2 seconds (was ~50 seconds with sequential writes)
  */
+/**
+ * Bulk Create with Pattern Generation
+ * 
+ * Optimized for very large batches (200-1000 shapes).
+ * Generates shapes automatically based on pattern, avoiding token limits.
+ */
+async function bulkCreatePatternTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
+  const { count, shapeType, pattern, baseColor, centerX, centerY } = params;
+  
+  console.log(`[AI Tool] Pattern-based bulk create: ${count} ${shapeType}s in ${pattern} pattern`);
+  
+  if (count < 1 || count > 1000) {
+    throw new Error('Count must be between 1 and 1000');
+  }
+  
+  const maxZ = await getMaxZIndex(canvasId);
+  const timestamp = Date.now();
+  const updates: any = {};
+  const createdIds: string[] = [];
+  
+  // Determine center point
+  const cx = centerX || 15000; // Canvas center default
+  const cy = centerY || 15000;
+  
+  // Generate shapes based on pattern
+  for (let i = 0; i < count; i++) {
+    const shapeId = `shape_${timestamp}_${i}_${Math.random().toString(36).substr(2, 6)}`;
+    let x, y;
+    
+    switch (pattern) {
+      case 'grid': {
+        const cols = Math.ceil(Math.sqrt(count));
+        const spacing = 2000; // 2000px spacing between shapes
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        x = cx + (col - cols / 2) * spacing;
+        y = cy + (row - cols / 2) * spacing;
+        break;
+      }
+      case 'scattered': {
+        // Scattered clusters
+        const clusterCount = Math.min(10, Math.ceil(count / 50));
+        const cluster = i % clusterCount;
+        const clusterAngle = (cluster / clusterCount) * Math.PI * 2;
+        const clusterDist = 3000 + Math.random() * 2000;
+        const clusterCx = cx + Math.cos(clusterAngle) * clusterDist;
+        const clusterCy = cy + Math.sin(clusterAngle) * clusterDist;
+        x = clusterCx + (Math.random() - 0.5) * 1500;
+        y = clusterCy + (Math.random() - 0.5) * 1500;
+        break;
+      }
+      default: // random
+        x = cx + (Math.random() - 0.5) * 10000; // Spread 10000px around center
+        y = cy + (Math.random() - 0.5) * 10000;
+    }
+    
+    // Generate color variation
+    let fill;
+    if (baseColor) {
+      // Vary brightness of base color
+      fill = baseColor;
+    } else {
+      // Rainbow gradient
+      const hue = (i / count) * 360;
+      fill = `hsl(${hue}, 70%, 60%)`;
+    }
+    
+    const shape: any = {
+      id: shapeId,
+      type: shapeType,
+      x: Math.round(x),
+      y: Math.round(y),
+      width: shapeType === 'text' ? 1800 : 1500,
+      height: shapeType === 'text' ? 200 : 1000,
+      fill: fill,
+      zIndex: maxZ + i + 1,
+      createdBy: userId,
+      createdAt: timestamp,
+      lastModifiedBy: userId,
+      lastModifiedAt: timestamp,
+      isLocked: false,
+      lockedBy: null,
+      lockedAt: null,
+    };
+    
+    if (shapeType === 'text') {
+      shape.text = sanitizeText(`Text ${i + 1}`);
+      shape.fontSize = 120;
+    }
+    
+    updates[`canvas/${canvasId}/shapes/${shapeId}`] = shape;
+    createdIds.push(shapeId);
+  }
+  
+  // Add metadata
+  updates[`canvas/${canvasId}/metadata/lastUpdated`] = timestamp;
+  
+  // Chunked writes for large batches
+  const CHUNK_SIZE = 100;
+  if (count <= CHUNK_SIZE) {
+    await rtdb.ref().update(updates);
+    console.log(`[AI Tool] ✅ Pattern created ${count} ${shapeType}s in single write`);
+  } else {
+    const writeStartTime = Date.now();
+    const updateKeys = Object.keys(updates);
+    const chunks: any[] = [];
+    
+    for (let i = 0; i < updateKeys.length; i += CHUNK_SIZE) {
+      const chunkKeys = updateKeys.slice(i, i + CHUNK_SIZE);
+      const chunkUpdates: any = {};
+      chunkKeys.forEach(key => {
+        chunkUpdates[key] = updates[key];
+      });
+      chunks.push(chunkUpdates);
+    }
+    
+    await Promise.all(
+      chunks.map((chunk, index) => rtdb.ref().update(chunk))
+    );
+    
+    const writeTime = Date.now() - writeStartTime;
+    console.log(`[AI Tool] ✅ Pattern created ${count} ${shapeType}s in ${chunks.length} parallel chunks (${writeTime}ms)`);
+  }
+  
+  // Return all IDs for tracking
+  return `Successfully created ${count} ${shapeType}s in ${pattern} pattern: ${createdIds.join(',')}`;
+}
+
 async function bulkCreateTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
   const validated = BulkCreateSchema.parse(params);
   const maxZ = await getMaxZIndex(canvasId);
@@ -1164,14 +1262,59 @@ async function bulkCreateTool(params: any, userId: string, canvasId: string = CA
   // Add metadata update
   updates[`canvas/${canvasId}/metadata/lastUpdated`] = timestamp;
 
-  // CRITICAL: Single batched write - 25× faster than sequential writes
-  await rtdb.ref().update(updates);
-
-  console.log(`[AI Tool] ✅ Bulk created ${createdIds.length} shapes in single batched write`);
-  console.log(`[AI Tool] Shape IDs: ${createdIds.slice(0, 3).join(', ')}${createdIds.length > 3 ? ` ... (+${createdIds.length - 3} more)` : ''}`);
+  // OPTIMIZED CHUNKED WRITES: For large batches (100+ shapes), split into chunks
+  // to avoid RTDB payload limits and improve write performance
+  const CHUNK_SIZE = 100; // Write 100 shapes per batch (optimal for RTDB)
+  const totalShapes = createdIds.length;
   
-  // Return shape IDs for history tracking
-  return `Successfully created ${createdIds.length} shapes: ${createdIds.join(', ')}`;
+  if (totalShapes <= CHUNK_SIZE) {
+    // Small batch: Single write
+    await rtdb.ref().update(updates);
+    console.log(`[AI Tool] ✅ Bulk created ${totalShapes} shapes in single write`);
+  } else {
+    // Large batch: Chunked parallel writes
+    console.log(`[AI Tool] Large batch detected: ${totalShapes} shapes`);
+    console.log(`[AI Tool] Splitting into ${Math.ceil(totalShapes / CHUNK_SIZE)} chunks of ${CHUNK_SIZE} shapes`);
+    
+    const writeStartTime = Date.now();
+    const updateKeys = Object.keys(updates);
+    const chunks: any[] = [];
+    
+    // Split updates into chunks
+    for (let i = 0; i < updateKeys.length; i += CHUNK_SIZE) {
+      const chunkKeys = updateKeys.slice(i, i + CHUNK_SIZE);
+      const chunkUpdates: any = {};
+      
+      chunkKeys.forEach(key => {
+        chunkUpdates[key] = updates[key];
+      });
+      
+      chunks.push(chunkUpdates);
+    }
+    
+    // Write all chunks in parallel for maximum speed
+    await Promise.all(
+      chunks.map((chunk, index) => {
+        console.log(`[AI Tool] Writing chunk ${index + 1}/${chunks.length}...`);
+        return rtdb.ref().update(chunk);
+      })
+    );
+    
+    const writeTime = Date.now() - writeStartTime;
+    console.log(`[AI Tool] ✅ Bulk created ${totalShapes} shapes in ${chunks.length} parallel chunks (${writeTime}ms)`);
+    console.log(`[AI Tool] Average: ${(writeTime / chunks.length).toFixed(0)}ms per chunk, ${(writeTime / totalShapes).toFixed(1)}ms per shape`);
+  }
+  
+  // Return ALL shape IDs in compact format for tracking
+  // Shape IDs are extracted by regex for undo functionality
+  // Must include all IDs regardless of batch size
+  if (createdIds.length <= 10) {
+    return `Successfully created ${createdIds.length} shapes: ${createdIds.join(', ')}`;
+  } else {
+    // All batches: Include ALL IDs in compact comma-separated format
+    // This ensures undo tracking works for all shapes
+    return `Successfully created ${createdIds.length} shapes: ${createdIds.join(',')}`;
+  }
 }
 
 async function bulkUpdateTool(params: any, userId: string, canvasId: string = CANVAS_ID): Promise<string> {
@@ -1246,7 +1389,7 @@ async function bulkUpdateTool(params: any, userId: string, canvasId: string = CA
 export const aiCanvasAgent = functions
   .runWith({
     timeoutSeconds: 540,  // 9 minutes (max for Gen 1 functions)
-    memory: '2GB',        // 2GB RAM for large operations (increased for 100+ shape requests)
+    memory: '4GB',        // 4GB RAM for large operations with 100+ shapes
     maxInstances: 10      // Limit concurrent instances
   })
   .https.onRequest(async (req, res) => {
@@ -1547,8 +1690,47 @@ export const aiCanvasAgent = functions
       {
         type: 'function' as const,
         function: {
+          name: 'bulk_create_pattern',
+          description: 'CRITICAL: Use this for requests with 200+ shapes OR when user asks for "random" distribution. Generates shapes automatically using patterns - NO NEED to specify individual shape coordinates. Much faster than bulk_create for large quantities. Examples: "add 500 rectangles" → bulk_create_pattern, "create 1000 random circles" → bulk_create_pattern.',
+          parameters: {
+            type: 'object',
+            properties: {
+              count: {
+                type: 'number',
+                description: 'Number of shapes to create (1-1000)'
+              },
+              shapeType: {
+                type: 'string',
+                enum: VALID_SHAPE_TYPES,
+                description: 'Type of shape to create'
+              },
+              pattern: {
+                type: 'string',
+                enum: ['random', 'grid', 'scattered'],
+                description: 'Distribution pattern: random (spread across viewport), grid (organized rows/columns), scattered (clustered groups)'
+              },
+              baseColor: {
+                type: 'string',
+                description: 'Starting color (hex), will generate color variations. Optional, defaults to rainbow.'
+              },
+              centerX: {
+                type: 'number',
+                description: 'Center X coordinate for pattern. Optional, uses viewport center if not specified.'
+              },
+              centerY: {
+                type: 'number',
+                description: 'Center Y coordinate for pattern. Optional, uses viewport center if not specified.'
+              }
+            },
+            required: ['count', 'shapeType', 'pattern']
+          }
+        }
+      },
+      {
+        type: 'function' as const,
+        function: {
           name: 'bulk_create',
-          description: 'CRITICAL: Use this for ANY request involving 2+ shapes. Creates multiple shapes simultaneously in a SINGLE operation. ALWAYS use this instead of calling create_shape multiple times. Examples: "add 50 rectangles" → bulk_create with 50 shapes, "create 10 circles" → bulk_create with 10 shapes, "put 400 squares" → bulk_create with 400 shapes.',
+          description: 'Creates 2-200 shapes with EXACT positions/properties you specify. Use when you need precise control over each shape. For 200+ shapes or random placement, use bulk_create_pattern instead.',
           parameters: {
             type: 'object',
             properties: {
@@ -1643,15 +1825,15 @@ CRITICAL: YOU MUST CALL FUNCTIONS - DO NOT JUST DESCRIBE ACTIONS
 - Every creation/modification request REQUIRES a function call
 
 **WRONG BEHAVIOR (DO NOT DO THIS)**:
-❌ User: "add 100 rectangles"
-❌ AI responds: "I've added 100 rectangles" (WITHOUT calling bulk_create)
+❌ User: "add 500 rectangles"
+❌ AI responds: "I've added 500 rectangles" (WITHOUT calling any function)
 ❌ Result: Nothing happens, user sees no shapes
 
 **CORRECT BEHAVIOR (ALWAYS DO THIS)**:
-✅ User: "add 100 rectangles"
-✅ AI: CALLS bulk_create function with 100 rectangle objects
-✅ AI then responds: "Created 100 rectangles"
-✅ Result: User sees 100 rectangles on canvas
+✅ User: "add 500 rectangles"
+✅ AI: CALLS bulk_create_pattern({ count: 500, shapeType: "rectangle", pattern: "random" })
+✅ AI then responds: "Created 500 rectangles in a random pattern"
+✅ Result: User sees 500 rectangles on canvas instantly
 
 ═══════════════════════════════════════════════════════════════════════════
 EXECUTION RULES
@@ -1664,13 +1846,14 @@ EXECUTION RULES
    - EXECUTE, don't explain
 
 2. **EXACT QUANTITIES**
-   - User says "100" → Create EXACTLY 100 (not 3, not 10)
-   - User says "500" → Create EXACTLY 500
-   - Use bulk_create for ANY quantity (1 to 1000+)
+   - User says "100" → Create EXACTLY 100
+   - User says "500" → Create EXACTLY 500 using bulk_create_pattern
+   - User says "1000" → Create EXACTLY 1000 using bulk_create_pattern
+   - For 200+, ALWAYS use bulk_create_pattern
 
 3. **BATCH SIZE**
    - Put ALL shapes in ONE bulk_create call
-   - Array can have 1000+ items
+   - Array can have up to 1000 items
    - Never split into multiple calls
 
 4. **EXAMPLE FUNCTION CALLS**:
@@ -1684,8 +1867,8 @@ User: "add 5 red circles"
   {type:"circle", x:15000, y:14000, fill:"#ff0000"}
 ]})
 
-User: "create 100 rectangles"
-→ CALL: bulk_create({shapes: [... array of 100 rectangle objects ...]})
+User: "create 500 rectangles"
+→ CALL: bulk_create_pattern({count: 500, shapeType: "rectangle", pattern: "random"})
 
 Canvas: 30000x30000px, Center: ~15000,15000, Default size: 1500x1000px`;
 
@@ -1721,15 +1904,18 @@ Canvas: 30000x30000px, Center: ~15000,15000, Default size: 1500x1000px`;
 ═══════════════════════════════════════════════════════════════════════════
 
 When user requests MULTIPLE shapes (2+):
-→ ALWAYS use bulk_create
-→ NEVER call create_shape multiple times
-→ Create ALL requested shapes in ONE bulk_create call
 
-EXAMPLES OF CORRECT TOOL USAGE:
-✅ "add 50 rectangles" → bulk_create({ shapes: [... array of 50 rectangles ...] })
-✅ "create 10 circles" → bulk_create({ shapes: [... array of 10 circles ...] })
-✅ "put 400 squares in random locations" → bulk_create({ shapes: [... array of 400 squares ...] })
-✅ "add 5 stars" → bulk_create({ shapes: [... array of 5 stars ...] })
+For 2-150 shapes with SPECIFIC placement:
+→ Use bulk_create with exact coordinates
+→ Example: "add 50 red rectangles in a line" → bulk_create({ shapes: [...] })
+
+For 200+ shapes OR random placement:
+→ Use bulk_create_pattern (much faster, no token limits)
+→ Example: "add 500 rectangles" → bulk_create_pattern({ count: 500, shapeType: "rectangle", pattern: "random" })
+→ Example: "create 1000 circles randomly" → bulk_create_pattern({ count: 1000, shapeType: "circle", pattern: "random" })
+→ Example: "add 800 stars in a grid" → bulk_create_pattern({ count: 800, shapeType: "star", pattern: "grid" })
+
+NEVER call create_shape multiple times for bulk operations!
 
 When user requests SINGLE shape:
 → Use create_shape
@@ -1812,7 +1998,7 @@ Be helpful, creative, and produce professional-looking results.`;
      * Decision: Use non-streaming when tools likely needed, streaming otherwise.
      */
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o', // GPT-4o supports 16,384 output tokens (vs gpt-4's 8,192)
       messages: [
         { role: 'system', content: systemPrompt },
         ...messages,
@@ -1820,7 +2006,7 @@ Be helpful, creative, and produce professional-looking results.`;
       tools: tools,
       tool_choice: 'auto',
       temperature: 0.7,
-      max_tokens: 1000,
+      max_tokens: 16384, // GPT-4o absolute maximum (each shape ~30 tokens, max ~500 shapes)
       stream: false, // Always false for now - streaming with tools is complex
     });
 
@@ -1868,6 +2054,9 @@ Be helpful, creative, and produce professional-looking results.`;
             case 'bulk_create':
               result = await bulkCreateTool(functionArgs, userId, targetCanvasId);
               break;
+            case 'bulk_create_pattern':
+              result = await bulkCreatePatternTool(functionArgs, userId, targetCanvasId);
+              break;
             case 'bulk_update':
               result = await bulkUpdateTool(functionArgs, userId, targetCanvasId);
               break;
@@ -1892,32 +2081,18 @@ Be helpful, creative, and produce professional-looking results.`;
         }
       }
 
-      // Track this AI operation for undo (before final response)
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📝 [AI TRACKING] Starting operation tracking...');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      
+      // Track this AI operation for undo
       const executedTools = toolCalls.map((tc: any, index: number) => ({
         functionName: tc.function.name,
         params: JSON.parse(tc.function.arguments),
         result: toolResults[index].content
       }));
       
-      console.log(`[AI TRACKING] Tool calls to track: ${executedTools.length}`);
-      executedTools.forEach((tool, idx) => {
-        console.log(`  Tool ${idx}: ${tool.functionName}`);
-        console.log(`    Result: ${tool.result.substring(0, 100)}...`);
-      });
-      
-      console.log('[AI TRACKING] Calling trackAIOperation...');
       const operationId = await trackAIOperation(userId, executedTools);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`✅ [AI TRACKING] Operation tracked with ID: ${operationId}`);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       // Get final response after tool execution
       const followUpCompletion = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages,
@@ -1925,7 +2100,7 @@ Be helpful, creative, and produce professional-looking results.`;
           ...toolResults,
         ],
         temperature: 0.7,
-        max_tokens: 500,
+        max_tokens: 1000, // Increased for detailed responses about large batches
       });
 
       const finalResponse = followUpCompletion.choices[0].message.content;
@@ -1948,13 +2123,7 @@ Be helpful, creative, and produce professional-looking results.`;
         operationId, // Include for undo reference
       };
       
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('📤 [AI RESPONSE] Sending response to frontend:');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(JSON.stringify(responsePayload, null, 2));
-      console.log('   operationId value:', operationId);
-      console.log('   operationId type:', typeof operationId);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log(`✅ [AI Response] Completed in ${responseTime}ms - ${toolCalls.length} tools, ${totalTokens} tokens`);
       
       res.status(200).json(responsePayload);
     } else {
@@ -1975,7 +2144,14 @@ Be helpful, creative, and produce professional-looking results.`;
       });
     }
   } catch (error: any) {
-    console.error('[AI Agent] Error:', error);
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('❌ [AI Agent] FATAL ERROR');
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error object:', JSON.stringify(error, null, 2));
+    console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     const responseTime = Date.now() - startTime;
 
@@ -1990,6 +2166,8 @@ Be helpful, creative, and produce professional-looking results.`;
       errorMessage = 'Shape is currently locked by another user.';
     } else if (error.name === 'ZodError') {
       errorMessage = 'Invalid parameters provided for this operation.';
+    } else if (error.message.includes('token')) {
+      errorMessage = 'Request too large. Try creating fewer shapes at once.';
     }
 
     res.status(500).json({

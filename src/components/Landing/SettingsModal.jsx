@@ -318,13 +318,17 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
                   }}
                   onMouseEnter={(e) => {
                     if (!isActive) {
-                      e.currentTarget.style.borderColor = isLocked ? theme.border.medium : theme.border.strong;
+                      e.currentTarget.style.borderColor = isLocked ? theme.border.medium : themeOption.button.primary;
+                      e.currentTarget.style.borderWidth = isLocked ? '2px' : '3px';
+                      e.currentTarget.style.boxShadow = isLocked ? theme.shadow.md : `0 0 20px ${themeOption.button.primary}40, 0 4px 12px ${themeOption.button.primary}30`;
                       e.currentTarget.style.transform = 'scale(1.02)';
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (!isActive) {
                       e.currentTarget.style.borderColor = theme.border.medium;
+                      e.currentTarget.style.borderWidth = '2px';
+                      e.currentTarget.style.boxShadow = theme.shadow.md;
                       e.currentTarget.style.transform = 'scale(1)';
                     }
                   }}
