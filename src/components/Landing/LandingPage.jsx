@@ -22,6 +22,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToProjects, createProject, deleteProject, updateProject, getUserSubscription, listProjects, listSharedCanvases } from '../../services/projects';
 import SubscriptionModal from './SubscriptionModal';
 import RenameModal from './RenameModal';
@@ -29,10 +30,12 @@ import CouponModal from './CouponModal';
 import ShareModal from './ShareModal';
 import NotificationBell from './NotificationBell';
 import TemplateSelectionModal from './TemplateSelectionModal';
+import SettingsModal from './SettingsModal';
 import { TEMPLATES } from '../../utils/templates';
 
 export default function LandingPage() {
   const { user, logout } = useAuth();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   const [ownedProjects, setOwnedProjects] = useState([]);
   const [sharedProjects, setSharedProjects] = useState([]);
@@ -42,6 +45,7 @@ export default function LandingPage() {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [renamingProject, setRenamingProject] = useState(null);
   const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
@@ -306,14 +310,27 @@ export default function LandingPage() {
 
   if (loading) {
     return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.loader}>Loading projects...</div>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '100vh',
+        background: theme.background.page
+      }}>
+        <div style={{
+          fontSize: '15px',
+          color: theme.text.secondary,
+          fontWeight: '400'
+        }}>Loading projects...</div>
       </div>
     );
   }
 
   const canCreateMore = subscription.isPremium || ownedProjects.length < 3;
   const remainingProjects = subscription.isPremium ? '∞' : Math.max(0, 3 - ownedProjects.length);
+
+  // Generate styles with current theme
+  const styles = getStyles(theme);
 
   return (
     <div style={styles.container}>
@@ -370,6 +387,42 @@ export default function LandingPage() {
             loadData();
           }} />
           
+          {/* Settings Button */}
+          <button
+            onClick={() => {
+              console.log('[SETTINGS] Button clicked!');
+              console.log('[SETTINGS] Current showSettingsModal state:', showSettingsModal);
+              setShowSettingsModal(true);
+              console.log('[SETTINGS] setShowSettingsModal(true) called');
+            }}
+            style={{
+              background: theme.background.card,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.medium}`,
+              padding: '8px 18px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: theme.shadow.md,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }}
+            title="Settings"
+          >
+            ⚙️ Settings
+          </button>
+          
           {subscription.isPremium ? (
             <div style={styles.premiumBadge}>
               {subscription.tier === 'lifetime' ? 'Lifetime Premium' : 'Premium'}
@@ -379,14 +432,14 @@ export default function LandingPage() {
               <button
                 onClick={() => setShowCouponModal(true)}
                 style={styles.couponButton}
-                onMouseEnter={(e) => {
-                  e.target.style.background = '#fafafa';
-                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.background = '#ffffff';
-                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
-                }}
+              onMouseEnter={(e) => {
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
+              }}
                 title="Have a coupon code?"
               >
                 Coupon
@@ -395,10 +448,10 @@ export default function LandingPage() {
                 onClick={() => setShowSubscriptionModal(true)}
                 style={styles.upgradeButton}
                 onMouseEnter={(e) => {
-                  e.target.style.background = '#1a1c1f';
+                  e.target.style.background = theme.button.primaryHover;
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = '#2c2e33';
+                  e.target.style.background = theme.button.primary;
                 }}
               >
                 Upgrade to Premium
@@ -409,14 +462,14 @@ export default function LandingPage() {
           <button
             onClick={() => setShowLogoutConfirm(true)}
             style={styles.logoutButton}
-            onMouseEnter={(e) => {
-              e.target.style.background = '#fafafa';
-              e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = '#ffffff';
-              e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
-            }}
+              onMouseEnter={(e) => {
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
+              }}
           >
             Sign Out
           </button>
@@ -439,12 +492,14 @@ export default function LandingPage() {
             }}
             onMouseEnter={(e) => {
               if (filter !== 'all') {
-                e.target.style.background = '#fafafa';
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
               }
             }}
             onMouseLeave={(e) => {
               if (filter !== 'all') {
-                e.target.style.background = '#ffffff';
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
               }
             }}
           >
@@ -458,12 +513,14 @@ export default function LandingPage() {
             }}
             onMouseEnter={(e) => {
               if (filter !== 'owned') {
-                e.target.style.background = '#fafafa';
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
               }
             }}
             onMouseLeave={(e) => {
               if (filter !== 'owned') {
-                e.target.style.background = '#ffffff';
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
               }
             }}
           >
@@ -477,12 +534,14 @@ export default function LandingPage() {
             }}
             onMouseEnter={(e) => {
               if (filter !== 'shared') {
-                e.target.style.background = '#fafafa';
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
               }
             }}
             onMouseLeave={(e) => {
               if (filter !== 'shared') {
-                e.target.style.background = '#ffffff';
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
               }
             }}
           >
@@ -740,6 +799,18 @@ export default function LandingPage() {
           onClose={() => setSharingProject(null)}
         />
       )}
+      
+      {showSettingsModal && (
+        <SettingsModal
+          onClose={() => {
+            console.log('[SETTINGS] Modal onClose called');
+            setShowSettingsModal(false);
+          }}
+        />
+      )}
+      
+      {/* Debug: Log showSettingsModal state */}
+      {console.log('[SETTINGS] Render - showSettingsModal:', showSettingsModal)}
 
       {/* Delete Confirmation - Matching Sign Out Style */}
       {showDeleteConfirm && (
@@ -762,12 +833,12 @@ export default function LandingPage() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#ffffff',
+              background: theme.background.card,
               borderRadius: '12px',
               padding: '32px',
               maxWidth: '400px',
               width: '90%',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+              boxShadow: theme.shadow.xl,
               fontFamily: "'Roboto Mono', monospace",
               opacity: deleteConfirmVisible ? 1 : 0,
               transform: deleteConfirmVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
@@ -778,14 +849,14 @@ export default function LandingPage() {
               margin: '0 0 12px 0',
               fontSize: '18px',
               fontWeight: '600',
-              color: '#2c2e33'
+              color: theme.text.primary
             }}>
               Delete Project?
             </h3>
             <p style={{
               margin: '0 0 24px 0',
               fontSize: '14px',
-              color: '#6b7280',
+              color: theme.text.secondary,
               lineHeight: '1.5'
             }}>
               Are you sure you want to delete "{projectToDelete?.name}"? This action cannot be undone.
@@ -799,12 +870,12 @@ export default function LandingPage() {
                 onClick={handleCloseDeleteConfirm}
                 style={{
                   padding: '10px 20px',
-                  background: '#ffffff',
-                  border: '1px solid rgba(0, 0, 0, 0.1)',
+                  background: theme.background.card,
+                  border: `1px solid ${theme.border.medium}`,
                   borderRadius: '8px',
                   fontSize: '14px',
                   fontWeight: '500',
-                  color: '#2c2e33',
+                  color: theme.text.primary,
                   cursor: 'pointer',
                   fontFamily: "'Roboto Mono', monospace",
                   transition: 'all 0.2s ease',
@@ -813,12 +884,12 @@ export default function LandingPage() {
                   gap: '6px'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.background = '#fafafa';
-                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+                  e.target.style.background = theme.background.elevated;
+                  e.target.style.borderColor = theme.border.strong;
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = '#ffffff';
-                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.1)';
+                  e.target.style.background = theme.background.card;
+                  e.target.style.borderColor = theme.border.medium;
                 }}
               >
                 <span style={{ fontSize: '16px' }}>✕</span>
@@ -834,12 +905,12 @@ export default function LandingPage() {
                 }}
                 style={{
                   padding: '10px 20px',
-                  background: '#2c2e33',
-                  border: '1px solid #2c2e33',
+                  background: theme.button.primary,
+                  border: `1px solid ${theme.button.primary}`,
                   borderRadius: '8px',
                   fontSize: '14px',
                   fontWeight: '500',
-                  color: '#ffffff',
+                  color: theme.text.inverse,
                   cursor: 'pointer',
                   fontFamily: "'Roboto Mono', monospace",
                   transition: 'all 0.2s ease',
@@ -848,10 +919,10 @@ export default function LandingPage() {
                   gap: '6px'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.background = '#1a1c1f';
+                  e.target.style.background = theme.button.primaryHover;
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = '#2c2e33';
+                  e.target.style.background = theme.button.primary;
                 }}
               >
                 <span style={{ fontSize: '16px' }}>✓</span>
@@ -883,12 +954,12 @@ export default function LandingPage() {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              background: '#ffffff',
+              background: theme.background.card,
               borderRadius: '12px',
               padding: '32px',
               maxWidth: '400px',
               width: '90%',
-              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+              boxShadow: theme.shadow.xl,
               fontFamily: "'Roboto Mono', monospace",
               opacity: logoutConfirmVisible ? 1 : 0,
               transform: logoutConfirmVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
@@ -899,14 +970,14 @@ export default function LandingPage() {
               margin: '0 0 12px 0',
               fontSize: '18px',
               fontWeight: '600',
-              color: '#2c2e33'
+              color: theme.text.primary
             }}>
               Sign Out?
             </h3>
             <p style={{
               margin: '0 0 24px 0',
               fontSize: '14px',
-              color: '#6b7280',
+              color: theme.text.secondary,
               lineHeight: '1.5'
             }}>
               Are you sure you want to sign out?
@@ -920,12 +991,12 @@ export default function LandingPage() {
                 onClick={handleCloseLogoutConfirm}
                 style={{
                   padding: '10px 20px',
-                  background: '#ffffff',
-                  border: '1px solid rgba(0, 0, 0, 0.1)',
+                  background: theme.background.card,
+                  border: `1px solid ${theme.border.medium}`,
                   borderRadius: '8px',
                   fontSize: '14px',
                   fontWeight: '500',
-                  color: '#2c2e33',
+                  color: theme.text.primary,
                   cursor: 'pointer',
                   fontFamily: "'Roboto Mono', monospace",
                   transition: 'all 0.2s ease',
@@ -934,12 +1005,12 @@ export default function LandingPage() {
                   gap: '6px'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.background = '#fafafa';
-                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+                  e.target.style.background = theme.background.elevated;
+                  e.target.style.borderColor = theme.border.strong;
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = '#ffffff';
-                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.1)';
+                  e.target.style.background = theme.background.card;
+                  e.target.style.borderColor = theme.border.medium;
                 }}
               >
                 <span style={{ fontSize: '16px' }}>✕</span>
@@ -955,12 +1026,12 @@ export default function LandingPage() {
                 }}
                 style={{
                   padding: '10px 20px',
-                  background: '#2c2e33',
-                  border: '1px solid #2c2e33',
+                  background: theme.button.primary,
+                  border: `1px solid ${theme.button.primary}`,
                   borderRadius: '8px',
                   fontSize: '14px',
                   fontWeight: '500',
-                  color: '#ffffff',
+                  color: theme.text.inverse,
                   cursor: 'pointer',
                   fontFamily: "'Roboto Mono', monospace",
                   transition: 'all 0.2s ease',
@@ -969,10 +1040,10 @@ export default function LandingPage() {
                   gap: '6px'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.background = '#1a1c1f';
+                  e.target.style.background = theme.button.primaryHover;
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = '#2c2e33';
+                  e.target.style.background = theme.button.primary;
                 }}
               >
                 <span style={{ fontSize: '16px' }}>✓</span>
@@ -986,10 +1057,11 @@ export default function LandingPage() {
   );
 }
 
-const styles = {
+// Generate styles function to use theme
+const getStyles = (theme) => ({
   container: {
     minHeight: '100vh',
-    background: '#f5f5f5',
+    background: theme.background.page,
     padding: '40px 24px',
     display: 'flex',
     flexDirection: 'column',
@@ -1003,11 +1075,11 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    background: '#ffffff',
+    background: theme.background.card,
     padding: '20px 32px',
     borderRadius: '12px',
-    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
-    border: '1px solid rgba(0, 0, 0, 0.06)'
+    boxShadow: theme.shadow.lg,
+    border: `1px solid ${theme.border.normal}`
   },
   
   headerLeft: {
@@ -1026,14 +1098,14 @@ const styles = {
     margin: 0,
     fontSize: '20px',
     fontWeight: '600',
-    color: '#2c2e33',
+    color: theme.text.primary,
     letterSpacing: '-0.02em'
   },
   
   subtitle: {
     margin: 0,
     fontSize: '13px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400'
   },
   
@@ -1048,8 +1120,8 @@ const styles = {
   },
   
   upgradeButton: {
-    background: '#2c2e33',
-    color: '#ffffff',
+    background: theme.button.primary,
+    color: theme.text.inverse,
     border: 'none',
     padding: '8px 18px',
     borderRadius: '8px',
@@ -1057,33 +1129,33 @@ const styles = {
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+    boxShadow: theme.shadow.md
   },
   
   couponButton: {
-    background: '#ffffff',
-    color: '#2c2e33',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.background.card,
+    color: theme.text.primary,
+    border: `1px solid ${theme.border.medium}`,
     padding: '8px 18px',
     borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
+    boxShadow: theme.shadow.md
   },
   
   logoutButton: {
-    background: '#ffffff',
-    color: '#2c2e33',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.background.card,
+    color: theme.text.primary,
+    border: `1px solid ${theme.border.medium}`,
     padding: '8px 18px',
     borderRadius: '8px',
     fontSize: '13px',
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
+    boxShadow: theme.shadow.md
   },
   
   filterContainer: {
@@ -1096,9 +1168,9 @@ const styles = {
   },
   
   filterButton: {
-    background: '#ffffff',
-    color: '#646669',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.background.card,
+    color: theme.text.secondary,
+    border: `1px solid ${theme.border.medium}`,
     padding: '8px 16px',
     borderRadius: '8px',
     fontSize: '13px',
@@ -1108,9 +1180,9 @@ const styles = {
   },
   
   filterButtonActive: {
-    background: '#2c2e33',
-    color: '#ffffff',
-    borderColor: '#2c2e33'
+    background: theme.button.primary,
+    color: theme.text.inverse,
+    borderColor: theme.button.primary
   },
   
   gridContainer: {
@@ -1123,11 +1195,11 @@ const styles = {
   },
   
   projectCard: {
-    background: '#ffffff',
+    background: theme.background.card,
     borderRadius: '12px',
     padding: '0',
-    border: '1px solid rgba(0, 0, 0, 0.06)',
-    boxShadow: '0 2px 12px rgba(0, 0, 0, 0.06)',
+    border: `1px solid ${theme.border.normal}`,
+    boxShadow: theme.shadow.lg,
     cursor: 'pointer',
     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
     overflow: 'hidden',
@@ -1140,33 +1212,33 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '220px',
-    background: '#fafafa',
-    border: '2px dashed rgba(0, 0, 0, 0.08)'
+    background: theme.background.elevated,
+    border: `2px dashed ${theme.border.medium}`
   },
   
   createIcon: {
     fontSize: '48px',
-    color: '#646669',
+    color: theme.text.secondary,
     marginBottom: '8px'
   },
   
   createLabel: {
     fontSize: '15px',
     fontWeight: '500',
-    color: '#2c2e33',
+    color: theme.text.primary,
     marginBottom: '4px'
   },
   
   createLimit: {
     fontSize: '12px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400'
   },
   
   thumbnail: {
     width: '100%',
     height: '160px',
-    background: '#fafafa',
+    background: theme.background.elevated,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center'
@@ -1191,7 +1263,7 @@ const styles = {
   projectName: {
     fontSize: '15px',
     fontWeight: '500',
-    color: '#2c2e33',
+    color: theme.text.primary,
     marginBottom: '4px',
     display: 'flex',
     alignItems: 'center',
@@ -1201,7 +1273,7 @@ const styles = {
   
   projectMeta: {
     fontSize: '12px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400'
   },
   
@@ -1225,8 +1297,8 @@ const styles = {
   },
   
   actionButton: {
-    background: 'rgba(255, 255, 255, 0.95)',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.isDark ? 'rgba(26, 29, 36, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+    border: `1px solid ${theme.border.medium}`,
     borderRadius: '6px',
     width: '32px',
     height: '32px',
@@ -1236,7 +1308,8 @@ const styles = {
     cursor: 'pointer',
     fontSize: '14px',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)'
+    boxShadow: theme.shadow.md,
+    color: theme.text.primary
   },
   
   deleteButton: {
@@ -1248,20 +1321,6 @@ const styles = {
     margin: '60px auto',
     textAlign: 'center',
     padding: '40px 20px'
-  },
-  
-  loadingContainer: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    background: '#f5f5f5'
-  },
-  
-  loader: {
-    fontSize: '15px',
-    color: '#646669',
-    fontWeight: '400'
   }
-};
+});
 

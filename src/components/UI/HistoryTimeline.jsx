@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useUndo } from '../../contexts/UndoContext';
+import { useTheme } from '../../contexts/ThemeContext';
 import ConfirmationModal from './ConfirmationModal';
 
 export default function HistoryTimeline({ isVisible = true }) {
+  const { theme } = useTheme();
   const { getStackSizes, undoStackSize, redoStackSize, clear } = useUndo();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
@@ -111,11 +113,11 @@ export default function HistoryTimeline({ isVisible = true }) {
     },
     collapsed: {
       width: isExpanded ? '320px' : '140px',
-      background: 'rgba(255, 255, 255, 0.98)',
+      background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : 'rgba(255, 255, 255, 0.98)',
       backdropFilter: 'blur(10px)',
       borderRadius: '12px',
-      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
-      border: '1px solid rgba(0, 0, 0, 0.06)',
+      boxShadow: `${theme.shadow.xl}, ${theme.shadow.md}`,
+      border: `1px solid ${theme.border.normal}`,
       transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
       overflow: 'hidden',
       transformOrigin: 'bottom left',
@@ -130,10 +132,10 @@ export default function HistoryTimeline({ isVisible = true }) {
       justifyContent: 'space-between',
       cursor: 'pointer',
       background: 'transparent',
-      borderBottom: isExpanded ? '1px solid rgba(0, 0, 0, 0.06)' : 'none'
+      borderBottom: isExpanded ? `1px solid ${theme.border.normal}` : 'none'
     },
     title: {
-      color: '#374151',
+      color: theme.text.primary,
       fontSize: '13px',
       fontWeight: '600',
       display: 'flex',
@@ -141,8 +143,8 @@ export default function HistoryTimeline({ isVisible = true }) {
       gap: '8px'
     },
     count: {
-      background: 'rgba(107, 114, 128, 0.1)',
-      color: '#6b7280',
+      background: theme.isDark ? 'rgba(156, 163, 175, 0.2)' : 'rgba(107, 114, 128, 0.1)',
+      color: theme.text.secondary,
       padding: '2px 8px',
       borderRadius: '10px',
       fontSize: '11px',
@@ -150,7 +152,7 @@ export default function HistoryTimeline({ isVisible = true }) {
     },
     expandIcon: {
       fontSize: '12px',
-      color: '#9ca3af',
+      color: theme.text.tertiary,
       transition: 'transform 0.3s ease',
       transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)'
     },
@@ -168,14 +170,14 @@ export default function HistoryTimeline({ isVisible = true }) {
       display: 'flex',
       flexDirection: 'column',
       gap: '4px',
-      background: '#f9fafb',
-      border: '1px solid rgba(0, 0, 0, 0.04)',
+      background: theme.background.elevated,
+      border: `1px solid ${theme.border.light}`,
       animation: `slideInFromTop 0.3s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.03}s backwards`,
       position: 'relative' // For AI icon positioning
     }),
     historyItemCurrent: {
-      background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
-      border: '1px solid rgba(0, 0, 0, 0.08)',
+      background: theme.gradient.hover,
+      border: `1px solid ${theme.border.medium}`,
       fontWeight: '600'
     },
     bullet: {
@@ -197,21 +199,21 @@ export default function HistoryTimeline({ isVisible = true }) {
     },
     itemDescription: {
       fontSize: '12px',
-      color: '#374151',
+      color: theme.text.primary,
       lineHeight: '1.4',
       wordBreak: 'break-word'
     },
     itemDescriptionUndone: {
-      color: '#9ca3af',
+      color: theme.text.tertiary,
       opacity: 0.5,
       textDecoration: 'line-through'
     },
     itemTime: {
-      color: '#9ca3af',
+      color: theme.text.tertiary,
       fontSize: '10px'
     },
     itemUser: {
-      color: '#6b7280',
+      color: theme.text.secondary,
       fontSize: '10px',
       fontWeight: '500',
       marginTop: '2px'
@@ -219,13 +221,13 @@ export default function HistoryTimeline({ isVisible = true }) {
     empty: {
       padding: '24px 16px',
       textAlign: 'center',
-      color: '#9ca3af',
+      color: theme.text.tertiary,
       fontSize: '12px'
     },
     trashButton: {
       background: 'transparent',
       border: 'none',
-      color: '#9ca3af',
+      color: theme.text.tertiary,
       fontSize: '16px',
       cursor: 'pointer',
       padding: '4px 8px',

@@ -22,9 +22,11 @@
 
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function ModernLogin() {
   const { loginWithGoogle } = useAuth();
+  const { theme } = useTheme();
   const [showEmailLogin, setShowEmailLogin] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -86,6 +88,9 @@ export default function ModernLogin() {
     }
   };
 
+  // Generate styles with current theme
+  const styles = getStyles(theme);
+
   return (
     <div style={styles.container}>
       {/* Main Login Card */}
@@ -138,15 +143,15 @@ export default function ModernLogin() {
               onClick={() => toggleEmailLogin(true)}
               style={styles.emailButton}
               onMouseEnter={(e) => {
-                e.target.style.background = '#fafafa';
-                e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
               }}
               onMouseLeave={(e) => {
-                e.target.style.background = '#ffffff';
-                e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
               }}
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" style={{ marginRight: '12px' }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={theme.text.primary} strokeWidth="2" style={{ marginRight: '12px' }}>
                 <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
                 <polyline points="22,6 12,13 2,6"/>
               </svg>
@@ -172,12 +177,12 @@ export default function ModernLogin() {
                     style={styles.input}
                     required={isSignup}
                     onFocus={(e) => {
-                      e.target.style.borderColor = '#2c2e33';
-                      e.target.style.background = '#ffffff';
+                      e.target.style.borderColor = theme.border.focus;
+                      e.target.style.background = theme.background.inputFocus;
                     }}
                     onBlur={(e) => {
-                      e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
-                      e.target.style.background = '#fafafa';
+                      e.target.style.borderColor = theme.border.medium;
+                      e.target.style.background = theme.background.elevated;
                     }}
                   />
                 </div>
@@ -239,12 +244,12 @@ export default function ModernLogin() {
                 }}
                 onMouseEnter={(e) => {
                   if (!loading) {
-                    e.target.style.background = '#1a1c1f';
+                    e.target.style.background = theme.button.primaryHover;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!loading) {
-                    e.target.style.background = '#2c2e33';
+                    e.target.style.background = theme.button.primary;
                   }
                 }}
               >
@@ -272,8 +277,8 @@ export default function ModernLogin() {
                   setError('');
                 }}
                 style={styles.backButton}
-                onMouseEnter={(e) => e.target.style.color = '#2c2e33'}
-                onMouseLeave={(e) => e.target.style.color = '#646669'}
+                onMouseEnter={(e) => e.target.style.color = theme.text.primary}
+                onMouseLeave={(e) => e.target.style.color = theme.text.secondary}
               >
                 ← Back to options
               </button>
@@ -300,10 +305,11 @@ export default function ModernLogin() {
   );
 }
 
-const styles = {
+// Generate styles function to use theme
+const getStyles = (theme) => ({
   container: {
     minHeight: '100vh',
-    background: '#f5f5f5',
+    background: theme.background.page,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -311,13 +317,13 @@ const styles = {
   },
   
   card: {
-    background: '#ffffff',
+    background: theme.background.card,
     borderRadius: '16px',
     padding: '60px 50px',
     maxWidth: '420px',
     width: '100%',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)',
-    border: '1px solid rgba(0, 0, 0, 0.06)',
+    boxShadow: theme.shadow.xl,
+    border: `1px solid ${theme.border.normal}`,
     textAlign: 'center'
   },
   
@@ -329,22 +335,22 @@ const styles = {
     margin: '0 0 12px 0',
     fontSize: '28px',
     fontWeight: '600',
-    color: '#2c2e33',
+    color: theme.text.primary,
     letterSpacing: '-0.02em'
   },
   
   tagline: {
     margin: 0,
     fontSize: '14px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400',
     lineHeight: '1.6'
   },
   
   googleButton: {
     width: '100%',
-    background: '#ffffff',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.background.card,
+    border: `1px solid ${theme.border.medium}`,
     padding: '14px 20px',
     borderRadius: '10px',
     fontSize: '15px',
@@ -354,8 +360,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#2c2e33',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+    color: theme.text.primary,
+    boxShadow: theme.shadow.md,
     marginBottom: '16px'
   },
   
@@ -369,19 +375,19 @@ const styles = {
   dividerLine: {
     flex: 1,
     height: '1px',
-    background: 'rgba(0, 0, 0, 0.08)'
+    background: theme.border.medium
   },
   
   dividerText: {
     fontSize: '12px',
-    color: '#646669',
+    color: theme.text.secondary,
     fontWeight: '400'
   },
   
   emailButton: {
     width: '100%',
-    background: '#ffffff',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    background: theme.background.card,
+    border: `1px solid ${theme.border.medium}`,
     padding: '14px 20px',
     borderRadius: '10px',
     fontSize: '15px',
@@ -391,8 +397,8 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#2c2e33',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
+    color: theme.text.primary,
+    boxShadow: theme.shadow.md
   },
   
   form: {
@@ -411,33 +417,34 @@ const styles = {
   label: {
     fontSize: '13px',
     fontWeight: '500',
-    color: '#2c2e33'
+    color: theme.text.primary
   },
   
   input: {
     padding: '12px 14px',
-    border: '1px solid rgba(0, 0, 0, 0.08)',
+    border: `1px solid ${theme.border.medium}`,
     borderRadius: '8px',
     fontSize: '14px',
     outline: 'none',
     transition: 'all 0.2s ease',
-    background: '#fafafa'
+    background: theme.background.elevated,
+    color: theme.text.primary
   },
   
   errorBox: {
-    background: '#fee2e2',
-    color: '#991b1b',
+    background: theme.isDark ? '#3f1e1e' : '#fee2e2',
+    color: theme.isDark ? '#f87171' : '#991b1b',
     padding: '12px 14px',
     borderRadius: '8px',
     fontSize: '13px',
-    border: '1px solid rgba(153, 27, 27, 0.15)',
+    border: theme.isDark ? '1px solid rgba(248, 113, 113, 0.2)' : '1px solid rgba(153, 27, 27, 0.15)',
     textAlign: 'center'
   },
   
   submitButton: {
     width: '100%',
-    background: '#2c2e33',
-    color: '#ffffff',
+    background: theme.button.primary,
+    color: theme.text.inverse,
     border: 'none',
     padding: '14px',
     borderRadius: '8px',
@@ -445,19 +452,19 @@ const styles = {
     fontWeight: '500',
     cursor: 'pointer',
     transition: 'all 0.2s ease',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+    boxShadow: theme.shadow.md
   },
   
   switchMode: {
     textAlign: 'center',
     fontSize: '13px',
-    color: '#646669'
+    color: theme.text.secondary
   },
   
   switchButton: {
     background: 'transparent',
     border: 'none',
-    color: '#2c2e33',
+    color: theme.text.primary,
     cursor: 'pointer',
     textDecoration: 'underline',
     fontSize: '13px',
@@ -468,7 +475,7 @@ const styles = {
   backButton: {
     background: 'transparent',
     border: 'none',
-    color: '#646669',
+    color: theme.text.secondary,
     cursor: 'pointer',
     fontSize: '13px',
     fontWeight: '400',
@@ -480,7 +487,7 @@ const styles = {
   features: {
     marginTop: '36px',
     paddingTop: '28px',
-    borderTop: '1px solid rgba(0, 0, 0, 0.06)',
+    borderTop: `1px solid ${theme.border.normal}`,
     display: 'flex',
     flexDirection: 'column',
     gap: '10px'
@@ -488,7 +495,7 @@ const styles = {
   
   feature: {
     fontSize: '13px',
-    color: '#2c2e33',
+    color: theme.text.primary,
     textAlign: 'center',
     fontWeight: '400'
   },
@@ -496,5 +503,5 @@ const styles = {
   featureText: {
     fontWeight: '400'
   }
-};
+});
 

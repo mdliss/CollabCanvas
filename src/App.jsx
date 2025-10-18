@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { UndoProvider } from "./contexts/UndoContext";
+import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import ModernLogin from "./components/Auth/ModernLogin";
 import LandingPage from "./components/Landing/LandingPage";
 import Canvas from "./components/Canvas/Canvas";
@@ -8,6 +9,7 @@ import ErrorBoundary from "./components/UI/ErrorBoundary";
 
 function AppContent() {
   const { user, loading } = useAuth();
+  const { theme } = useTheme();
 
   // Show loading state while checking auth
   if (loading) {
@@ -18,13 +20,13 @@ function AppContent() {
           alignItems: 'center',
           justifyContent: 'center',
           height: '100vh',
-          background: '#f5f5f5'
+          background: theme.background.page
         }}
       >
         <div
           style={{
             fontSize: '18px',
-            color: '#666',
+            color: theme.text.secondary,
             fontWeight: '500'
           }}
         >
@@ -70,12 +72,14 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <UndoProvider>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
-      </UndoProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <UndoProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </UndoProvider>
+      </AuthProvider>
+    </ThemeProvider>
   );
 }

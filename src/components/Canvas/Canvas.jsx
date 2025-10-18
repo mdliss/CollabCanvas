@@ -183,12 +183,16 @@ import AICanvas from "../AI/AICanvas";
 import AIDesignSuggestions from "../AI/AIDesignSuggestions";
 import { checkCanvasAccess } from "../../services/sharing";
 import { createEditRequest, hasPendingRequest, subscribeToMessages, markMessageAsRead } from "../../services/notifications";
+import { useTheme } from "../../contexts/ThemeContext";
 
 const GRID_SIZE = 50;
-const GRID_COLOR = "#e0e0e0";
 
 export default function Canvas() {
   const { user } = useAuth();
+  const { theme } = useTheme();
+  
+  // Theme-aware grid color
+  const GRID_COLOR = theme.isDark ? 'rgba(255, 255, 255, 0.08)' : "#e0e0e0";
   const { canvasId } = useParams();
   const navigate = useNavigate();
   
@@ -2983,15 +2987,15 @@ export default function Canvas() {
           top: isViewer ? '64px' : '20px',
           left: '20px',
           padding: '10px 16px',
-          background: '#ffffff',
-          border: '1px solid rgba(0, 0, 0, 0.06)',
+          background: theme.background.card,
+          border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
           fontSize: '14px',
           fontWeight: '500',
-          color: '#2c2e33',
+          color: theme.text.primary,
           cursor: 'pointer',
           transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-          boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
+          boxShadow: theme.shadow.md,
           zIndex: 10000,
           display: 'flex',
           alignItems: 'center',
@@ -3000,12 +3004,12 @@ export default function Canvas() {
           transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)'
         }}
         onMouseEnter={(e) => {
-          e.target.style.background = '#fafafa';
-          e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+          e.target.style.background = theme.background.elevated;
+          e.target.style.borderColor = theme.border.strong;
         }}
         onMouseLeave={(e) => {
-          e.target.style.background = '#ffffff';
-          e.target.style.borderColor = 'rgba(0, 0, 0, 0.06)';
+          e.target.style.background = theme.background.card;
+          e.target.style.borderColor = theme.border.normal;
         }}
         title="Back to projects"
       >

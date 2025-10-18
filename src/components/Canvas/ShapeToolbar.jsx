@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * ShapeToolbar - Right-aligned vertical toolbar for shape creation and tools
@@ -18,6 +19,7 @@ export default function ShapeToolbar({
   isLayersPanelVisible = false,
   isVisible = true
 }) {
+  const { theme } = useTheme();
   const [activeTool, setActiveTool] = useState(null);
   const [hoveredTool, setHoveredTool] = useState(null);
 
@@ -42,41 +44,38 @@ export default function ShapeToolbar({
     const isHovered = hoveredTool === config.id;
     const isDisabled = config.disabled;
 
-    // Neutral color scheme - softer, more professional
+    // Themed button styles
     const getButtonStyle = () => {
       if (isDisabled) {
-        // Disabled: white/light gray (not dark gray)
         return {
-          background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
-          color: '#d1d5db',
+          background: theme.gradient.button,
+          color: theme.text.disabled,
           cursor: 'not-allowed',
           opacity: 0.6,
-          boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)'
+          boxShadow: theme.shadow.sm
         };
       }
       if (isActive) {
-        // Active: subtle gray
         return {
-          background: 'linear-gradient(135deg, #e5e7eb 0%, #d1d5db 100%)',
-          color: '#111827',
+          background: theme.gradient.active,
+          color: theme.text.primary,
           transform: 'scale(0.96)',
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.1) inset'
+          boxShadow: theme.shadow.inset
         };
       }
       if (isHovered) {
-        // Hover: very subtle gray
         return {
-          background: 'linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%)',
-          color: '#111827',
+          background: theme.gradient.hover,
+          color: theme.text.primary,
           transform: 'translateY(-1px)',
-          boxShadow: '0 3px 8px rgba(0, 0, 0, 0.12)'
+          boxShadow: theme.shadow.lg
         };
       }
-      // Default: clean white
+      // Default
       return {
-        background: 'linear-gradient(135deg, #ffffff 0%, #fafbfc 100%)',
-        color: '#374151',
-        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.08)'
+        background: theme.gradient.button,
+        color: theme.text.primary,
+        boxShadow: theme.shadow.md
       };
     };
 
@@ -94,7 +93,7 @@ export default function ShapeToolbar({
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: config.fontSize || '20px',
-            border: '1px solid rgba(0, 0, 0, 0.06)',
+            border: `1px solid ${theme.border.normal}`,
             borderRadius: '10px',
             cursor: isDisabled ? 'not-allowed' : 'pointer',
             transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -114,17 +113,17 @@ export default function ShapeToolbar({
               left: '60px', // Changed from right to left - shows on right side
               top: '50%',
               transform: 'translateY(-50%)',
-              background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
-              color: 'white',
+              background: theme.gradient.tooltip,
+              color: theme.text.inverse,
               padding: '8px 12px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '600',
               whiteSpace: 'nowrap',
               pointerEvents: 'none',
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.3)',
+              boxShadow: theme.isDark ? '0 4px 12px rgba(0, 0, 0, 0.6)' : '0 4px 12px rgba(0, 0, 0, 0.3)',
               zIndex: 10000,
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              border: theme.isDark ? '1px solid rgba(255, 255, 255, 0.1)' : '1px solid rgba(255, 255, 255, 0.2)',
               transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)' // Smooth animation
             }}
           >
@@ -156,12 +155,12 @@ export default function ShapeToolbar({
         flexDirection: 'column',
         gap: '10px',
         zIndex: 9999,
-        background: 'rgba(255, 255, 255, 0.98)',
+        background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : 'rgba(255, 255, 255, 0.98)',
         padding: '14px 10px',
         borderRadius: '16px',
-        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.06)',
+        boxShadow: `${theme.shadow.xl}, ${theme.shadow.md}`,
         backdropFilter: 'blur(10px)',
-        border: '1px solid rgba(0, 0, 0, 0.06)',
+        border: `1px solid ${theme.border.normal}`,
         opacity: isVisible ? 1 : 0,
         transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.15s, left 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
       }}
@@ -190,7 +189,9 @@ export default function ShapeToolbar({
       {/* Divider */}
       <div style={{
         height: '1px',
-        background: 'linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%)',
+        background: theme.isDark 
+          ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)'
+          : 'linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%)',
         margin: '4px 0'
       }} />
       
@@ -208,7 +209,9 @@ export default function ShapeToolbar({
       {/* Divider */}
       <div style={{
         height: '1px',
-        background: 'linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%)',
+        background: theme.isDark 
+          ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)'
+          : 'linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%)',
         margin: '4px 0'
       }} />
       
@@ -256,7 +259,9 @@ export default function ShapeToolbar({
       {/* Divider */}
       <div style={{
         height: '1px',
-        background: 'linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%)',
+        background: theme.isDark 
+          ? 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.1) 50%, transparent 100%)'
+          : 'linear-gradient(90deg, transparent 0%, #e5e7eb 50%, transparent 100%)',
         margin: '4px 0'
       }} />
       
