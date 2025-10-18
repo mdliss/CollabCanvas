@@ -3447,6 +3447,7 @@ export default function Canvas() {
           {shapes.map(shape => {
             const selection = selections[shape.id];
             const isLockedByOther = shape.isLocked && shape.lockedBy && shape.lockedBy !== user?.uid;
+            const isSelectedByMe = selectedIds.includes(shape.id);
             
             // CRITICAL: Hide badge if shape is being actively dragged by anyone
             // This keeps the canvas clean during drag operations
@@ -3455,8 +3456,11 @@ export default function Canvas() {
               return null; // Hide badge during drag - cleaner UX
             }
             
-            // Show badge if selected OR locked by someone else (and NOT being dragged)
-            if (selection || isLockedByOther) {
+            // Show badge ONLY if:
+            // 1. Selected by current user (isSelectedByMe), OR
+            // 2. Locked by someone else (isLockedByOther)
+            // This prevents badges from showing on AI-created shapes unless user selects them
+            if ((selection && isSelectedByMe) || isLockedByOther) {
               // For locks, we need to get the user's display name from online users
               let badgeName = selection?.name;
               let badgeColor = selection?.color;

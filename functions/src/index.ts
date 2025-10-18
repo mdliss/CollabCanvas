@@ -105,7 +105,7 @@ const LayoutArrangeSchema = z.object({
 });
 
 const BulkCreateSchema = z.object({
-  shapes: z.array(CreateShapeSchema),
+  shapes: z.array(CreateShapeSchema).max(500), // Limit to 500 shapes per call for safety
 });
 
 const BulkUpdateSchema = z.object({
@@ -1246,7 +1246,7 @@ async function bulkUpdateTool(params: any, userId: string, canvasId: string = CA
 export const aiCanvasAgent = functions
   .runWith({
     timeoutSeconds: 540,  // 9 minutes (max for Gen 1 functions)
-    memory: '1GB',        // 1GB RAM for large operations
+    memory: '2GB',        // 2GB RAM for large operations (increased for 100+ shape requests)
     maxInstances: 10      // Limit concurrent instances
   })
   .https.onRequest(async (req, res) => {

@@ -320,7 +320,6 @@ export default function AICanvas({
   useEffect(() => {
     const handleDesignToggle = (e) => {
       const designIsOpen = e.detail?.isOpen || false;
-      console.log('[AICanvas] Design Suggestions toggled:', designIsOpen ? 'OPEN' : 'CLOSED');
       setIsDesignSuggestionsOpen(designIsOpen);
     };
     
@@ -333,31 +332,16 @@ export default function AICanvas({
   const isOpen = externalIsOpen !== null ? externalIsOpen : localIsOpen;
   
   const setIsOpen = (newValue) => {
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('[🎯 AI ASSISTANT POSITIONING] State change triggered');
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('[🎯 AI ASSISTANT] Previous state:', isOpen ? 'OPEN' : 'CLOSED');
-    console.log('[🎯 AI ASSISTANT] New state:', newValue ? 'OPEN' : 'CLOSED');
-    console.log('[🎯 AI ASSISTANT] Controlled by parent:', !!onOpenChange);
-    console.log('[🎯 AI ASSISTANT] Timestamp:', new Date().toISOString());
-    
     if (onOpenChange) {
-      console.log('[🎯 AI ASSISTANT] Notifying parent component of state change');
       onOpenChange(newValue);
     } else {
-      console.log('[🎯 AI ASSISTANT] Updating local state directly');
       setLocalIsOpen(newValue);
     }
     
     // Emit event for Design Suggestions to listen
-    console.log('[🎯 AI ASSISTANT] 📡 Emitting aiAssistantToggle event:', newValue ? 'OPEN' : 'CLOSED');
-    console.log('[🎯 AI ASSISTANT] Event detail:', { isOpen: newValue });
     window.dispatchEvent(new CustomEvent('aiAssistantToggle', { 
       detail: { isOpen: newValue } 
     }));
-    console.log('[🎯 AI ASSISTANT] ✅ Event dispatched successfully');
-    console.log('[🎯 AI ASSISTANT] Position: ALWAYS FAR RIGHT (20px)');
-    console.log('═══════════════════════════════════════════════════════════════');
   };
   
   // Calculate dynamic positioning - AI stays on far right always
@@ -644,24 +628,65 @@ export default function AICanvas({
         totalShapes: shapes.length
       };
 
+      // Build request payload
+      const requestPayload = {
+        messages: newMessages.map(m => ({
+          role: m.role,
+          content: m.content,
+        })),
+        canvasId: canvasId,
+        canvasContext,
+      };
+      
+      // Log request details for debugging 500 errors
+      const payloadSize = JSON.stringify(requestPayload).length;
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📤 [AI REQUEST] Sending to Cloud Function');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('💬 User message:', userMessage);
+      console.log('📊 Conversation length:', newMessages.length, 'messages');
+      console.log('📦 Payload size:', (payloadSize / 1024).toFixed(2), 'KB');
+      console.log('🎨 Canvas context:', {
+        selectedShapes: canvasContext.selectedShapes.length,
+        totalShapes: canvasContext.totalShapes,
+        viewportCenter: canvasContext.viewportCenter,
+        zoom: canvasContext.zoom
+      });
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
       const response = await fetch(AI_ENDPOINT, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          messages: newMessages.map(m => ({
-            role: m.role,
-            content: m.content,
-          })),
-          canvasId: canvasId, // Dynamic canvas ID from props
-          canvasContext, // Pass canvas context to AI
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+        
+        // Detailed error logging for debugging 500 errors
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('❌ [AI REQUEST FAILED] Cloud Function error');
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('🔴 Status:', response.status, response.statusText);
+        console.error('💬 Original message:', userMessage);
+        console.error('📦 Request payload size:', (payloadSize / 1024).toFixed(2), 'KB');
+        console.error('📊 Conversation length:', newMessages.length);
+        console.error('🎨 Total shapes on canvas:', canvasContext.totalShapes);
+        console.error('⚠️  Error details:', errorData);
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('');
+        console.error('💡 TROUBLESHOOTING:');
+        if (response.status === 500) {
+          console.error('  • 500 Internal Server Error - Cloud Function crashed');
+          console.error('  • Check Firebase Console > Functions > Logs for details');
+          console.error('  • May indicate timeout, memory limit, or OpenAI API error');
+          console.error('  • For large batches (50+ shapes), function may exceed memory/timeout');
+        }
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
@@ -767,38 +792,18 @@ export default function AICanvas({
        * After AI executes operations (create shapes, templates, etc.), we register
        * them with the undo manager for proper Ctrl+Z/Ctrl+Y support.
        */
-      console.log('═══════════════════════════════════════════════════════════════');
-      console.log('[📝 AI HISTORY REGISTRATION] Starting registration process...');
-      console.log('═══════════════════════════════════════════════════════════════');
-      console.log('[📝 AI HISTORY] Tools executed:', data.toolsExecuted);
-      console.log('[📝 AI HISTORY] Operation ID:', data.operationId);
-      console.log('[📝 AI HISTORY] registerAIOperation function exists:', !!registerAIOperation);
-      console.log('[📝 AI HISTORY] User message:', fullMessage);
-      
       if (data.toolsExecuted > 0 && data.operationId && registerAIOperation) {
         try {
-          const regStartTime = performance.now();
-          console.log('[📝 AI HISTORY] ✓ All preconditions met - proceeding with registration');
-          
           // Fetch AI operation data from RTDB to get affected shape IDs
           const operationPath = `ai-operations/${user.uid}/operations/${data.operationId}`;
-          console.log('[📝 AI HISTORY] Fetching operation data from:', operationPath);
-          
           const operationRef = ref(rtdb, operationPath);
-          const fetchOpStart = performance.now();
           const operationSnapshot = await get(operationRef);
-          console.log(`[📝 AI HISTORY] Operation data fetched in ${(performance.now() - fetchOpStart).toFixed(2)}ms`);
-          
           const operationData = operationSnapshot.val();
-          console.log('[📝 AI HISTORY] Operation data:', operationData);
 
           if (operationData && operationData.toolCalls) {
-            console.log('[📝 AI HISTORY] Processing', operationData.toolCalls.length, 'tool calls');
-            
             // Extract all affected shape IDs from tool calls
             const allShapeIds = [];
             for (const toolCall of operationData.toolCalls) {
-              console.log('[📝 AI HISTORY] Tool call:', toolCall.functionName, 'Affected shapes:', toolCall.affectedShapeIds?.length || 0);
               if (toolCall.affectedShapeIds && Array.isArray(toolCall.affectedShapeIds)) {
                 allShapeIds.push(...toolCall.affectedShapeIds);
               }
@@ -806,36 +811,21 @@ export default function AICanvas({
 
             // Deduplicate shape IDs
             const uniqueShapeIds = [...new Set(allShapeIds)];
-            console.log('[📝 AI HISTORY] Total affected shapes (after dedup):', uniqueShapeIds.length);
-            console.log('[📝 AI HISTORY] Shape IDs:', uniqueShapeIds);
 
             if (uniqueShapeIds.length > 0) {
               // Fetch current shape data for redo capability
               const shapesPath = `canvas/${canvasId}/shapes`;
-              console.log('[📝 AI HISTORY] Fetching shape data from:', shapesPath);
-              
               const shapesRef = ref(rtdb, shapesPath);
-              const fetchShapesStart = performance.now();
               const shapesSnapshot = await get(shapesRef);
-              console.log(`[📝 AI HISTORY] Shape data fetched in ${(performance.now() - fetchShapesStart).toFixed(2)}ms`);
-              
               const allShapes = shapesSnapshot.val() || {};
-              console.log('[📝 AI HISTORY] Total shapes in canvas:', Object.keys(allShapes).length);
 
               // Get shape data for affected shapes only
               const shapeData = uniqueShapeIds
                 .map(id => allShapes[id])
                 .filter(Boolean); // Filter out null/undefined
 
-              console.log('[📝 AI HISTORY] Shape data retrieved:', shapeData.length, 'shapes');
-              
-              if (shapeData.length !== uniqueShapeIds.length) {
-                console.warn(`[📝 AI HISTORY] ⚠️ Warning: ${uniqueShapeIds.length - shapeData.length} shapes not found in canvas!`);
-              }
-
               // Create AI operation command
               const historyDesc = `AI: ${fullMessage.substring(0, 50)}${fullMessage.length > 50 ? '...' : ''}`;
-              console.log('[📝 AI HISTORY] Creating AIOperationCommand with description:', historyDesc);
 
               const aiCommand = new AIOperationCommand({
                 canvasId: canvasId,
@@ -847,39 +837,16 @@ export default function AICanvas({
                 createShapeFn: createShape
               });
 
-              console.log('[📝 AI HISTORY] AIOperationCommand created:', {
-                description: aiCommand.getDescription(),
-                shapeCount: uniqueShapeIds.length,
-                userName: user.displayName || user.email,
-                timestamp: new Date().toISOString()
-              });
-
               // Register with undo manager
-              const regCallStart = performance.now();
               registerAIOperation(aiCommand);
-              console.log(`[📝 AI HISTORY] ✅ registerAIOperation() called in ${(performance.now() - regCallStart).toFixed(2)}ms`);
-              console.log(`[📝 AI HISTORY] ✅ REGISTRATION COMPLETE - Total time: ${(performance.now() - regStartTime).toFixed(2)}ms`);
-              console.log('[📝 AI HISTORY] Operation should now appear in history timeline');
-            } else {
-              console.warn('[📝 AI HISTORY] ⚠️ No shape IDs to register - skipping');
+              console.log(`✅ AI operation registered: ${uniqueShapeIds.length} shapes`);
             }
-          } else {
-            console.warn('[📝 AI HISTORY] ⚠️ No operation data or tool calls found');
-            console.warn('[📝 AI HISTORY] Operation data:', operationData);
           }
         } catch (error) {
-          console.error('[📝 AI HISTORY] ❌ REGISTRATION FAILED');
-          console.error('[📝 AI HISTORY] Error:', error);
-          console.error('[📝 AI HISTORY] Error stack:', error.stack);
+          console.error('❌ Failed to register AI operation for undo:', error.message);
           // Non-critical error - shapes were created successfully, just can't undo
         }
-      } else {
-        console.warn('[📝 AI HISTORY] ⚠️ Registration skipped - preconditions not met:');
-        console.warn('[📝 AI HISTORY]   - toolsExecuted:', data.toolsExecuted, '(expected > 0)');
-        console.warn('[📝 AI HISTORY]   - operationId:', data.operationId, '(expected truthy)');
-        console.warn('[📝 AI HISTORY]   - registerAIOperation:', !!registerAIOperation, '(expected true)');
       }
-      console.log('═══════════════════════════════════════════════════════════════');
       
       // CRITICAL: Re-focus input after response for seamless conversation flow
       // Longer timeout ensures React re-renders complete before focus
