@@ -178,20 +178,42 @@ export default function AIDesignSuggestions({
   useEffect(() => {
     const handleAIToggle = (e) => {
       const aiIsOpen = e.detail?.isOpen || false;
-      console.log('[AIDesignSuggestions] AI Assistant toggled:', aiIsOpen ? 'OPEN' : 'CLOSED');
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('[🎯 DESIGN SUGGESTIONS] Received aiAssistantToggle event');
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('[🎯 DESIGN] Event received at:', new Date().toISOString());
+      console.log('[🎯 DESIGN] Event detail:', e.detail);
+      console.log('[🎯 DESIGN] AI Assistant state:', aiIsOpen ? 'OPEN' : 'CLOSED');
+      console.log('[🎯 DESIGN] Design Suggestions state:', isOpen ? 'OPEN' : 'CLOSED');
+      console.log('[🎯 DESIGN] Previous isAIOpen:', isAIOpen ? 'OPEN' : 'CLOSED');
+      console.log('[🎯 DESIGN] New isAIOpen:', aiIsOpen ? 'OPEN' : 'CLOSED');
+      console.log('[🎯 DESIGN] Setting isAIOpen state to:', aiIsOpen);
       setIsAIOpen(aiIsOpen);
+      console.log('[🎯 DESIGN] ✅ State updated - will recalculate position');
+      console.log('═══════════════════════════════════════════════════════════════');
     };
     
+    console.log('[🎯 DESIGN] 📡 Listening for aiAssistantToggle events');
     window.addEventListener('aiAssistantToggle', handleAIToggle);
-    return () => window.removeEventListener('aiAssistantToggle', handleAIToggle);
-  }, []);
+    return () => {
+      console.log('[🎯 DESIGN] 🔇 Stopped listening for aiAssistantToggle events');
+      window.removeEventListener('aiAssistantToggle', handleAIToggle);
+    };
+  }, [isAIOpen, isOpen]);
   
   // Emit event when this panel opens/closes so AI can slide
   useEffect(() => {
-    console.log('[AIDesignSuggestions] Emitting designSuggestionsToggle:', isOpen ? 'OPEN' : 'CLOSED');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('[🎯 DESIGN] State changed - emitting event');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('[🎯 DESIGN] Emitting designSuggestionsToggle:', isOpen ? 'OPEN' : 'CLOSED');
+    console.log('[🎯 DESIGN] Event detail:', { isOpen });
+    console.log('[🎯 DESIGN] Timestamp:', new Date().toISOString());
     window.dispatchEvent(new CustomEvent('designSuggestionsToggle', {
       detail: { isOpen }
     }));
+    console.log('[🎯 DESIGN] ✅ Event dispatched successfully');
+    console.log('═══════════════════════════════════════════════════════════════');
   }, [isOpen]);
   
   // Calculate button position - to the LEFT of AI Assistant button
@@ -203,6 +225,35 @@ export default function AIDesignSuggestions({
   // - Only Design open: far right (20px)
   // - Both open: slides left to make room for AI on the right (410px)
   const panelRight = (isOpen && isAIOpen) ? BASE_RIGHT + AI_PANEL_WIDTH + GAP : BASE_RIGHT;
+  
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('[🎯 DESIGN POSITION CALCULATION]');
+  console.log('═══════════════════════════════════════════════════════════════');
+  console.log('[🎯 DESIGN] Current state:', {
+    isOpen,
+    isAIOpen,
+    BASE_RIGHT,
+    AI_PANEL_WIDTH,
+    GAP,
+    calculatedPanelRight: panelRight,
+    buttonRight,
+    BUTTON_GAP
+  });
+  console.log('[🎯 DESIGN] Position logic:', {
+    condition: 'isOpen && isAIOpen',
+    isOpen,
+    isAIOpen,
+    bothOpen: isOpen && isAIOpen,
+    positionIfBothOpen: BASE_RIGHT + AI_PANEL_WIDTH + GAP,
+    positionIfNotBothOpen: BASE_RIGHT,
+    actualPosition: panelRight
+  });
+  console.log('[🎯 DESIGN] Expected behavior:');
+  console.log('[🎯 DESIGN]   - Only Design open: right = 20px (far right)');
+  console.log('[🎯 DESIGN]   - Both open: right = 410px (slides left for AI)');
+  console.log('[🎯 DESIGN]   - Only AI open: Design closed (no position)');
+  console.log('[🎯 DESIGN] Actual position: right = ' + panelRight + 'px');
+  console.log('═══════════════════════════════════════════════════════════════');
 
   /**
    * Analyze Canvas Design

@@ -331,17 +331,31 @@ export default function AICanvas({
   const isOpen = externalIsOpen !== null ? externalIsOpen : localIsOpen;
   
   const setIsOpen = (newValue) => {
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('[🎯 AI ASSISTANT POSITIONING] State change triggered');
+    console.log('═══════════════════════════════════════════════════════════════');
+    console.log('[🎯 AI ASSISTANT] Previous state:', isOpen ? 'OPEN' : 'CLOSED');
+    console.log('[🎯 AI ASSISTANT] New state:', newValue ? 'OPEN' : 'CLOSED');
+    console.log('[🎯 AI ASSISTANT] Controlled by parent:', !!onOpenChange);
+    console.log('[🎯 AI ASSISTANT] Timestamp:', new Date().toISOString());
+    
     if (onOpenChange) {
+      console.log('[🎯 AI ASSISTANT] Notifying parent component of state change');
       onOpenChange(newValue);
     } else {
+      console.log('[🎯 AI ASSISTANT] Updating local state directly');
       setLocalIsOpen(newValue);
     }
     
     // Emit event for Design Suggestions to listen
-    console.log('[AICanvas] Emitting aiAssistantToggle:', newValue ? 'OPEN' : 'CLOSED');
+    console.log('[🎯 AI ASSISTANT] 📡 Emitting aiAssistantToggle event:', newValue ? 'OPEN' : 'CLOSED');
+    console.log('[🎯 AI ASSISTANT] Event detail:', { isOpen: newValue });
     window.dispatchEvent(new CustomEvent('aiAssistantToggle', { 
       detail: { isOpen: newValue } 
     }));
+    console.log('[🎯 AI ASSISTANT] ✅ Event dispatched successfully');
+    console.log('[🎯 AI ASSISTANT] Position: ALWAYS FAR RIGHT (20px)');
+    console.log('═══════════════════════════════════════════════════════════════');
   };
   
   // Calculate dynamic positioning - AI stays on far right always
@@ -733,18 +747,38 @@ export default function AICanvas({
        * After AI executes operations (create shapes, templates, etc.), we register
        * them with the undo manager for proper Ctrl+Z/Ctrl+Y support.
        */
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('[📝 AI HISTORY REGISTRATION] Starting registration process...');
+      console.log('═══════════════════════════════════════════════════════════════');
+      console.log('[📝 AI HISTORY] Tools executed:', data.toolsExecuted);
+      console.log('[📝 AI HISTORY] Operation ID:', data.operationId);
+      console.log('[📝 AI HISTORY] registerAIOperation function exists:', !!registerAIOperation);
+      console.log('[📝 AI HISTORY] User message:', fullMessage);
+      
       if (data.toolsExecuted > 0 && data.operationId && registerAIOperation) {
         try {
+          const regStartTime = performance.now();
+          console.log('[📝 AI HISTORY] ✓ All preconditions met - proceeding with registration');
+          
           // Fetch AI operation data from RTDB to get affected shape IDs
           const operationPath = `ai-operations/${user.uid}/operations/${data.operationId}`;
+          console.log('[📝 AI HISTORY] Fetching operation data from:', operationPath);
+          
           const operationRef = ref(rtdb, operationPath);
+          const fetchOpStart = performance.now();
           const operationSnapshot = await get(operationRef);
+          console.log(`[📝 AI HISTORY] Operation data fetched in ${(performance.now() - fetchOpStart).toFixed(2)}ms`);
+          
           const operationData = operationSnapshot.val();
+          console.log('[📝 AI HISTORY] Operation data:', operationData);
 
           if (operationData && operationData.toolCalls) {
+            console.log('[📝 AI HISTORY] Processing', operationData.toolCalls.length, 'tool calls');
+            
             // Extract all affected shape IDs from tool calls
             const allShapeIds = [];
             for (const toolCall of operationData.toolCalls) {
+              console.log('[📝 AI HISTORY] Tool call:', toolCall.functionName, 'Affected shapes:', toolCall.affectedShapeIds?.length || 0);
               if (toolCall.affectedShapeIds && Array.isArray(toolCall.affectedShapeIds)) {
                 allShapeIds.push(...toolCall.affectedShapeIds);
               }
@@ -752,21 +786,36 @@ export default function AICanvas({
 
             // Deduplicate shape IDs
             const uniqueShapeIds = [...new Set(allShapeIds)];
+            console.log('[📝 AI HISTORY] Total affected shapes (after dedup):', uniqueShapeIds.length);
+            console.log('[📝 AI HISTORY] Shape IDs:', uniqueShapeIds);
 
             if (uniqueShapeIds.length > 0) {
               // Fetch current shape data for redo capability
               const shapesPath = `canvas/${canvasId}/shapes`;
+              console.log('[📝 AI HISTORY] Fetching shape data from:', shapesPath);
+              
               const shapesRef = ref(rtdb, shapesPath);
+              const fetchShapesStart = performance.now();
               const shapesSnapshot = await get(shapesRef);
+              console.log(`[📝 AI HISTORY] Shape data fetched in ${(performance.now() - fetchShapesStart).toFixed(2)}ms`);
+              
               const allShapes = shapesSnapshot.val() || {};
+              console.log('[📝 AI HISTORY] Total shapes in canvas:', Object.keys(allShapes).length);
 
               // Get shape data for affected shapes only
               const shapeData = uniqueShapeIds
                 .map(id => allShapes[id])
                 .filter(Boolean); // Filter out null/undefined
 
+              console.log('[📝 AI HISTORY] Shape data retrieved:', shapeData.length, 'shapes');
+              
+              if (shapeData.length !== uniqueShapeIds.length) {
+                console.warn(`[📝 AI HISTORY] ⚠️ Warning: ${uniqueShapeIds.length - shapeData.length} shapes not found in canvas!`);
+              }
+
               // Create AI operation command
               const historyDesc = `AI: ${fullMessage.substring(0, 50)}${fullMessage.length > 50 ? '...' : ''}`;
+              console.log('[📝 AI HISTORY] Creating AIOperationCommand with description:', historyDesc);
 
               const aiCommand = new AIOperationCommand({
                 canvasId: canvasId,
@@ -778,15 +827,39 @@ export default function AICanvas({
                 createShapeFn: createShape
               });
 
+              console.log('[📝 AI HISTORY] AIOperationCommand created:', {
+                description: aiCommand.getDescription(),
+                shapeCount: uniqueShapeIds.length,
+                userName: user.displayName || user.email,
+                timestamp: new Date().toISOString()
+              });
+
               // Register with undo manager
+              const regCallStart = performance.now();
               registerAIOperation(aiCommand);
+              console.log(`[📝 AI HISTORY] ✅ registerAIOperation() called in ${(performance.now() - regCallStart).toFixed(2)}ms`);
+              console.log(`[📝 AI HISTORY] ✅ REGISTRATION COMPLETE - Total time: ${(performance.now() - regStartTime).toFixed(2)}ms`);
+              console.log('[📝 AI HISTORY] Operation should now appear in history timeline');
+            } else {
+              console.warn('[📝 AI HISTORY] ⚠️ No shape IDs to register - skipping');
             }
+          } else {
+            console.warn('[📝 AI HISTORY] ⚠️ No operation data or tool calls found');
+            console.warn('[📝 AI HISTORY] Operation data:', operationData);
           }
         } catch (error) {
-          console.error('[AI REGISTRATION] Error:', error);
+          console.error('[📝 AI HISTORY] ❌ REGISTRATION FAILED');
+          console.error('[📝 AI HISTORY] Error:', error);
+          console.error('[📝 AI HISTORY] Error stack:', error.stack);
           // Non-critical error - shapes were created successfully, just can't undo
         }
+      } else {
+        console.warn('[📝 AI HISTORY] ⚠️ Registration skipped - preconditions not met:');
+        console.warn('[📝 AI HISTORY]   - toolsExecuted:', data.toolsExecuted, '(expected > 0)');
+        console.warn('[📝 AI HISTORY]   - operationId:', data.operationId, '(expected truthy)');
+        console.warn('[📝 AI HISTORY]   - registerAIOperation:', !!registerAIOperation, '(expected true)');
       }
+      console.log('═══════════════════════════════════════════════════════════════');
       
       // CRITICAL: Re-focus input after response for seamless conversation flow
       // Longer timeout ensures React re-renders complete before focus
