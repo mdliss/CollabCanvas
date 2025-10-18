@@ -666,6 +666,24 @@ export default function AICanvas({
       }
 
       const data = await response.json();
+      
+      // Critical AI response logging
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🤖 [AI RESPONSE] Backend response received');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('📊 Tools Executed:', data.toolsExecuted, data.toolsExecuted > 0 ? '✅ Functions were called!' : '❌ NO FUNCTIONS CALLED');
+      console.log('🆔 Operation ID:', data.operationId || 'undefined ❌');
+      console.log('💬 AI Message:', data.message);
+      console.log('⏱️  Response Time:', data.responseTime + 'ms');
+      console.log('🎫 Token Usage:', data.tokenUsage);
+      if (data.toolsExecuted === 0) {
+        console.error('');
+        console.error('⚠️  WARNING: AI did not call any functions!');
+        console.error('⚠️  The AI is just describing what it would do, not actually doing it.');
+        console.error('⚠️  This means no shapes were created despite what the AI says.');
+        console.error('');
+      }
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
       /**
        * Progressive Display Simulation - Faster Streaming
