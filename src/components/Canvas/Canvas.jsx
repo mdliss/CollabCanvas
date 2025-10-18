@@ -181,6 +181,7 @@ import { rtdb } from "../../services/firebase";
 import { performanceMonitor } from "../../services/performance";
 import AICanvas from "../AI/AICanvas";
 import AIDesignSuggestions from "../AI/AIDesignSuggestions";
+import ChatPanel from "./ChatPanel";
 import { checkCanvasAccess } from "../../services/sharing";
 import { createEditRequest, hasPendingRequest, subscribeToMessages, markMessageAsRead } from "../../services/notifications";
 import { useTheme } from "../../contexts/ThemeContext";
@@ -293,6 +294,7 @@ export default function Canvas() {
   
   const [selectedIds, setSelectedIds] = useState([]);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [isChatPanelVisible, setIsChatPanelVisible] = useState(false);
   const [lastError, setLastError] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -637,8 +639,14 @@ export default function Canvas() {
     const handleKeyDown = async (e) => {
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
       
-      // Escape key - Close open panels (priority: layer panel first)
+      // Escape key - Close open panels (priority: chat, then layers)
       if (e.key === 'Escape') {
+        if (isChatPanelVisible) {
+          e.preventDefault();
+          setIsChatPanelVisible(false);
+          showFeedback('Chat closed');
+          return;
+        }
         if (isLayersPanelVisible) {
           e.preventDefault();
           setIsLayersPanelVisible(false);
@@ -1025,6 +1033,14 @@ export default function Canvas() {
               handleAddShape('line');
             }
             break;
+          case 'm':
+            // M toggles chat panel
+            e.preventDefault();
+            const newChatState = !isChatPanelVisible;
+            setIsChatPanelVisible(newChatState);
+            console.log('[Keyboard] M pressed - Chat panel:', newChatState ? 'OPENED' : 'CLOSED');
+            showFeedback(newChatState ? 'Chat opened' : 'Chat closed');
+            break;
           case 'a':
             // Shift+A toggles AI Assistant (editors only)
             if (e.shiftKey && canEdit) {
@@ -1094,7 +1110,7 @@ export default function Canvas() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes, getCenteredPosition, stageScale, canEdit, isLayersPanelVisible]);
+  }, [selectedIds, user, isSpacePressed, canUndo, canRedo, undo, redo, shapes, copiedShapes, getCenteredPosition, stageScale, canEdit, isLayersPanelVisible, isChatPanelVisible]);
 
   /**
    * Create shape with canvas-appropriate dimensions
@@ -3225,6 +3241,7 @@ export default function Canvas() {
             onSendBackward={handleSendBackward}
             onClose={() => setIsLayersPanelVisible(false)}
             user={user}
+            isChatPanelVisible={isChatPanelVisible}
           />
         </ErrorBoundary>
       )}
@@ -3232,7 +3249,12 @@ export default function Canvas() {
       {/* History Timeline - Hidden for viewers */}
       {canEdit && <HistoryTimeline isVisible={isUIVisible} />}
       
-      <PresenceList users={onlineUsers} canvasOwnerId={canvasOwnerId} isVisible={isUIVisible} />
+      <PresenceList 
+        users={onlineUsers} 
+        canvasOwnerId={canvasOwnerId} 
+        isVisible={isUIVisible}
+        isChatPanelVisible={isChatPanelVisible}
+      />
       {/* Toolbar - Hidden for viewers */}
       {canEdit && (
         <ShapeToolbar 
@@ -3556,7 +3578,7 @@ export default function Canvas() {
         style={{
           position: 'fixed',
           bottom: '20px',
-          right: `${isLayersPanelVisible ? 20 + 340 : 20}px`, // Swapped - now at far right
+          right: `${(isLayersPanelVisible ? 360 : 0) + (isChatPanelVisible ? 400 : 0) + 20}px`,
           width: '48px',
           height: '48px',
           display: 'flex',
@@ -3594,6 +3616,54 @@ export default function Canvas() {
         </svg>
       </button>
 
+      {/* Chat Button - To the left of all AI buttons */}
+      <button
+        onClick={() => setIsChatPanelVisible(!isChatPanelVisible)}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = theme.gradient.buttonHover;
+          e.currentTarget.style.transform = 'translateY(-2px)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = theme.gradient.button;
+          e.currentTarget.style.transform = 'translateY(0)';
+        }}
+        style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: `${isLayersPanelVisible ? 360 + 194 : 194}px`,
+          width: '48px',
+          height: '48px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: isChatPanelVisible ? theme.button.primary : theme.gradient.button,
+          border: `1px solid ${theme.border.normal}`,
+          borderRadius: '10px',
+          cursor: 'pointer',
+          boxShadow: theme.shadow.md,
+          zIndex: 1001,
+          transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), all 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s',
+          padding: 0,
+          opacity: isUIVisible ? 1 : 0,
+          transform: isUIVisible ? 'translateY(0)' : 'translateY(10px)'
+        }}
+        title="Chat (M)"
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke={isChatPanelVisible ? theme.text.inverse : theme.text.primary}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {/* Chat bubble icon */}
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+        </svg>
+      </button>
+
       {/* AI Canvas Assistant - Hidden for viewers */}
       {canEdit && (
         <AICanvas 
@@ -3606,6 +3676,7 @@ export default function Canvas() {
           isOpen={isAIChatOpen}
           onOpenChange={setIsAIChatOpen}
           isLayersPanelVisible={isLayersPanelVisible}
+          isChatPanelVisible={isChatPanelVisible}
           isVisible={isUIVisible}
         />
       )}
@@ -3615,9 +3686,22 @@ export default function Canvas() {
         <AIDesignSuggestions 
           canvasId={CANVAS_ID}
           isLayersPanelVisible={isLayersPanelVisible}
+          isChatPanelVisible={isChatPanelVisible}
           isVisible={isUIVisible}
         />
       )}
+
+      {/* Chat Panel - Available to all users with access */}
+      <ChatPanel
+        canvasId={CANVAS_ID}
+        isOpen={isChatPanelVisible}
+        onClose={() => setIsChatPanelVisible(false)}
+        hasSharedAccess={true}
+        onShowShare={() => {
+          // Navigate to landing page to share
+          navigate('/');
+        }}
+      />
     </div>
   );
 }

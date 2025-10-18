@@ -255,6 +255,11 @@ export default function HelpMenu({ isVisible, onClose }) {
           </div>
           
           <div style={styles.item}>
+            <span style={styles.key}>M</span>
+            <span style={styles.desc}>Toggle chat panel</span>
+          </div>
+          
+          <div style={styles.item}>
             <span style={styles.key}>]</span>
             <span style={styles.desc}>Bring selected shape(s) forward one layer</span>
           </div>

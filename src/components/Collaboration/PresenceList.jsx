@@ -1,18 +1,23 @@
 import { useState, useEffect, useRef } from 'react';
 import Avatar from './Avatar';
-import { getUserProfile } from '../../services/userProfile';
+import { getUserProfile, updateUserBio } from '../../services/userProfile';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 /**
  * PresenceList - Shows all online users with avatars
  * Click on a user to see their profile popup
  * Shows crown next to canvas owner
+ * Allows bio editing when viewing own profile
  */
-export default function PresenceList({ users, canvasOwnerId = null, isVisible = true }) {
+export default function PresenceList({ users, canvasOwnerId = null, isVisible = true, isChatPanelVisible = false }) {
   const { theme } = useTheme();
+  const { user: currentUser } = useAuth();
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isEditingBio, setIsEditingBio] = useState(false);
+  const [bioText, setBioText] = useState('');
   const popupRef = useRef(null);
 
   // Fetch profile when user is selected
@@ -41,12 +46,17 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
     const handleClickOutside = (e) => {
       if (popupRef.current && !popupRef.current.contains(e.target)) {
         setSelectedUserId(null);
+        setIsEditingBio(false);
       }
     };
 
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        setSelectedUserId(null);
+        if (isEditingBio) {
+          setIsEditingBio(false);
+        } else {
+          setSelectedUserId(null);
+        }
       }
     };
 
@@ -57,7 +67,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [selectedUserId]);
+  }, [selectedUserId, isEditingBio]);
 
   // MOVED: Early return AFTER hooks
   if (!users || users.length === 0) return null;
@@ -76,12 +86,37 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
+  const startEditingBio = () => {
+    setBioText(userProfile?.bio || '');
+    setIsEditingBio(true);
+  };
+
+  const handleBioSave = async () => {
+    if (!currentUser?.uid) return;
+    
+    try {
+      await updateUserBio(currentUser.uid, bioText);
+      setUserProfile(prev => ({ ...prev, bio: bioText }));
+      setIsEditingBio(false);
+    } catch (err) {
+      console.error('[PresenceList] Failed to save bio:', err);
+      alert('Failed to save bio. Please try again.');
+    }
+  };
+
+  const handleBioCancel = () => {
+    setIsEditingBio(false);
+    setBioText('');
+  };
+
+  const isOwnProfile = selectedUserId === currentUser?.uid;
+
   return (
     <div
       style={{
         position: "fixed",
         top: 8,
-        right: 8,
+        right: isChatPanelVisible ? 408 : 8,
         background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : "rgba(255, 255, 255, 0.95)",
         padding: "12px",
         borderRadius: "8px",
@@ -90,7 +125,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
         zIndex: 9998,
         opacity: isVisible ? 1 : 0,
         transform: isVisible ? 'translateX(0)' : 'translateX(20px)',
-        transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
+        transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.1s',
         border: `1px solid ${theme.border.normal}`,
         backdropFilter: 'blur(10px)'
       }}
@@ -257,19 +292,130 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                         >
                           Bio
                         </label>
-                        <p
-                          style={{
-                            fontSize: "14px",
-                            color: userProfile?.bio ? theme.text.primary : theme.text.tertiary,
-                            fontStyle: userProfile?.bio ? "normal" : "italic",
-                            lineHeight: "1.5",
-                            margin: 0,
-                            whiteSpace: "pre-wrap",
-                            wordBreak: "break-word"
-                          }}
-                        >
-                          {userProfile?.bio || "No bio yet"}
-                        </p>
+
+                        {isOwnProfile && isEditingBio ? (
+                          <div>
+                            <textarea
+                              value={bioText}
+                              onChange={(e) => setBioText(e.target.value.slice(0, 200))}
+                              placeholder="Tell us about yourself..."
+                              style={{
+                                width: '100%',
+                                padding: '10px',
+                                border: `1px solid ${theme.border.medium}`,
+                                borderRadius: '6px',
+                                fontSize: '14px',
+                                lineHeight: '1.5',
+                                resize: 'none',
+                                fontFamily: 'inherit',
+                                boxSizing: 'border-box',
+                                background: theme.background.card,
+                                color: theme.text.primary
+                              }}
+                              rows={3}
+                              maxLength={200}
+                              autoFocus
+                            />
+                            <div
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                marginTop: '8px'
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: '12px',
+                                  color: bioText.length >= 200 ? '#ef4444' : theme.text.tertiary
+                                }}
+                              >
+                                {bioText.length}/200
+                              </span>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button
+                                  onClick={handleBioCancel}
+                                  style={{
+                                    padding: '6px 14px',
+                                    background: theme.background.card,
+                                    border: `1px solid ${theme.border.medium}`,
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '500',
+                                    color: theme.text.primary,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={handleBioSave}
+                                  style={{
+                                    padding: '6px 14px',
+                                    background: theme.button.primary,
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    fontSize: '12px',
+                                    fontWeight: '500',
+                                    color: theme.text.inverse,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  Save
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p
+                              onClick={isOwnProfile ? startEditingBio : undefined}
+                              style={{
+                                fontSize: "14px",
+                                color: userProfile?.bio ? theme.text.primary : theme.text.tertiary,
+                                fontStyle: userProfile?.bio ? "normal" : "italic",
+                                lineHeight: "1.5",
+                                margin: 0,
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word",
+                                cursor: isOwnProfile ? 'pointer' : 'default',
+                                padding: isOwnProfile ? '8px' : '0',
+                                borderRadius: isOwnProfile ? '6px' : '0',
+                                transition: 'background 0.15s ease'
+                              }}
+                              onMouseEnter={(e) => {
+                                if (isOwnProfile) e.target.style.background = theme.background.elevated;
+                              }}
+                              onMouseLeave={(e) => {
+                                if (isOwnProfile) e.target.style.background = 'transparent';
+                              }}
+                            >
+                              {userProfile?.bio || (isOwnProfile ? "Click to add a bio..." : "No bio yet")}
+                            </p>
+                            {isOwnProfile && (
+                              <button
+                                onClick={startEditingBio}
+                                style={{
+                                  marginTop: '8px',
+                                  padding: '6px 14px',
+                                  background: theme.background.card,
+                                  border: `1px solid ${theme.border.medium}`,
+                                  borderRadius: '6px',
+                                  fontSize: '12px',
+                                  fontWeight: '500',
+                                  color: theme.text.primary,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s ease',
+                                  width: '100%'
+                                }}
+                              >
+                                Edit Bio
+                              </button>
+                            )}
+                          </>
+                        )}
                       </div>
 
                       {/* Status & Info Section */}

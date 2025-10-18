@@ -308,6 +308,7 @@ export default function AICanvas({
   isOpen: externalIsOpen = null,
   onOpenChange = null,
   isLayersPanelVisible = false,
+  isChatPanelVisible = false,
   isVisible = true
 }) {
   const { user } = useAuth();
@@ -344,13 +345,17 @@ export default function AICanvas({
     }));
   };
   
-  // Calculate dynamic positioning - AI stays on far right always
+  // Calculate dynamic positioning - AI stays on far right, but slides with chat
   const BASE_RIGHT = 20; // Far right edge
-  const buttonRight = 78; // Fixed position for button
+  const CHAT_PANEL_WIDTH = 380;
+  const CHAT_SLIDE_OFFSET = 400; // Chat panel width + gap
   
-  // FIXED LOGIC: AI panel ALWAYS stays at far right (never slides)
-  // This ensures when both panels are open, AI is on right, Design is on left
-  const panelRight = BASE_RIGHT; // Always far right
+  // Button position: slides right when chat is open
+  const buttonRight = isChatPanelVisible ? 78 + CHAT_SLIDE_OFFSET : 78;
+  
+  // Panel position: slides right when chat is open to stay next to button
+  // When both AI and Design are open, AI stays right, Design slides left
+  const panelRight = isChatPanelVisible ? BASE_RIGHT + CHAT_SLIDE_OFFSET : BASE_RIGHT;
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);

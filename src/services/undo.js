@@ -203,6 +203,17 @@ class UndoManager {
       // Not in batch mode - execute immediately and add to stack
       await command.execute();
       
+      // Track change for leaderboard (non-blocking, lazy import to avoid circular deps)
+      if (user?.uid) {
+        import('./userProfile').then(({ incrementChangesCount }) => {
+          incrementChangesCount(user.uid, 1).catch(err => {
+            console.warn('[UndoManager] Failed to track change for leaderboard:', err);
+          });
+        }).catch(() => {
+          // Silently fail if userProfile module can't be loaded
+        });
+      }
+      
       // Add to undo stack
       this.undoStack.push(command);
       console.log('[UndoManager] Command executed and added to undo stack:', command.getDescription(), 'Stack size:', this.undoStack.length);
@@ -253,6 +264,18 @@ class UndoManager {
       this.batchCommands, 
       this.batchDescription
     );
+    
+    // Track changes for leaderboard (count all commands in batch, lazy import)
+    const firstCommand = this.batchCommands[0];
+    if (firstCommand?.metadata?.user?.uid) {
+      import('./userProfile').then(({ incrementChangesCount }) => {
+        incrementChangesCount(firstCommand.metadata.user.uid, this.batchCommands.length).catch(err => {
+          console.warn('[UndoManager] Failed to track batch changes for leaderboard:', err);
+        });
+      }).catch(() => {
+        // Silently fail if userProfile module can't be loaded
+      });
+    }
     
     // Use the metadata from the first command
     if (this.batchCommands[0]?.metadata) {
@@ -563,6 +586,17 @@ class UndoManager {
     aiCommand.metadata.timestamp = Date.now();
     aiCommand.metadata.isAI = true;
     aiCommand.metadata.user = aiCommand.user; // Copy user from command for getUserName()
+    
+    // Track changes for leaderboard (AI operations count as changes, lazy import)
+    if (aiCommand.user?.uid && aiCommand.affectedShapeIds) {
+      import('./userProfile').then(({ incrementChangesCount }) => {
+        incrementChangesCount(aiCommand.user.uid, aiCommand.affectedShapeIds.length).catch(err => {
+          console.warn('[UndoManager] Failed to track AI changes for leaderboard:', err);
+        });
+      }).catch(() => {
+        // Silently fail if userProfile module can't be loaded
+      });
+    }
     
     // Add to undo stack (operation already executed by Cloud Function)
     this.undoStack.push(aiCommand);

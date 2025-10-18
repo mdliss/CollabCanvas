@@ -286,8 +286,8 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
         </button>
 
         <div style={{ marginBottom: '24px' }}>
-          <h3 style={styles.title}>Settings</h3>
-          <p style={styles.subtitle}>Customize your CollabCanvas experience</p>
+          <h3 style={styles.title}>Themes</h3>
+          <p style={styles.subtitle}>Choose your preferred color scheme</p>
         </div>
 
         {/* Theme Section - Scrollable */}

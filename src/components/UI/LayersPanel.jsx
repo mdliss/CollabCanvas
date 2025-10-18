@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * CRITICAL FIX: LayersPanel Component with Defensive Validation
@@ -259,8 +260,10 @@ export default function LayersPanel({
   onBringForward,
   onSendBackward,
   onClose,
-  user
+  user,
+  isChatPanelVisible = false
 }) {
+  const { theme } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
@@ -379,30 +382,32 @@ export default function LayersPanel({
     panel: {
       position: 'fixed',
       top: 0,
-      right: 0,
+      right: isChatPanelVisible ? '380px' : '0',
       width: '340px',
       height: '100vh',
-      backgroundColor: '#ffffff',
-      color: '#1f2937',
+      backgroundColor: theme.background.card,
+      color: theme.text.primary,
       display: 'flex',
       flexDirection: 'column',
-      boxShadow: '-4px 0 24px rgba(0, 0, 0, 0.12), -2px 0 8px rgba(0, 0, 0, 0.08)',
+      boxShadow: theme.shadow.xl,
+      borderLeft: `1px solid ${theme.border.normal}`,
       zIndex: 10000,
       fontFamily: "'Roboto Mono', monospace",
-      animation: 'slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      animation: 'slideInRight 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      transition: 'right 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     header: {
       padding: '20px',
-      borderBottom: '1px solid #e5e7eb',
+      borderBottom: `1px solid ${theme.border.normal}`,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      background: 'linear-gradient(180deg, #ffffff 0%, #f9fafb 100%)'
+      background: theme.background.elevated
     },
     title: {
       fontSize: '18px',
       fontWeight: '600',
-      color: '#111827',
+      color: theme.text.primary,
       display: 'flex',
       alignItems: 'center',
       gap: '8px'
@@ -410,7 +415,7 @@ export default function LayersPanel({
     closeButton: {
       background: 'none',
       border: 'none',
-      color: '#6b7280',
+      color: theme.text.tertiary,
       fontSize: '28px',
       cursor: 'pointer',
       width: '36px',
@@ -424,27 +429,27 @@ export default function LayersPanel({
     },
     searchBox: {
       padding: '16px 20px',
-      borderBottom: '1px solid #e5e7eb',
-      backgroundColor: '#f9fafb'
+      borderBottom: `1px solid ${theme.border.normal}`,
+      backgroundColor: theme.background.elevated
     },
     searchInput: {
       width: '100%',
       padding: '10px 14px',
-      backgroundColor: '#ffffff',
-      border: '1.5px solid #d1d5db',
+      backgroundColor: theme.background.card,
+      border: `1.5px solid ${theme.border.medium}`,
       borderRadius: '8px',
-      color: '#111827',
+      color: theme.text.primary,
       fontSize: '14px',
       outline: 'none',
       transition: 'all 0.2s'
     },
     batchControls: {
       padding: '16px 20px',
-      borderBottom: '1px solid #e5e7eb',
+      borderBottom: `1px solid ${theme.border.normal}`,
       display: 'flex',
       flexDirection: 'column',
       gap: '12px',
-      backgroundColor: '#ffffff'
+      backgroundColor: theme.background.card
     },
     selectAllRow: {
       display: 'flex',
@@ -455,11 +460,11 @@ export default function LayersPanel({
       width: '18px',
       height: '18px',
       cursor: 'pointer',
-      accentColor: '#4f46e5'
+      accentColor: theme.button.primary
     },
     selectAllLabel: {
       fontSize: '13px',
-      color: '#6b7280',
+      color: theme.text.secondary,
       fontWeight: '500'
     },
     batchButtonsRow: {
@@ -475,9 +480,9 @@ export default function LayersPanel({
       borderRadius: '8px',
       cursor: 'pointer',
       transition: 'all 0.2s ease',
-      color: '#ffffff',
-      backgroundColor: '#2c2e33',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
+      color: theme.text.inverse,
+      backgroundColor: theme.button.primary,
+      boxShadow: theme.shadow.sm,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -492,7 +497,7 @@ export default function LayersPanel({
       flex: 1,
       overflowY: 'auto',
       padding: '12px 16px',
-      backgroundColor: '#fafafa'
+      backgroundColor: theme.background.page
     },
     layerItem: {
       display: 'flex',
@@ -503,18 +508,19 @@ export default function LayersPanel({
       borderRadius: '10px',
       cursor: 'pointer',
       transition: 'all 0.15s ease',
-      backgroundColor: '#ffffff',
-      border: '1.5px solid transparent',
-      boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)'
+      backgroundColor: theme.background.card,
+      border: `1.5px solid transparent`,
+      boxShadow: theme.shadow.sm
     },
     layerItemSelected: {
-      backgroundColor: '#eef2ff',
-      border: '1.5px solid #818cf8',
-      boxShadow: '0 2px 8px rgba(99, 102, 241, 0.15)'
+      backgroundColor: theme.background.elevated,
+      border: `1.5px solid ${theme.button.primary}`,
+      boxShadow: theme.shadow.md
     },
     layerItemChecked: {
-      backgroundColor: '#ddd6fe',
-      border: '1.5px solid #a78bfa'
+      backgroundColor: theme.background.elevated,
+      border: `1.5px solid ${theme.button.primary}`,
+      opacity: 0.8
     },
     name: {
       flex: 1,
@@ -523,23 +529,23 @@ export default function LayersPanel({
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
-      color: '#374151'
+      color: theme.text.primary
     },
     nameInput: {
       flex: 1,
       padding: '6px 10px',
-      backgroundColor: '#ffffff',
-      border: '2px solid #4f46e5',
+      backgroundColor: theme.background.card,
+      border: `2px solid ${theme.button.primary}`,
       borderRadius: '6px',
-      color: '#111827',
+      color: theme.text.primary,
       fontSize: '14px',
       outline: 'none',
       fontWeight: '500'
     },
     zIndexBadge: {
       fontSize: '11px',
-      color: '#6b7280',
-      backgroundColor: '#f3f4f6',
+      color: theme.text.secondary,
+      backgroundColor: theme.background.elevated,
       padding: '4px 8px',
       borderRadius: '6px',
       fontFamily: 'monospace',
@@ -547,10 +553,10 @@ export default function LayersPanel({
     },
     footer: {
       padding: '16px 20px',
-      borderTop: '1px solid #e5e7eb',
+      borderTop: `1px solid ${theme.border.normal}`,
       fontSize: '13px',
-      color: '#6b7280',
-      backgroundColor: '#f9fafb',
+      color: theme.text.secondary,
+      backgroundColor: theme.background.elevated,
       fontWeight: '500',
       display: 'flex',
       alignItems: 'center',
@@ -561,13 +567,13 @@ export default function LayersPanel({
       padding: '8px 16px',
       fontSize: '12px',
       fontWeight: '600',
-      border: '1.5px solid #fca5a5',
+      border: `1.5px solid ${theme.isDark ? '#ef4444' : '#fca5a5'}`,
       borderRadius: '8px',
       cursor: 'pointer',
       transition: 'all 0.2s',
       color: '#dc2626',
-      backgroundColor: '#ffffff',
-      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.08)',
+      backgroundColor: theme.background.card,
+      boxShadow: theme.shadow.sm,
       display: 'flex',
       alignItems: 'center',
       gap: '6px',
@@ -619,12 +625,12 @@ export default function LayersPanel({
           style={styles.closeButton}
           onClick={onClose}
           onMouseOver={(e) => {
-            e.target.style.backgroundColor = '#f3f4f6';
-            e.target.style.color = '#111827';
+            e.target.style.backgroundColor = theme.background.elevated;
+            e.target.style.color = theme.text.primary;
           }}
           onMouseOut={(e) => {
             e.target.style.backgroundColor = 'transparent';
-            e.target.style.color = '#6b7280';
+            e.target.style.color = theme.text.tertiary;
           }}
         >
           ×
@@ -640,11 +646,11 @@ export default function LayersPanel({
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           onFocus={(e) => {
-            e.target.style.borderColor = '#4f46e5';
-            e.target.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.1)';
+            e.target.style.borderColor = theme.button.primary;
+            e.target.style.boxShadow = `0 0 0 3px ${theme.isDark ? 'rgba(99, 102, 241, 0.2)' : 'rgba(79, 70, 229, 0.1)'}`;
           }}
           onBlur={(e) => {
-            e.target.style.borderColor = '#d1d5db';
+            e.target.style.borderColor = theme.border.medium;
             e.target.style.boxShadow = 'none';
           }}
         />
@@ -672,8 +678,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onBringToFront)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primaryHover)}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primary)}
           >
             <span>⇈</span> To Front
           </button>
@@ -684,8 +690,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onBringForward)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primaryHover)}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primary)}
           >
             <span>⇑</span> Forward
           </button>
@@ -696,8 +702,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onSendBackward)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primaryHover)}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primary)}
           >
             <span>⇓</span> Backward
           </button>
@@ -708,8 +714,8 @@ export default function LayersPanel({
             }}
             onClick={() => hasChecked && handleBatchOperation(onSendToBack)}
             disabled={!hasChecked}
-            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = '#1a1c1f')}
-            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = '#2c2e33')}
+            onMouseOver={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primaryHover)}
+            onMouseOut={(e) => hasChecked && (e.target.style.backgroundColor = theme.button.primary)}
           >
             <span>⇊</span> To Back
           </button>
@@ -722,7 +728,7 @@ export default function LayersPanel({
           <div style={{ 
             padding: '48px 24px', 
             textAlign: 'center', 
-            color: '#9ca3af',
+            color: theme.text.tertiary,
             fontSize: '14px'
           }}>
             {searchTerm ? 'No matching layers' : 'No layers yet'}
@@ -744,13 +750,13 @@ export default function LayersPanel({
               onClick={() => onSelect(shape.id)}
               onMouseOver={(e) => {
                 if (!isSelected && !isChecked) {
-                  e.currentTarget.style.backgroundColor = '#f9fafb';
-                  e.currentTarget.style.borderColor = '#e5e7eb';
+                  e.currentTarget.style.backgroundColor = theme.background.elevated;
+                  e.currentTarget.style.borderColor = theme.border.light;
                 }
               }}
               onMouseOut={(e) => {
                 if (!isSelected && !isChecked) {
-                  e.currentTarget.style.backgroundColor = '#ffffff';
+                  e.currentTarget.style.backgroundColor = theme.background.card;
                   e.currentTarget.style.borderColor = 'transparent';
                 }
               }}
@@ -822,14 +828,14 @@ export default function LayersPanel({
             style={styles.deleteAllButton}
             onClick={handleDeleteAll}
             onMouseOver={(e) => {
-              e.target.style.backgroundColor = '#fef2f2';
+              e.target.style.backgroundColor = theme.isDark ? 'rgba(239, 68, 68, 0.2)' : '#fef2f2';
               e.target.style.borderColor = '#f87171';
-              e.target.style.boxShadow = '0 2px 6px rgba(220, 38, 38, 0.15)';
+              e.target.style.boxShadow = theme.shadow.md;
             }}
             onMouseOut={(e) => {
-              e.target.style.backgroundColor = '#ffffff';
-              e.target.style.borderColor = '#fca5a5';
-              e.target.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.08)';
+              e.target.style.backgroundColor = theme.background.card;
+              e.target.style.borderColor = theme.isDark ? '#ef4444' : '#fca5a5';
+              e.target.style.boxShadow = theme.shadow.sm;
             }}
           >
             <span>🗑</span> Delete All

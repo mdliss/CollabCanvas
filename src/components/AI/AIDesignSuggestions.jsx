@@ -89,6 +89,7 @@ const getSeverityColor = (severity) => {
 export default function AIDesignSuggestions({ 
   canvasId = 'global-canvas-v1',
   isLayersPanelVisible = false,
+  isChatPanelVisible = false,
   isVisible = true
 }) {
   const { user } = useAuth();
@@ -149,13 +150,15 @@ export default function AIDesignSuggestions({
   
   // Calculate button position - to the LEFT of AI Assistant button
   const BUTTON_GAP = 10;
-  const buttonRight = 78 + 48 + BUTTON_GAP; // AI at 78px, this is left of it
+  const CHAT_SLIDE_OFFSET = 400; // Chat panel width + gap
+  const baseButtonRight = 78 + 48 + BUTTON_GAP; // AI at 78px, this is left of it
+  const buttonRight = isChatPanelVisible ? baseButtonRight + CHAT_SLIDE_OFFSET : baseButtonRight;
   
-  // FIXED LOGIC: When both open, Design slides left, AI stays right
-  // Design panel position:
-  // - Only Design open: far right (20px)
-  // - Both open: slides left to make room for AI on the right (410px)
-  const panelRight = (isOpen && isAIOpen) ? BASE_RIGHT + AI_PANEL_WIDTH + GAP : BASE_RIGHT;
+  // Panel position logic:
+  // 1. If chat is open, slide right by CHAT_SLIDE_OFFSET
+  // 2. If both Design and AI are open, Design slides left to make room for AI
+  const basePanelRight = isChatPanelVisible ? BASE_RIGHT + CHAT_SLIDE_OFFSET : BASE_RIGHT;
+  const panelRight = (isOpen && isAIOpen) ? basePanelRight + AI_PANEL_WIDTH + GAP : basePanelRight;
 
   /**
    * Analyze Canvas Design

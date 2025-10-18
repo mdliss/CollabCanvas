@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment } from 'firebase/firestore';
 import { db } from './firebase';
 
 /**
@@ -85,6 +85,7 @@ export const initializeUserProfile = async (user) => {
         bio: '',
         createdAt: Date.now(),
         lastSeen: Date.now(),
+        changesCount: 0,
         stats: {
           shapesCreated: 0,
           sessionsCount: 0
@@ -121,6 +122,57 @@ export const incrementShapeCount = async (uid) => {
   } catch (error) {
     console.error('[userProfile] Failed to increment shape count:', error);
     // Don't throw - this is non-critical
+  }
+};
+
+/**
+ * Increment changes count for leaderboard
+ * @param {string} uid - User ID
+ * @param {number} count - Number of changes to add (default 1)
+ * @returns {Promise<void>}
+ */
+export const incrementChangesCount = async (uid, count = 1) => {
+  if (!uid) return;
+  
+  try {
+    const docRef = doc(db, 'users', uid);
+    await updateDoc(docRef, { 
+      changesCount: increment(count),
+      updatedAt: Date.now()
+    });
+  } catch (error) {
+    console.error('[userProfile] Failed to increment changes count:', error);
+    // Don't throw - this is non-critical
+  }
+};
+
+/**
+ * Get user's leaderboard rank
+ * @param {string} uid - User ID
+ * @returns {Promise<number|null>} User's rank (1-based) or null if not found
+ */
+export const getUserRank = async (uid) => {
+  if (!uid) return null;
+  
+  try {
+    const docRef = doc(db, 'users', uid);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) return null;
+    
+    const userChanges = docSnap.data().changesCount || 0;
+    
+    // This is a simple implementation - for better performance, 
+    // consider using a Cloud Function or caching
+    const { collection, query, where, getDocs } = await import('firebase/firestore');
+    const usersRef = collection(db, 'users');
+    const higherRankedQuery = query(usersRef, where('changesCount', '>', userChanges));
+    const snapshot = await getDocs(higherRankedQuery);
+    
+    return snapshot.size + 1; // Rank is 1-based
+  } catch (error) {
+    console.error('[userProfile] Failed to get user rank:', error);
+    return null;
   }
 };
 

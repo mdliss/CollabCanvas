@@ -8,9 +8,11 @@
 import { useState, useEffect } from 'react';
 import { subscribeToRequests, approveEditRequest, denyEditRequest, deleteRequest } from '../../services/notifications';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function NotificationBell({ onApprove }) {
   const { user } = useAuth();
+  const { theme } = useTheme();
   const [requests, setRequests] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
   const [processingId, setProcessingId] = useState(null);
@@ -62,8 +64,8 @@ export default function NotificationBell({ onApprove }) {
       <button
         onClick={() => setIsOpen(!isOpen)}
         style={{
-          background: '#ffffff',
-          border: '1px solid rgba(0, 0, 0, 0.08)',
+          background: theme.background.card,
+          border: `1px solid ${theme.border.medium}`,
           padding: '8px 16px',
           borderRadius: '8px',
           fontSize: '13px',
@@ -74,24 +76,26 @@ export default function NotificationBell({ onApprove }) {
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
-          color: '#2c2e33'
+          color: theme.text.primary,
+          boxShadow: theme.shadow.md,
+          whiteSpace: 'nowrap'
         }}
         onMouseEnter={(e) => {
-          e.target.style.background = '#fafafa';
-          e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+          e.target.style.background = theme.background.elevated;
+          e.target.style.borderColor = theme.border.strong;
         }}
         onMouseLeave={(e) => {
-          e.target.style.background = '#ffffff';
-          e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+          e.target.style.background = theme.background.card;
+          e.target.style.borderColor = theme.border.medium;
         }}
       >
-        <span style={{ fontSize: '12px', fontWeight: '400' }}>Requests</span>
+        <span style={{ fontSize: '13px', fontWeight: '500' }}>Requests</span>
         {requests.length > 0 && (
           <span style={{
-            background: '#2c2e33',
-            color: '#ffffff',
+            background: theme.button.primary,
+            color: theme.text.inverse,
             fontSize: '11px',
-            fontWeight: '500',
+            fontWeight: '600',
             padding: '2px 7px',
             borderRadius: '10px',
             minWidth: '20px',
@@ -108,22 +112,22 @@ export default function NotificationBell({ onApprove }) {
           position: 'absolute',
           top: 'calc(100% + 8px)',
           right: 0,
-          background: '#ffffff',
-          border: '1px solid rgba(0, 0, 0, 0.08)',
+          background: theme.background.card,
+          border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
-          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+          boxShadow: theme.shadow.xl,
           minWidth: '340px',
           maxWidth: '400px',
-          zIndex: 10004,
+          zIndex: 100000,
           maxHeight: '400px',
           overflowY: 'auto'
         }}>
           <div style={{
             padding: '12px 16px',
-            borderBottom: '1px solid rgba(0, 0, 0, 0.06)',
+            borderBottom: `1px solid ${theme.border.normal}`,
             fontSize: '13px',
             fontWeight: '600',
-            color: '#2c2e33'
+            color: theme.text.primary
           }}>
             Edit Requests ({requests.length})
           </div>
@@ -133,18 +137,18 @@ export default function NotificationBell({ onApprove }) {
               key={request.id}
               style={{
                 padding: '12px 16px',
-                borderBottom: '1px solid rgba(0, 0, 0, 0.04)',
+                borderBottom: `1px solid ${theme.border.light}`,
                 fontSize: '13px'
               }}
             >
               <div style={{ marginBottom: '10px' }}>
-                <div style={{ fontWeight: '500', color: '#2c2e33', marginBottom: '3px', fontSize: '13px' }}>
+                <div style={{ fontWeight: '500', color: theme.text.primary, marginBottom: '3px', fontSize: '13px' }}>
                   {request.requesterName}
                 </div>
-                <div style={{ fontSize: '12px', color: '#646669', fontWeight: '400', marginBottom: '3px' }}>
+                <div style={{ fontSize: '12px', color: theme.text.secondary, fontWeight: '400', marginBottom: '3px' }}>
                   wants to edit "{request.canvasName}"
                 </div>
-                <div style={{ fontSize: '11px', color: '#9ca3af', fontWeight: '400' }}>
+                <div style={{ fontSize: '11px', color: theme.text.tertiary, fontWeight: '400' }}>
                   {new Date(request.createdAt).toLocaleString()}
                 </div>
               </div>
@@ -155,8 +159,8 @@ export default function NotificationBell({ onApprove }) {
                   disabled={processingId === request.id}
                   style={{
                     flex: 1,
-                    background: '#2c2e33',
-                    color: '#ffffff',
+                    background: theme.button.primary,
+                    color: theme.text.inverse,
                     border: 'none',
                     padding: '8px',
                     borderRadius: '6px',
@@ -168,12 +172,12 @@ export default function NotificationBell({ onApprove }) {
                   }}
                   onMouseEnter={(e) => {
                     if (processingId !== request.id) {
-                      e.target.style.background = '#1a1c1f';
+                      e.target.style.background = theme.button.primaryHover;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (processingId !== request.id) {
-                      e.target.style.background = '#2c2e33';
+                      e.target.style.background = theme.button.primary;
                     }
                   }}
                 >
@@ -184,9 +188,9 @@ export default function NotificationBell({ onApprove }) {
                   disabled={processingId === request.id}
                   style={{
                     flex: 1,
-                    background: '#ffffff',
-                    color: '#2c2e33',
-                    border: '1px solid rgba(0, 0, 0, 0.08)',
+                    background: theme.background.card,
+                    color: theme.text.primary,
+                    border: `1px solid ${theme.border.medium}`,
                     padding: '8px',
                     borderRadius: '6px',
                     fontSize: '12px',
@@ -197,14 +201,14 @@ export default function NotificationBell({ onApprove }) {
                   }}
                   onMouseEnter={(e) => {
                     if (processingId !== request.id) {
-                      e.target.style.background = '#fafafa';
-                      e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+                      e.target.style.background = theme.background.elevated;
+                      e.target.style.borderColor = theme.border.strong;
                     }
                   }}
                   onMouseLeave={(e) => {
                     if (processingId !== request.id) {
-                      e.target.style.background = '#ffffff';
-                      e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+                      e.target.style.background = theme.background.card;
+                      e.target.style.borderColor = theme.border.medium;
                     }
                   }}
                 >
@@ -223,7 +227,7 @@ export default function NotificationBell({ onApprove }) {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 10003
+            zIndex: 99999
           }}
         />
       )}

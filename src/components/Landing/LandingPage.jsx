@@ -31,6 +31,8 @@ import ShareModal from './ShareModal';
 import NotificationBell from './NotificationBell';
 import TemplateSelectionModal from './TemplateSelectionModal';
 import SettingsModal from './SettingsModal';
+import ProfileModal from './ProfileModal';
+import LeaderboardModal from './LeaderboardModal';
 import { TEMPLATES } from '../../utils/templates';
 
 export default function LandingPage() {
@@ -46,6 +48,8 @@ export default function LandingPage() {
   const [showCouponModal, setShowCouponModal] = useState(false);
   const [showTemplateModal, setShowTemplateModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [renamingProject, setRenamingProject] = useState(null);
   const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
@@ -365,6 +369,7 @@ export default function LandingPage() {
         transform: isPageVisible ? 'translateY(0)' : 'translateY(-20px)',
         transition: 'opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)'
       }}>
+        {/* Left Side - CollabCanvas Title */}
         <div style={styles.headerLeft}>
           <h1 style={styles.title}>
             CollabCanvas
@@ -374,6 +379,7 @@ export default function LandingPage() {
           </p>
         </div>
         
+        {/* Right Side - All Actions */}
         <div style={styles.headerRight}>
           {/* Notification Bell */}
           <NotificationBell onApprove={() => {
@@ -387,28 +393,21 @@ export default function LandingPage() {
             loadData();
           }} />
           
-          {/* Settings Button */}
+          {/* Profile Button */}
           <button
-            onClick={() => {
-              console.log('[SETTINGS] Button clicked!');
-              console.log('[SETTINGS] Current showSettingsModal state:', showSettingsModal);
-              setShowSettingsModal(true);
-              console.log('[SETTINGS] setShowSettingsModal(true) called');
-            }}
+            onClick={() => setShowProfileModal(true)}
             style={{
               background: theme.background.card,
               color: theme.text.primary,
               border: `1px solid ${theme.border.medium}`,
-              padding: '8px 18px',
+              padding: '8px 16px',
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: '500',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
               boxShadow: theme.shadow.md,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
+              whiteSpace: 'nowrap'
             }}
             onMouseEnter={(e) => {
               e.target.style.background = theme.background.elevated;
@@ -418,35 +417,117 @@ export default function LandingPage() {
               e.target.style.background = theme.background.card;
               e.target.style.borderColor = theme.border.medium;
             }}
-            title="Settings"
+            title="Profile"
           >
-            ⚙️ Settings
+            Profile
+          </button>
+          
+          {/* Leaderboard Button */}
+          <button
+            onClick={() => setShowLeaderboardModal(true)}
+            style={{
+              background: theme.background.card,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.medium}`,
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: theme.shadow.md,
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }}
+            title="Leaderboard"
+          >
+            Leaderboard
+          </button>
+
+          {/* Themes Button */}
+          <button
+            onClick={() => setShowSettingsModal(true)}
+            style={{
+              background: theme.background.card,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.medium}`,
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: theme.shadow.md,
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }}
+            title="Themes"
+          >
+            Themes
           </button>
           
           {subscription.isPremium ? (
             <div style={styles.premiumBadge}>
-              {subscription.tier === 'lifetime' ? 'Lifetime Premium' : 'Premium'}
+              {subscription.tier === 'lifetime' ? 'Lifetime' : 'Premium'}
             </div>
           ) : (
             <>
               <button
                 onClick={() => setShowCouponModal(true)}
-                style={styles.couponButton}
-              onMouseEnter={(e) => {
-                e.target.style.background = theme.background.elevated;
-                e.target.style.borderColor = theme.border.strong;
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = theme.background.card;
-                e.target.style.borderColor = theme.border.medium;
-              }}
+                style={{
+                  background: theme.background.card,
+                  color: theme.text.primary,
+                  border: `1px solid ${theme.border.medium}`,
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: theme.shadow.md,
+                  whiteSpace: 'nowrap'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = theme.background.elevated;
+                  e.target.style.borderColor = theme.border.strong;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = theme.background.card;
+                  e.target.style.borderColor = theme.border.medium;
+                }}
                 title="Have a coupon code?"
               >
                 Coupon
               </button>
               <button
                 onClick={() => setShowSubscriptionModal(true)}
-                style={styles.upgradeButton}
+                style={{
+                  background: theme.button.primary,
+                  color: theme.text.inverse,
+                  border: 'none',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '500',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  boxShadow: theme.shadow.md,
+                  whiteSpace: 'nowrap'
+                }}
                 onMouseEnter={(e) => {
                   e.target.style.background = theme.button.primaryHover;
                 }}
@@ -454,22 +535,34 @@ export default function LandingPage() {
                   e.target.style.background = theme.button.primary;
                 }}
               >
-                Upgrade to Premium
+                Upgrade
               </button>
             </>
           )}
           
           <button
             onClick={() => setShowLogoutConfirm(true)}
-            style={styles.logoutButton}
-              onMouseEnter={(e) => {
-                e.target.style.background = theme.background.elevated;
-                e.target.style.borderColor = theme.border.strong;
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = theme.background.card;
-                e.target.style.borderColor = theme.border.medium;
-              }}
+            style={{
+              background: theme.background.card,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.medium}`,
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: theme.shadow.md,
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }}
           >
             Sign Out
           </button>
@@ -813,9 +906,18 @@ export default function LandingPage() {
           }}
         />
       )}
-      
-      {/* Debug: Log showSettingsModal state */}
-      {console.log('[SETTINGS] Render - showSettingsModal:', showSettingsModal)}
+
+      {showProfileModal && (
+        <ProfileModal
+          onClose={() => setShowProfileModal(false)}
+        />
+      )}
+
+      {showLeaderboardModal && (
+        <LeaderboardModal
+          onClose={() => setShowLeaderboardModal(false)}
+        />
+      )}
 
       {/* Delete Confirmation - Matching Sign Out Style */}
       {showDeleteConfirm && (
@@ -1095,8 +1197,9 @@ const getStyles = (theme) => ({
   
   headerRight: {
     display: 'flex',
-    gap: '12px',
-    alignItems: 'center'
+    gap: '10px',
+    alignItems: 'center',
+    flexWrap: 'wrap'
   },
   
   title: {
