@@ -14,6 +14,12 @@ export default function ShareModal({ project, currentUser, isPremium, onClose })
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [collaborators, setCollaborators] = useState([]);
+  const [isVisible, setIsVisible] = useState(false);
+  
+  // Trigger entrance animation
+  useEffect(() => {
+    setTimeout(() => setIsVisible(true), 50);
+  }, []);
 
   useEffect(() => {
     loadCollaborators();
@@ -71,15 +77,50 @@ export default function ShareModal({ project, currentUser, isPremium, onClose })
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget && !loading) {
-      onClose();
+      handleClose();
     }
   };
+  
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose(), 300);
+  };
+
+  // Add CSS animations if not already added
+  if (typeof document !== 'undefined' && !document.head.querySelector('style[data-share-modal]')) {
+    const styleSheet = document.createElement('style');
+    styleSheet.setAttribute('data-share-modal', '');
+    styleSheet.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { 
+          opacity: 0;
+          transform: translateY(20px) scale(0.95);
+        }
+        to { 
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+    `;
+    document.head.appendChild(styleSheet);
+  }
 
   return (
-    <div onClick={handleBackdropClick} style={styles.backdrop}>
-      <div style={styles.modal}>
+    <div onClick={handleBackdropClick} style={{...styles.backdrop,
+      opacity: isVisible ? 1 : 0,
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+    }}>
+      <div style={{...styles.modal, 
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+        transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         <button
-          onClick={onClose}
+          onClick={handleClose}
           style={styles.closeButton}
           onMouseEnter={(e) => e.target.style.color = '#2c2e33'}
           onMouseLeave={(e) => e.target.style.color = '#9ca3af'}
@@ -197,11 +238,11 @@ const styles = {
     right: 0,
     bottom: 0,
     background: 'rgba(0, 0, 0, 0.5)',
+    backdropFilter: 'blur(8px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10003,
-    backdropFilter: 'blur(4px)'
+    zIndex: 10003
   },
   
   modal: {

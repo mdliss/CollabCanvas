@@ -2,27 +2,69 @@
  * Rename Project Modal - Inline editing for project names
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function RenameModal({ project, onSave, onClose }) {
   const [name, setName] = useState(project.name);
+  const [isVisible, setIsVisible] = useState(false);
+  
+  // Trigger entrance animation
+  useEffect(() => {
+    setTimeout(() => setIsVisible(true), 50);
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (name.trim()) {
-      onSave(name.trim());
+      setIsVisible(false);
+      setTimeout(() => onSave(name.trim()), 300);
     }
   };
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
-      onClose();
+      handleClose();
     }
   };
+  
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose(), 300);
+  };
+
+  // Add CSS animations if not already added
+  if (typeof document !== 'undefined' && !document.head.querySelector('style[data-rename-modal]')) {
+    const styleSheet = document.createElement('style');
+    styleSheet.setAttribute('data-rename-modal', '');
+    styleSheet.textContent = `
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      @keyframes slideUp {
+        from { 
+          opacity: 0;
+          transform: translateY(20px) scale(0.95);
+        }
+        to { 
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+    `;
+    document.head.appendChild(styleSheet);
+  }
 
   return (
-    <div onClick={handleBackdropClick} style={styles.backdrop}>
-      <div style={styles.modal}>
+    <div onClick={handleBackdropClick} style={{...styles.backdrop,
+      opacity: isVisible ? 1 : 0,
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+    }}>
+      <div style={{...styles.modal,
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+        transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      }}>
         <h3 style={styles.title}>Rename Project</h3>
         
         <form onSubmit={handleSubmit} style={styles.form}>
@@ -47,7 +89,7 @@ export default function RenameModal({ project, onSave, onClose }) {
           <div style={styles.buttons}>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               style={styles.cancelButton}
               onMouseEnter={(e) => e.target.style.background = '#fafafa'}
               onMouseLeave={(e) => e.target.style.background = '#ffffff'}
@@ -86,21 +128,22 @@ const styles = {
     right: 0,
     bottom: 0,
     background: 'rgba(0, 0, 0, 0.5)',
+    backdropFilter: 'blur(8px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10003,
-    backdropFilter: 'blur(4px)'
+    zIndex: 10003
   },
   
   modal: {
     background: '#ffffff',
-    borderRadius: '16px',
+    borderRadius: '12px',
     padding: '32px',
     maxWidth: '400px',
     width: '90%',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)',
-    border: '1px solid rgba(0, 0, 0, 0.06)'
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+    border: '1px solid rgba(0, 0, 0, 0.06)',
+    fontFamily: "'Roboto Mono', monospace"
   },
   
   title: {

@@ -7,7 +7,7 @@
  * - Project cards with thumbnails
  * - Create new project button
  * - Premium subscription prompts for free users at limit
- * - Project management (rename, delete, duplicate, star)
+ * - Project management (rename, delete, share)
  * 
  * DESIGN AESTHETIC:
  * - Matches ShapeToolbar styling (same gradients, shadows, rounded corners)
@@ -50,6 +50,9 @@ export default function LandingPage() {
   const [cardsVisible, setCardsVisible] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [logoutConfirmVisible, setLogoutConfirmVisible] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+  const [projectToDelete, setProjectToDelete] = useState(null);
   const [triggerReflow, setTriggerReflow] = useState(false);
 
   // Trigger logout confirmation entrance animation
@@ -60,26 +63,61 @@ export default function LandingPage() {
       setLogoutConfirmVisible(false);
     }
   }, [showLogoutConfirm]);
+  
+  // Trigger delete confirmation entrance animation
+  useEffect(() => {
+    if (showDeleteConfirm) {
+      setTimeout(() => setDeleteConfirmVisible(true), 50);
+    } else {
+      setDeleteConfirmVisible(false);
+    }
+  }, [showDeleteConfirm]);
 
   // Handle logout confirmation close with animation
   const handleCloseLogoutConfirm = () => {
     setLogoutConfirmVisible(false);
     setTimeout(() => setShowLogoutConfirm(false), 300);
   };
+  
+  // Handle delete confirmation close with animation
+  const handleCloseDeleteConfirm = () => {
+    setDeleteConfirmVisible(false);
+    setTimeout(() => {
+      setShowDeleteConfirm(false);
+      setProjectToDelete(null);
+    }, 300);
+  };
 
   // Load projects and subscription status
   useEffect(() => {
     if (!user) return;
 
+    let pollCount = 0;
+    console.log('[🔄 DATA SYNC] Setting up project data loading...');
+
     const loadData = async () => {
+      pollCount++;
+      const loadStartTime = performance.now();
+      
+      if (pollCount === 1) {
+        console.log('[🔄 DATA SYNC] 📥 Initial data load...');
+      } else {
+        console.log(`[🔄 DATA SYNC] 🔁 Poll #${pollCount - 1} - Refreshing all data (5s interval)`);
+      }
+      
       try {
         
         // Load subscription status
+        const subStart = performance.now();
         const sub = await getUserSubscription(user.uid);
+        console.log(`[🔄 DATA SYNC] ✓ Subscription loaded in ${(performance.now() - subStart).toFixed(2)}ms`);
         setSubscription(sub);
 
         // Load owned projects
+        const ownedStart = performance.now();
         const owned = await listProjects(user.uid);
+        console.log(`[🔄 DATA SYNC] ✓ Owned projects loaded in ${(performance.now() - ownedStart).toFixed(2)}ms (${owned.length} projects)`);
+        
         setOwnedProjects(owned);
         
         // Load shared canvases - CRITICAL: Get email from multiple sources
@@ -90,7 +128,9 @@ export default function LandingPage() {
         
         let shared = [];
         if (userEmail) {
+          const sharedStart = performance.now();
           shared = await listSharedCanvases(userEmail);
+          console.log(`[🔄 DATA SYNC] ✓ Shared projects loaded in ${(performance.now() - sharedStart).toFixed(2)}ms (${shared.length} projects)`);
           setSharedProjects(shared);
         } else {
           console.error('[LandingPage] No email found for user!', user);
@@ -99,18 +139,32 @@ export default function LandingPage() {
         
         setLoading(false);
         
+        const totalTime = performance.now() - loadStartTime;
+        console.log(`[🔄 DATA SYNC] ✅ Total load time: ${totalTime.toFixed(2)}ms`);
+        
+        if (pollCount > 1) {
+          console.log(`[🔄 DATA SYNC] ⏰ Next poll in 5000ms`);
+        }
+        
       } catch (error) {
         console.error('[LandingPage] Failed to load data:', error);
         setLoading(false);
       }
     };
 
+    console.log('[🔄 DATA SYNC] 🚨 PERFORMANCE WARNING: Using POLLING (5s interval) instead of real-time subscription!');
+    console.log('[🔄 DATA SYNC] 🚨 This means UI updates will be delayed by up to 5 seconds!');
+    
     loadData();
     
     // Poll for updates every 5 seconds to catch shared canvas changes
+    console.log('[🔄 DATA SYNC] ⏰ Starting 5-second polling interval...');
     const interval = setInterval(loadData, 5000);
     
-    return () => clearInterval(interval);
+    return () => {
+      console.log('[🔄 DATA SYNC] 🛑 Stopping polling interval');
+      clearInterval(interval);
+    };
   }, [user]);
 
   // Combine and filter projects
@@ -185,26 +239,32 @@ export default function LandingPage() {
   const handleDeleteProject = async (project, e) => {
     e.stopPropagation();
     
-    if (!confirm(`Delete "${project.name}"? This cannot be undone.`)) {
-      return;
-    }
+    // Show confirmation modal instead of browser confirm
+    setProjectToDelete(project);
+    setShowDeleteConfirm(true);
+  };
+  
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
 
     // Set deleting state to show animation
-    setDeletingProjectId(project.id);
+    setDeletingProjectId(projectToDelete.id);
+    setShowDeleteConfirm(false);
 
     try {
       // Wait for fade-out animation (600ms)
       await new Promise(resolve => setTimeout(resolve, 600));
 
       // Delete the project
-      await deleteProject(user.uid, project.id, project.canvasId);
+      await deleteProject(user.uid, projectToDelete.id, projectToDelete.canvasId);
 
       // Immediately remove from local state to prevent flicker
-      setOwnedProjects(prev => prev.filter(p => p.id !== project.id));
-      setSharedProjects(prev => prev.filter(p => p.id !== project.id));
+      setOwnedProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
+      setSharedProjects(prev => prev.filter(p => p.id !== projectToDelete.id));
 
       // Clear deleting state
       setDeletingProjectId(null);
+      setProjectToDelete(null);
 
       // Trigger reflow animation for remaining cards
       setTriggerReflow(true);
@@ -213,16 +273,6 @@ export default function LandingPage() {
       console.error('[LandingPage] ❌ Failed to delete project:', error);
       alert('Failed to delete project');
       setDeletingProjectId(null);
-    }
-  };
-
-  const handleToggleStar = async (project, e) => {
-    e.stopPropagation();
-    
-    try {
-      await updateProject(user.uid, project.id, { isStarred: !project.isStarred });
-    } catch (error) {
-      console.error('[LandingPage] Failed to toggle star:', error);
     }
   };
 
@@ -582,7 +632,6 @@ export default function LandingPage() {
             {/* Project Info */}
             <div style={styles.projectInfo}>
               <div style={styles.projectName}>
-                {project.isStarred && <span style={styles.starIcon}>★</span>}
                 {project.name}
                 {project.isShared && (
                   <span style={styles.sharedBadge}>
@@ -598,13 +647,6 @@ export default function LandingPage() {
             {/* Actions - Only show for owned projects */}
             {project.isOwned && (
               <div style={styles.projectActions}>
-                <button
-                  onClick={(e) => handleToggleStar(project, e)}
-                  style={styles.actionButton}
-                  title={project.isStarred ? 'Unstar' : 'Star'}
-                >
-                  {project.isStarred ? '★' : '☆'}
-                </button>
                 <button
                   onClick={(e) => handleShare(project, e)}
                   style={styles.actionButton}
@@ -697,6 +739,127 @@ export default function LandingPage() {
           isPremium={subscription.isPremium}
           onClose={() => setSharingProject(null)}
         />
+      )}
+
+      {/* Delete Confirmation - Matching Sign Out Style */}
+      {showDeleteConfirm && (
+        <div
+          onClick={handleCloseDeleteConfirm}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: `rgba(0, 0, 0, ${deleteConfirmVisible ? 0.5 : 0})`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 10000,
+            transition: 'background 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              padding: '32px',
+              maxWidth: '400px',
+              width: '90%',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+              fontFamily: "'Roboto Mono', monospace",
+              opacity: deleteConfirmVisible ? 1 : 0,
+              transform: deleteConfirmVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+              transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+          >
+            <h3 style={{
+              margin: '0 0 12px 0',
+              fontSize: '18px',
+              fontWeight: '600',
+              color: '#2c2e33'
+            }}>
+              Delete Project?
+            </h3>
+            <p style={{
+              margin: '0 0 24px 0',
+              fontSize: '14px',
+              color: '#6b7280',
+              lineHeight: '1.5'
+            }}>
+              Are you sure you want to delete "{projectToDelete?.name}"? This action cannot be undone.
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={handleCloseDeleteConfirm}
+                style={{
+                  padding: '10px 20px',
+                  background: '#ffffff',
+                  border: '1px solid rgba(0, 0, 0, 0.1)',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#2c2e33',
+                  cursor: 'pointer',
+                  fontFamily: "'Roboto Mono', monospace",
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#fafafa';
+                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#ffffff';
+                  e.target.style.borderColor = 'rgba(0, 0, 0, 0.1)';
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>✕</span>
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setDeleteConfirmVisible(false);
+                  setTimeout(() => {
+                    setShowDeleteConfirm(false);
+                    handleConfirmDelete();
+                  }, 300);
+                }}
+                style={{
+                  padding: '10px 20px',
+                  background: '#2c2e33',
+                  border: '1px solid #2c2e33',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '500',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  fontFamily: "'Roboto Mono', monospace",
+                  transition: 'all 0.2s ease',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = '#1a1c1f';
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = '#2c2e33';
+                }}
+              >
+                <span style={{ fontSize: '16px' }}>✓</span>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Logout Confirmation */}
@@ -1040,10 +1203,6 @@ const styles = {
     fontSize: '12px',
     color: '#646669',
     fontWeight: '400'
-  },
-  
-  starIcon: {
-    fontSize: '13px'
   },
   
   sharedBadge: {

@@ -1012,16 +1012,67 @@ class SuggestionCommand {
   }
 
   /**
-   * Execute - Apply the suggestion (already done by Cloud Function)
-   * This is called only if command is redone
+   * Execute - Apply the suggestion
+   * Called during initial registration AND when redoing
+   * NOTE: For suggestion commands, initial execution happens in Cloud Function
+   *       This method is mainly for redo functionality
    */
   async execute() {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔄 [SuggestionCommand] REDO - Reapplying changes');
+    console.log('🔄 [SuggestionCommand] EXECUTE - Applying changes');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('Description:', this.description);
     console.log('Canvas ID:', this.canvasId);
     console.log('Shapes to update:', this.afterState.length);
+    console.log('After state:', this.afterState);
+    
+    if (!this.afterState || this.afterState.length === 0) {
+      console.error('❌ No afterState! Cannot execute.');
+      return;
+    }
+    
+    const { ref, set } = await import('firebase/database');
+    const { rtdb } = await import('../../services/firebase');
+    
+    for (let i = 0; i < this.afterState.length; i++) {
+      const shape = this.afterState[i];
+      console.log(`  ${i + 1}/${this.afterState.length} Applying changes to ${shape.id}:`, {
+        type: shape.type,
+        fontSize: shape.fontSize,
+        fill: shape.fill,
+        x: shape.x,
+        y: shape.y
+      });
+      
+      const shapeRef = ref(rtdb, `canvas/${this.canvasId}/shapes/${shape.id}`);
+      await set(shapeRef, shape);
+      
+      console.log(`  ✅ Shape ${shape.id} updated`);
+    }
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('✅ [SuggestionCommand] EXECUTE COMPLETE');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Return description for feedback
+    return this.description;
+  }
+
+  /**
+   * Redo - Reapply the suggestion (same as execute for this command)
+   */
+  async redo() {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('⏩ [SuggestionCommand] REDO - Reapplying changes');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('Description:', this.description);
+    console.log('Canvas ID:', this.canvasId);
+    console.log('Shapes to update:', this.afterState.length);
+    
+    if (!this.afterState || this.afterState.length === 0) {
+      console.error('❌ No afterState! Cannot redo.');
+      return;
+    }
     
     const { ref, set } = await import('firebase/database');
     const { rtdb } = await import('../../services/firebase');
@@ -1045,6 +1096,9 @@ class SuggestionCommand {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('✅ [SuggestionCommand] REDO COMPLETE');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Return description for feedback
+    return this.description;
   }
 
   /**
@@ -1057,6 +1111,12 @@ class SuggestionCommand {
     console.log('Description:', this.description);
     console.log('Canvas ID:', this.canvasId);
     console.log('Shapes to revert:', this.beforeState.length);
+    console.log('Before state:', this.beforeState);
+    
+    if (!this.beforeState || this.beforeState.length === 0) {
+      console.error('❌ No beforeState! Cannot undo.');
+      return;
+    }
     
     const { ref, set } = await import('firebase/database');
     const { rtdb } = await import('../../services/firebase');
@@ -1080,6 +1140,9 @@ class SuggestionCommand {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('✅ [SuggestionCommand] UNDO COMPLETE');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Return description for feedback
+    return this.description;
   }
 
   /**
