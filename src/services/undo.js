@@ -239,7 +239,8 @@ export class UndoManager {
         userId: command.metadata?.user?.uid || 'unknown',
         userName: command.metadata?.user?.displayName || command.metadata?.user?.email?.split('@')[0] || 'User',
         status: status,
-        isAI: command.metadata?.isAI || false
+        isAI: command.metadata?.isAI || false,
+        commandId: command.metadata?.commandId // Unique ID for tracking
       };
       
       console.log('🔵 [HISTORY] Syncing to RTDB:', commandData);
@@ -264,6 +265,9 @@ export class UndoManager {
       command.metadata.timestamp = Date.now();
       command.metadata.user = user;
       command.metadata.canvasId = this.canvasId; // Track which canvas
+      
+      // Generate unique command ID for tracking
+      command.metadata.commandId = `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
       // Track current user for isLocal determination in history
       if (user?.uid) {
@@ -365,7 +369,9 @@ export class UndoManager {
     if (this.batchCommands[0]?.metadata) {
       batchCommand.metadata = { 
         ...this.batchCommands[0].metadata,
-        canvasId: this.canvasId
+        canvasId: this.canvasId,
+        // Generate unique command ID for the batch
+        commandId: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
       };
     }
     
@@ -685,6 +691,13 @@ export class UndoManager {
     aiCommand.metadata.isAI = true;
     aiCommand.metadata.user = aiCommand.user; // Copy user from command for getUserName()
     aiCommand.metadata.canvasId = this.canvasId;
+    // Generate unique command ID for tracking
+    aiCommand.metadata.commandId = `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // Track current user for isLocal determination in history
+    if (aiCommand.user?.uid) {
+      this.currentUserId = aiCommand.user.uid;
+    }
     
     // Track changes for leaderboard and daily activity (AI OPERATION = 1 CHANGE, not n shapes)
     if (aiCommand.user?.uid && aiCommand.affectedShapeIds) {
@@ -766,45 +779,50 @@ export class UndoManager {
       const currentUid = this.currentUserId;
       console.log('🔵 [HISTORY] Returning RTDB history:', this.rtdbHistory.commands.length, 'commands from all users. Current user:', currentUid);
       
-      // Find the current position in history by matching with local undo stack
-      // The "current" position is the last command in the undo stack
-      let currentHistoryIndex = -1;
-      if (this.undoStack.length > 0) {
-        const lastCommand = this.undoStack[this.undoStack.length - 1];
-        const lastCommandDesc = lastCommand.getDescription();
-        const lastCommandTime = lastCommand.metadata?.timestamp;
-        
-        // Find matching command in RTDB history (match by description and timestamp)
-        for (let i = this.rtdbHistory.commands.length - 1; i >= 0; i--) {
-          const rtdbCmd = this.rtdbHistory.commands[i];
-          if (rtdbCmd.userId === currentUid && 
-              rtdbCmd.description === lastCommandDesc &&
-              Math.abs((rtdbCmd.timestamp || 0) - (lastCommandTime || 0)) < 5000) { // Within 5 seconds
-            currentHistoryIndex = i;
-            break;
-          }
-        }
-      }
+      // Build a Set of command IDs that are in the UNDO stack (active/done)
+      const undoStackCommandIds = new Set(
+        this.undoStack
+          .map(cmd => cmd.metadata?.commandId)
+          .filter(Boolean)
+      );
       
-      console.log('🔵 [HISTORY] Current position in history:', currentHistoryIndex, '(undo stack size:', this.undoStack.length + ')');
+      // Build a Set of command IDs that are in the REDO stack (undone)
+      const redoStackCommandIds = new Set(
+        this.redoStack
+          .map(cmd => cmd.metadata?.commandId)
+          .filter(Boolean)
+      );
+      
+      // Find the last command ID in undo stack (current position)
+      const lastUndoCommandId = this.undoStack.length > 0 
+        ? this.undoStack[this.undoStack.length - 1].metadata?.commandId 
+        : null;
+      
+      console.log('🔵 [HISTORY] Undo stack command IDs:', Array.from(undoStackCommandIds));
+      console.log('🔵 [HISTORY] Redo stack command IDs:', Array.from(redoStackCommandIds));
+      console.log('🔵 [HISTORY] Current command ID:', lastUndoCommandId);
       
       return this.rtdbHistory.commands.map((cmd, idx) => {
         const isLocal = cmd.userId === currentUid;
-        const isCurrent = idx === currentHistoryIndex;
+        const isCurrent = cmd.commandId === lastUndoCommandId;
         
-        // Determine status: commands after current position are "undone" (for local user only)
-        let status = cmd.status;
-        if (isLocal && currentHistoryIndex >= 0) {
-          if (idx > currentHistoryIndex) {
-            status = 'undone'; // This command has been undone
+        // Determine status based on which stack contains this command
+        let status = 'done'; // Default for non-local commands
+        
+        if (isLocal && cmd.commandId) {
+          if (undoStackCommandIds.has(cmd.commandId)) {
+            status = 'done'; // In undo stack = active
+          } else if (redoStackCommandIds.has(cmd.commandId)) {
+            status = 'undone'; // In redo stack = undone
           } else {
-            status = 'done'; // This command is active
+            // Not in either stack - might be another user's command or very old
+            status = 'done';
           }
         }
         
         // Log the first few to help debug
         if (idx < 3) {
-          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId} - isLocal: ${isLocal}, status: ${status}, isCurrent: ${isCurrent}`);
+          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId?.slice(0, 8)} - isLocal: ${isLocal}, status: ${status}, isCurrent: ${isCurrent}, cmdId: ${cmd.commandId?.slice(0, 12)}`);
         }
         
         return {
