@@ -174,6 +174,7 @@ export class UndoManager {
     this.canvasId = canvasId;
     this.undoStack = [];
     this.redoStack = [];
+    this.currentUserId = null; // Track current user for isLocal determination
     this.maxHistorySize = maxHistorySize;
     this.listeners = new Set();
     this.batchMode = false;
@@ -263,6 +264,11 @@ export class UndoManager {
       command.metadata.timestamp = Date.now();
       command.metadata.user = user;
       command.metadata.canvasId = this.canvasId; // Track which canvas
+      
+      // Track current user for isLocal determination in history
+      if (user?.uid) {
+        this.currentUserId = user.uid;
+      }
       
       // If in batch mode, collect commands WITHOUT executing them
       // They will be executed by the MultiShapeCommand later
@@ -757,19 +763,29 @@ export class UndoManager {
   getFullHistory() {
     // If we have RTDB history (canvas-specific), show ALL users' commands
     if (this.rtdbHistory && this.rtdbHistory.commands && this.rtdbHistory.commands.length > 0) {
-      console.log('🔵 [HISTORY] Returning RTDB history:', this.rtdbHistory.commands.length, 'commands from all users');
+      const currentUid = this.currentUserId;
+      console.log('🔵 [HISTORY] Returning RTDB history:', this.rtdbHistory.commands.length, 'commands from all users. Current user:', currentUid);
       
-      return this.rtdbHistory.commands.map((cmd, idx) => ({
-        id: cmd.id || `history-${idx}`,
-        index: idx,
-        description: cmd.description,
-        timestamp: cmd.timestamp,
-        user: { uid: cmd.userId, displayName: cmd.userName },
-        status: cmd.status,
-        isCurrent: false, // Don't mark any as current in shared view
-        isAI: cmd.isAI || cmd.description?.startsWith('AI:') || false,
-        isLocal: false // Mark as non-local (from RTDB)
-      }));
+      return this.rtdbHistory.commands.map((cmd, idx) => {
+        const isLocal = cmd.userId === currentUid;
+        
+        // Log the first few to help debug
+        if (idx < 3) {
+          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId} - isLocal: ${isLocal} (current: ${currentUid})`);
+        }
+        
+        return {
+          id: cmd.id || `history-${idx}`,
+          index: idx,
+          description: cmd.description,
+          timestamp: cmd.timestamp,
+          user: { uid: cmd.userId, displayName: cmd.userName },
+          status: cmd.status,
+          isCurrent: false, // Don't mark any as current in shared view
+          isAI: cmd.isAI || cmd.description?.startsWith('AI:') || false,
+          isLocal: isLocal // Check if command is from current user
+        };
+      });
     }
     
     // Fallback to local history (for global manager or if RTDB not ready yet)

@@ -388,7 +388,7 @@ export default function HistoryTimeline({ isVisible = true }) {
 
                 // Check if this is a local command (user's own) or shared (from others)
                 const isLocal = item.isLocal !== false; // Default to true for backward compatibility
-                const isClickable = isLocal && item.status === 'done'; // Only local done commands are clickable
+                const isClickable = isLocal; // All local commands are clickable (done or undone)
 
                 return (
                   <div
@@ -432,8 +432,10 @@ export default function HistoryTimeline({ isVisible = true }) {
                     title={!isLocal 
                       ? 'Command from another user (view only)'
                       : (isAIAction 
-                        ? 'AI-generated action - Click to revert'
-                        : (isCurrent ? 'Current state' : `Click to revert to this point`))}
+                        ? `AI-generated action - Click to ${item.status === 'undone' ? 'redo' : 'revert'}`
+                        : (isCurrent 
+                          ? 'Current state' 
+                          : `Click to ${item.status === 'undone' ? 'redo to this point' : 'revert to this point'}`))}
                   >
                     {/* AI indicator - removed emoji, using dark left border instead */}
                     
