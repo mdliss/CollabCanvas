@@ -24,6 +24,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToProjects, createProject, deleteProject, updateProject, getUserSubscription, listProjects, listSharedCanvases } from '../../services/projects';
+import { setGlobalUserOnline } from '../../services/presence';
 import SubscriptionModal from './SubscriptionModal';
 import RenameModal from './RenameModal';
 import CouponModal from './CouponModal';
@@ -98,6 +99,15 @@ export default function LandingPage() {
       setProjectToDelete(null);
     }, 300);
   };
+
+  // Set user as globally online for friends to see
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    setGlobalUserOnline(user.uid).catch(err => {
+      console.error('[LandingPage] Failed to set global presence:', err);
+    });
+  }, [user]);
 
   // Load projects and subscription status
   useEffect(() => {

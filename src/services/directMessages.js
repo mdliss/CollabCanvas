@@ -12,7 +12,7 @@
  * /directMessages/{conversationId}/lastMessage - For sorting
  */
 
-import { ref, push, onValue, query, limitToLast, orderByKey, set, get } from 'firebase/database';
+import { ref, push, onValue, query, limitToLast, orderByKey, set, get, remove } from 'firebase/database';
 import { rtdb } from './firebase';
 
 /**
@@ -23,26 +23,37 @@ export const getConversationId = (userId1, userId2) => {
 };
 
 /**
- * Send a direct message to a friend
+ * Send a direct message to a friend (with optional attachment)
  */
-export const sendDirectMessage = async (fromUser, toUserId, messageText) => {
+export const sendDirectMessage = async (fromUser, toUserId, messageText, attachment = null) => {
   try {
     const conversationId = getConversationId(fromUser.uid, toUserId);
     const timestamp = Date.now();
     
     const messagesRef = ref(rtdb, `directMessages/${conversationId}/messages`);
     
-    await push(messagesRef, {
+    const messageData = {
       text: messageText.trim(),
       from: fromUser.uid,
       fromName: fromUser.displayName || fromUser.email?.split('@')[0] || 'User',
       fromPhoto: fromUser.photoURL || null,
       timestamp: timestamp
-    });
+    };
+
+    // Add attachment if provided
+    if (attachment) {
+      messageData.attachment = attachment;
+    }
+    
+    await push(messagesRef, messageData);
     
     // Update last message for conversation sorting
+    const lastMessageText = attachment?.type === 'image' ? '📷 Image' : 
+                           attachment?.type === 'gif' ? '🎬 GIF' : 
+                           messageText.trim();
+    
     await set(ref(rtdb, `directMessages/${conversationId}/lastMessage`), {
-      text: messageText.trim(),
+      text: lastMessageText,
       from: fromUser.uid,
       timestamp: timestamp
     });
@@ -54,6 +65,27 @@ export const sendDirectMessage = async (fromUser, toUserId, messageText) => {
     console.log('[DirectMessages] Message sent:', conversationId);
   } catch (error) {
     console.error('[DirectMessages] Failed to send message:', error);
+    throw error;
+  }
+};
+
+/**
+ * Delete a message (only by sender)
+ */
+export const deleteDirectMessage = async (userId1, userId2, messageId, messageSenderId) => {
+  try {
+    const conversationId = getConversationId(userId1, userId2);
+    
+    // Only allow deleting own messages
+    if (userId1 !== messageSenderId && userId2 !== messageSenderId) {
+      throw new Error('You can only delete your own messages');
+    }
+    
+    await remove(ref(rtdb, `directMessages/${conversationId}/messages/${messageId}`));
+    
+    console.log('[DirectMessages] Message deleted:', messageId);
+  } catch (error) {
+    console.error('[DirectMessages] Failed to delete message:', error);
     throw error;
   }
 };

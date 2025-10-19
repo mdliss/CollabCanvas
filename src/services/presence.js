@@ -66,3 +66,69 @@ export const watchPresence = (canvasId, callback) => {
   });
 };
 
+/**
+ * Global presence - Set user as online globally (for friends to see)
+ */
+export const setGlobalUserOnline = async (uid) => {
+  if (!uid) return;
+
+  const userRef = ref(rtdb, `globalPresence/${uid}`);
+  
+  await set(userRef, {
+    online: true,
+    lastSeen: serverTimestamp()
+  });
+
+  // Remove on disconnect
+  await onDisconnect(userRef).remove();
+};
+
+/**
+ * Check if a specific user is online
+ */
+export const isUserOnline = async (uid) => {
+  try {
+    const userRef = ref(rtdb, `globalPresence/${uid}`);
+    const snapshot = await new Promise((resolve) => {
+      onValue(userRef, (s) => resolve(s), { onlyOnce: true });
+    });
+    
+    const data = snapshot.val();
+    return data?.online === true;
+  } catch (error) {
+    console.error('[Presence] Failed to check online status:', error);
+    return false;
+  }
+};
+
+/**
+ * Watch online status for multiple users (for friends list)
+ */
+export const watchMultipleUsersPresence = (userIds, callback) => {
+  if (!userIds || userIds.length === 0) {
+    callback({});
+    return () => {};
+  }
+
+  const statuses = {};
+  const unsubscribers = [];
+
+  const updateCallback = () => {
+    callback({ ...statuses });
+  };
+
+  userIds.forEach(uid => {
+    const userRef = ref(rtdb, `globalPresence/${uid}`);
+    const unsubscribe = onValue(userRef, (snapshot) => {
+      const data = snapshot.val();
+      statuses[uid] = data?.online === true;
+      updateCallback();
+    });
+    unsubscribers.push(unsubscribe);
+  });
+
+  return () => {
+    unsubscribers.forEach(unsub => unsub());
+  };
+};
+

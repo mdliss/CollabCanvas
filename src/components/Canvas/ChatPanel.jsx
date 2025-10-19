@@ -23,6 +23,7 @@ import { rtdb } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
+import { areFriends, removeFriend } from '../../services/friends';
 import Avatar from '../Collaboration/Avatar';
 
 export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, onShowShare }) {
@@ -35,6 +36,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [selectedUserRank, setSelectedUserRank] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [isFriend, setIsFriend] = useState(false);
   const [userPhotos, setUserPhotos] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -104,28 +106,31 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     if (!selectedMessageId) {
       setSelectedUserProfile(null);
       setSelectedUserRank(null);
+      setIsFriend(false);
       return;
     }
 
     // Find the message to get userId
     const message = messages.find(m => m.id === selectedMessageId);
-    if (!message) return;
+    if (!message || !user?.uid) return;
 
     setIsLoadingProfile(true);
     Promise.all([
       getUserProfile(message.userId),
-      getUserRank(message.userId)
+      getUserRank(message.userId),
+      areFriends(user.uid, message.userId)
     ])
-      .then(([profile, rank]) => {
+      .then(([profile, rank, friendStatus]) => {
         setSelectedUserProfile(profile);
         setSelectedUserRank(rank);
+        setIsFriend(friendStatus);
         setIsLoadingProfile(false);
       })
       .catch(err => {
         console.error('[ChatPanel] Failed to load profile:', err);
         setIsLoadingProfile(false);
       });
-  }, [selectedMessageId, messages]);
+  }, [selectedMessageId, messages, user]);
 
   // Click outside to close profile popup
   useEffect(() => {
@@ -638,6 +643,48 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                               </div>
                             )}
                           </div>
+
+                          {/* Remove Friend Button - Only show if they are friends */}
+                          {isFriend && message.userId !== user?.uid && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm(`Remove ${message.userName} from friends?`)) return;
+                                try {
+                                  await removeFriend(user.uid, message.userId);
+                                  setSelectedMessageId(null);
+                                  alert('Friend removed');
+                                } catch (error) {
+                                  console.error('[ChatPanel] Failed to remove friend:', error);
+                                  alert('Failed to remove friend');
+                                }
+                              }}
+                              style={{
+                                width: '100%',
+                                padding: '8px',
+                                background: 'transparent',
+                                border: `1px solid ${theme.border.medium}`,
+                                borderRadius: '6px',
+                                fontSize: '12px',
+                                fontWeight: '500',
+                                color: theme.text.secondary,
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                marginBottom: '12px'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.target.style.background = '#fee2e2';
+                                e.target.style.borderColor = '#ef4444';
+                                e.target.style.color = '#dc2626';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.target.style.background = 'transparent';
+                                e.target.style.borderColor = theme.border.medium;
+                                e.target.style.color = theme.text.secondary;
+                              }}
+                            >
+                              Remove Friend
+                            </button>
+                          )}
 
                           <div style={{
                             fontSize: '12px',

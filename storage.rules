@@ -16,6 +16,18 @@ service firebase.storage {
       allow read: if request.auth != null;
     }
     
+    // Message images - stored in /message-images/{conversationId}/{filename}
+    match /message-images/{conversationId}/{filename} {
+      
+      // Any authenticated user can upload message images
+      allow write: if request.auth != null
+                   && request.resource.size < 10 * 1024 * 1024 // 10MB max
+                   && request.resource.contentType.matches('image/.*'); // Images only
+      
+      // Any authenticated user can read message images
+      allow read: if request.auth != null;
+    }
+    
     // Block all other access by default
     match /{allPaths=**} {
       allow read, write: if false;

@@ -14,11 +14,12 @@
  * - Theme-aware styling
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import useUserProfile from '../../hooks/useUserProfile';
 import { getUserRank } from '../../services/userProfile';
+import { replaceProfilePicture } from '../../services/profilePicture';
 import Avatar from '../Collaboration/Avatar';
 
 export default function ProfileModal({ onClose }) {
@@ -30,6 +31,9 @@ export default function ProfileModal({ onClose }) {
   const [bioText, setBioText] = useState('');
   const [userRank, setUserRank] = useState(null);
   const [loadingRank, setLoadingRank] = useState(true);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const fileInputRef = useRef(null);
   
   // Trigger entrance animation
   useEffect(() => {
@@ -77,6 +81,52 @@ export default function ProfileModal({ onClose }) {
   const handleBioCancel = () => {
     setIsEditingBio(false);
     setBioText('');
+  };
+
+  const handlePhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    // Create preview
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPhotoPreview(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handlePhotoUpload = async () => {
+    const file = fileInputRef.current?.files?.[0];
+    if (!file || !user?.uid) return;
+
+    setUploadingPhoto(true);
+    try {
+      const newPhotoURL = await replaceProfilePicture(user.uid, file, user.photoURL);
+      
+      // Update auth user object (this will trigger re-render)
+      await user.reload();
+      
+      setPhotoPreview(null);
+      alert('Profile picture updated successfully!');
+    } catch (error) {
+      console.error('[ProfileModal] Failed to upload photo:', error);
+      alert(error.message || 'Failed to upload photo. Please try again.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handlePhotoCancelPreview = () => {
+    setPhotoPreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const formatDate = (timestamp) => {
@@ -315,19 +365,139 @@ export default function ProfileModal({ onClose }) {
         <div style={styles.section}>
           {/* Profile Header */}
           <div style={styles.profileHeader}>
-            <div style={{ marginBottom: '16px' }}>
-              <Avatar 
-                src={user?.photoURL}
-                name={user?.displayName || user?.email}
-                size="lg"
-                style={{ 
-                  width: '80px', 
-                  height: '80px',
-                  fontSize: '32px',
-                  borderWidth: '3px'
+            <div style={{ marginBottom: '12px', position: 'relative', display: 'inline-block' }}>
+              {photoPreview ? (
+                <img 
+                  src={photoPreview}
+                  alt="Preview"
+                  style={{ 
+                    width: '80px', 
+                    height: '80px',
+                    borderRadius: '50%',
+                    objectFit: 'cover',
+                    border: `3px solid ${theme.button.primary}`
+                  }}
+                />
+              ) : (
+                <Avatar 
+                  src={profile?.photoURL || user?.photoURL}
+                  name={profile?.displayName || user?.displayName || user?.email}
+                  size="lg"
+                  style={{ 
+                    width: '80px', 
+                    height: '80px',
+                    fontSize: '32px',
+                    borderWidth: '3px'
+                  }}
+                />
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                style={{
+                  position: 'absolute',
+                  bottom: '0',
+                  right: '0',
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: theme.button.primary,
+                  border: `2px solid ${theme.background.card}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease',
+                  fontSize: '14px',
+                  color: theme.text.inverse,
+                  opacity: uploadingPhoto ? 0.5 : 1
                 }}
+                onMouseEnter={(e) => {
+                  if (!uploadingPhoto) {
+                    e.target.style.background = theme.button.primaryHover;
+                    e.target.style.transform = 'scale(1.1)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!uploadingPhoto) {
+                    e.target.style.background = theme.button.primary;
+                    e.target.style.transform = 'scale(1)';
+                  }
+                }}
+                title="Change profile picture"
+              >
+                📷
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoSelect}
+                style={{ display: 'none' }}
               />
             </div>
+            
+            {photoPreview && (
+              <div style={{ marginBottom: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                <button
+                  onClick={handlePhotoUpload}
+                  disabled={uploadingPhoto}
+                  style={{
+                    padding: '6px 16px',
+                    background: theme.button.primary,
+                    color: theme.text.inverse,
+                    border: 'none',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                    opacity: uploadingPhoto ? 0.5 : 1,
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!uploadingPhoto) {
+                      e.target.style.background = theme.button.primaryHover;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!uploadingPhoto) {
+                      e.target.style.background = theme.button.primary;
+                    }
+                  }}
+                >
+                  {uploadingPhoto ? 'Uploading...' : 'Upload'}
+                </button>
+                <button
+                  onClick={handlePhotoCancelPreview}
+                  disabled={uploadingPhoto}
+                  style={{
+                    padding: '6px 16px',
+                    background: theme.background.card,
+                    color: theme.text.primary,
+                    border: `1px solid ${theme.border.medium}`,
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: '500',
+                    cursor: uploadingPhoto ? 'not-allowed' : 'pointer',
+                    opacity: uploadingPhoto ? 0.5 : 1,
+                    transition: 'all 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!uploadingPhoto) {
+                      e.target.style.background = theme.background.elevated;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!uploadingPhoto) {
+                      e.target.style.background = theme.background.card;
+                    }
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+            
             <h3 style={{
               fontSize: '18px',
               fontWeight: '600',

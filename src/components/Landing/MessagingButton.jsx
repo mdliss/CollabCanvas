@@ -24,6 +24,7 @@ import {
   denyFriendRequest,
   cancelFriendRequest
 } from '../../services/friends';
+import { watchMultipleUsersPresence } from '../../services/presence';
 
 export default function MessagingButton({ onOpenMessaging }) {
   const { user } = useAuth();
@@ -34,6 +35,7 @@ export default function MessagingButton({ onOpenMessaging }) {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [outgoingRequests, setOutgoingRequests] = useState([]);
   const [friends, setFriends] = useState([]);
+  const [onlineStatuses, setOnlineStatuses] = useState({});
   const [addFriendEmail, setAddFriendEmail] = useState('');
   const [addingFriend, setAddingFriend] = useState(false);
   const [processingId, setProcessingId] = useState(null);
@@ -54,6 +56,19 @@ export default function MessagingButton({ onOpenMessaging }) {
       unsubFriends();
     };
   }, [user]);
+
+  // Watch online status for all friends
+  useEffect(() => {
+    if (!friends || friends.length === 0) {
+      setOnlineStatuses({});
+      return;
+    }
+
+    const friendIds = friends.map(f => f.id);
+    const unsubscribe = watchMultipleUsersPresence(friendIds, setOnlineStatuses);
+
+    return () => unsubscribe();
+  }, [friends]);
 
   const handleOpen = (e) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -323,36 +338,67 @@ export default function MessagingButton({ onOpenMessaging }) {
                   <div style={{ fontSize: '13px', opacity: 0.8 }}>Add friends to start messaging!</div>
                 </div>
               ) : (
-                friends.map(friend => (
-                  <div
-                    key={friend.id}
-                    onClick={() => handleOpenChat(friend)}
-                    style={{
-                      padding: '10px',
-                      marginBottom: '6px',
-                      background: theme.background.elevated,
-                      borderRadius: '8px',
-                      border: `1px solid ${theme.border.light}`,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = theme.background.card;
-                      e.currentTarget.style.borderColor = theme.border.medium;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = theme.background.elevated;
-                      e.currentTarget.style.borderColor = theme.border.light;
-                    }}
-                  >
-                    <div style={{ fontWeight: '500', color: theme.text.primary, fontSize: '13px' }}>
-                      {friend.userName}
+                friends.map(friend => {
+                  const isOnline = onlineStatuses[friend.id] === true;
+                  
+                  return (
+                    <div
+                      key={friend.id}
+                      onClick={() => handleOpenChat(friend)}
+                      style={{
+                        padding: '10px',
+                        marginBottom: '6px',
+                        background: theme.background.elevated,
+                        borderRadius: '8px',
+                        border: `1px solid ${theme.border.light}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        position: 'relative'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = theme.background.card;
+                        e.currentTarget.style.borderColor = theme.border.medium;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = theme.background.elevated;
+                        e.currentTarget.style.borderColor = theme.border.light;
+                      }}
+                    >
+                      {/* Online Status Indicator */}
+                      <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        background: isOnline ? '#22c55e' : theme.border.medium,
+                        flexShrink: 0,
+                        boxShadow: isOnline ? '0 0 6px rgba(34, 197, 94, 0.6)' : 'none'
+                      }} />
+                      
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ 
+                          fontWeight: '500', 
+                          color: theme.text.primary, 
+                          fontSize: '13px',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {friend.userName}
+                        </div>
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: isOnline ? '#22c55e' : theme.text.secondary,
+                          fontWeight: isOnline ? '500' : '400'
+                        }}>
+                          {isOnline ? 'Online' : friend.userEmail}
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ fontSize: '12px', color: theme.text.secondary }}>
-                      {friend.userEmail}
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               )
             )}
 

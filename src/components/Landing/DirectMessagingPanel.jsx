@@ -10,8 +10,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { subscribeToConversation, sendDirectMessage } from '../../services/directMessages';
+import { subscribeToConversation, sendDirectMessage, deleteDirectMessage, getConversationId } from '../../services/directMessages';
+import { getUserProfile } from '../../services/userProfile';
+import { uploadMessageImage } from '../../services/messageAttachments';
+import { removeFriend } from '../../services/friends';
+import { watchMultipleUsersPresence } from '../../services/presence';
 import Avatar from '../Collaboration/Avatar';
+import GifPicker from '../Messaging/GifPicker';
+import ShareWithFriendModal from './ShareWithFriendModal';
 
 export default function DirectMessagingPanel({ friend, onClose }) {
   const { user } = useAuth();
@@ -19,8 +25,47 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
+  const [friendProfile, setFriendProfile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [isOnline, setIsOnline] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Load user and friend profiles from Firestore
+  useEffect(() => {
+    if (!user?.uid || !friend?.id) return;
+
+    // Load both profiles
+    Promise.all([
+      getUserProfile(user.uid),
+      getUserProfile(friend.id)
+    ]).then(([userProf, friendProf]) => {
+      setUserProfile(userProf);
+      setFriendProfile(friendProf);
+    }).catch(err => {
+      console.error('[DirectMessaging] Failed to load profiles:', err);
+    });
+  }, [user, friend]);
+
+  // Watch friend's online status
+  useEffect(() => {
+    if (!friend?.id) return;
+
+    const unsubscribe = watchMultipleUsersPresence([friend.id], (statuses) => {
+      setIsOnline(statuses[friend.id] === true);
+    });
+
+    return () => unsubscribe();
+  }, [friend]);
 
   // Subscribe to conversation
   useEffect(() => {
@@ -40,20 +85,155 @@ export default function DirectMessagingPanel({ friend, onClose }) {
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
 
-  const handleSendMessage = async (e) => {
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be less than 10MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleDragOver = (e) => {
     e.preventDefault();
-    
-    if (!newMessage.trim() || !user || sending) return;
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please drop an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be less than 10MB');
+      return;
+    }
+
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setImagePreview(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleGifSelect = (gifData) => {
+    // Send GIF immediately (no preview needed)
+    sendMessageWithAttachment('', gifData);
+  };
+
+  const sendMessageWithAttachment = async (text, attachment) => {
+    if (sending) return;
 
     setSending(true);
     try {
-      await sendDirectMessage(user, friend.id, newMessage.trim());
+      await sendDirectMessage(user, friend.id, text || '', attachment);
       setNewMessage('');
+      setImagePreview(null);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     } catch (error) {
       console.error('[DirectMessaging] Failed to send message:', error);
       alert('Failed to send message. Please try again.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    
+    if (sending) return;
+    if (!newMessage.trim() && !selectedFile) return;
+
+    setSending(true);
+    try {
+      let attachment = null;
+
+      // Upload image if selected
+      if (selectedFile) {
+        setUploadingImage(true);
+        const conversationId = getConversationId(user.uid, friend.id);
+        const imageUrl = await uploadMessageImage(conversationId, selectedFile);
+        attachment = {
+          type: 'image',
+          url: imageUrl
+        };
+        setUploadingImage(false);
+      }
+
+      await sendDirectMessage(user, friend.id, newMessage.trim(), attachment);
+      setNewMessage('');
+      setImagePreview(null);
+      setSelectedFile(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('[DirectMessaging] Failed to send message:', error);
+      alert('Failed to send message. Please try again.');
+    } finally {
+      setSending(false);
+      setUploadingImage(false);
+    }
+  };
+
+  const handleDeleteMessage = async (messageId, messageSenderId) => {
+    if (!confirm('Delete this message?')) return;
+
+    try {
+      await deleteDirectMessage(user.uid, friend.id, messageId, messageSenderId);
+    } catch (error) {
+      console.error('[DirectMessaging] Failed to delete message:', error);
+      alert(error.message || 'Failed to delete message');
+    }
+  };
+
+  const handleRemoveFriend = async () => {
+    if (!confirm(`Remove ${friend.userName} from friends? You'll no longer be able to message each other.`)) return;
+
+    try {
+      await removeFriend(user.uid, friend.id);
+      alert('Friend removed');
+      onClose();
+    } catch (error) {
+      console.error('[DirectMessaging] Failed to remove friend:', error);
+      alert('Failed to remove friend');
     }
   };
 
@@ -151,7 +331,8 @@ export default function DirectMessagingPanel({ friend, onClose }) {
       padding: '20px 24px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '16px'
+      gap: '16px',
+      position: 'relative'
     },
 
     message: (isOwn) => ({
@@ -272,35 +453,146 @@ export default function DirectMessagingPanel({ friend, onClose }) {
         {/* Header */}
         <div style={styles.header}>
           <div style={styles.headerLeft}>
-            <Avatar
-              src={friend.userPhoto}
-              name={friend.userName}
-              size="md"
-              style={{ width: '40px', height: '40px', fontSize: '16px' }}
-            />
+            <div style={{ position: 'relative' }}>
+              <Avatar
+                src={friendProfile?.photoURL || friend.userPhoto}
+                name={friend.userName}
+                size="md"
+                style={{ width: '40px', height: '40px', fontSize: '16px' }}
+              />
+              {/* Online Status Dot */}
+              {isOnline && (
+                <div style={{
+                  position: 'absolute',
+                  bottom: '0',
+                  right: '0',
+                  width: '12px',
+                  height: '12px',
+                  borderRadius: '50%',
+                  background: '#22c55e',
+                  border: `2px solid ${theme.background.card}`,
+                  boxShadow: '0 0 8px rgba(34, 197, 94, 0.6)'
+                }} />
+              )}
+            </div>
             <div>
-              <div style={styles.friendName}>{friend.userName}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <div style={styles.friendName}>{friend.userName}</div>
+                {isOnline && (
+                  <span style={{
+                    fontSize: '11px',
+                    color: '#22c55e',
+                    fontWeight: '500'
+                  }}>
+                    • Online
+                  </span>
+                )}
+              </div>
               <div style={styles.friendEmail}>{friend.userEmail}</div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            style={styles.closeButton}
-            onMouseEnter={(e) => {
-              e.target.style.background = theme.background.card;
-              e.target.style.color = theme.text.primary;
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'transparent';
-              e.target.style.color = theme.text.tertiary;
-            }}
-          >
-            ×
-          </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              onClick={() => setShowShareModal(true)}
+              style={{
+                background: theme.button.primary,
+                border: 'none',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: theme.text.inverse,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = theme.button.primaryHover;
+                e.target.style.transform = 'translateY(-1px)';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = theme.button.primary;
+                e.target.style.transform = 'translateY(0)';
+              }}
+              title="Share a canvas with this friend"
+            >
+              Share Canvas
+            </button>
+            <button
+              onClick={handleRemoveFriend}
+              style={{
+                background: 'transparent',
+                border: `1px solid ${theme.border.medium}`,
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                color: theme.text.secondary,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.background = '#fee2e2';
+                e.target.style.borderColor = '#ef4444';
+                e.target.style.color = '#dc2626';
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'transparent';
+                e.target.style.borderColor = theme.border.medium;
+                e.target.style.color = theme.text.secondary;
+              }}
+              title="Remove friend"
+            >
+              Remove Friend
+            </button>
+            <button
+              onClick={onClose}
+              style={styles.closeButton}
+              onMouseEnter={(e) => {
+                e.target.style.background = theme.background.card;
+                e.target.style.color = theme.text.primary;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.background = 'transparent';
+                e.target.style.color = theme.text.tertiary;
+              }}
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         {/* Messages */}
-        <div style={styles.messagesContainer}>
+        <div 
+          style={{
+            ...styles.messagesContainer,
+            ...(isDragging && {
+              background: `${theme.button.primary}10`,
+              border: `2px dashed ${theme.button.primary}`,
+              borderRadius: '12px'
+            })
+          }}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          {isDragging && (
+            <div style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '24px',
+              fontWeight: '600',
+              color: theme.button.primary,
+              background: `${theme.button.primary}15`,
+              borderRadius: '12px',
+              zIndex: 10,
+              pointerEvents: 'none'
+            }}>
+              📎 Drop image to send
+            </div>
+          )}
           {messages.length === 0 ? (
             <div style={styles.emptyState}>
               <div style={styles.emptyIcon}>💬</div>
@@ -312,11 +604,17 @@ export default function DirectMessagingPanel({ friend, onClose }) {
           ) : (
             messages.map((message) => {
               const isOwn = message.from === user?.uid;
+              const isHovered = hoveredMessageId === message.id;
               
               return (
-                <div key={message.id} style={styles.message(isOwn)}>
+                <div 
+                  key={message.id} 
+                  style={styles.message(isOwn)}
+                  onMouseEnter={() => setHoveredMessageId(message.id)}
+                  onMouseLeave={() => setHoveredMessageId(null)}
+                >
                   <Avatar
-                    src={isOwn ? (user.photoURL || null) : (friend.userPhoto || null)}
+                    src={isOwn ? (userProfile?.photoURL || user.photoURL || null) : (friendProfile?.photoURL || friend.userPhoto || null)}
                     name={isOwn ? (user.displayName || user.email) : friend.userName}
                     size="sm"
                     style={{ width: '32px', height: '32px', fontSize: '12px', flexShrink: 0 }}
@@ -329,9 +627,63 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                       <span style={styles.messageTime}>
                         {formatTimestamp(message.timestamp)}
                       </span>
+                      {isOwn && isHovered && (
+                        <button
+                          onClick={() => handleDeleteMessage(message.id, message.from)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: theme.text.tertiary,
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            transition: 'all 0.2s ease'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.target.style.background = '#fee2e2';
+                            e.target.style.color = '#dc2626';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.target.style.background = 'transparent';
+                            e.target.style.color = theme.text.tertiary;
+                          }}
+                          title="Delete message"
+                        >
+                          🗑️
+                        </button>
+                      )}
                     </div>
                     <div style={styles.messageBubble(isOwn)}>
-                      {message.text}
+                      {message.attachment?.type === 'image' && (
+                        <img
+                          src={message.attachment.url}
+                          alt="Shared image"
+                          style={{
+                            maxWidth: '300px',
+                            maxHeight: '300px',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            display: 'block',
+                            marginBottom: message.text ? '8px' : 0
+                          }}
+                          onClick={() => window.open(message.attachment.url, '_blank')}
+                        />
+                      )}
+                      {message.attachment?.type === 'gif' && (
+                        <img
+                          src={message.attachment.url}
+                          alt="GIF"
+                          style={{
+                            maxWidth: '250px',
+                            maxHeight: '250px',
+                            borderRadius: '8px',
+                            display: 'block',
+                            marginBottom: message.text ? '8px' : 0
+                          }}
+                        />
+                      )}
+                      {message.text && <div>{message.text}</div>}
                     </div>
                   </div>
                 </div>
@@ -343,7 +695,133 @@ export default function DirectMessagingPanel({ friend, onClose }) {
 
         {/* Input */}
         <div style={styles.inputContainer}>
+          {/* Image Preview */}
+          {imagePreview && (
+            <div style={{
+              marginBottom: '12px',
+              padding: '12px',
+              background: theme.background.elevated,
+              borderRadius: '8px',
+              border: `1px solid ${theme.border.light}`,
+              display: 'flex',
+              gap: '12px',
+              alignItems: 'center'
+            }}>
+              <img
+                src={imagePreview}
+                alt="Preview"
+                style={{
+                  width: '60px',
+                  height: '60px',
+                  borderRadius: '6px',
+                  objectFit: 'cover',
+                  border: `1px solid ${theme.border.medium}`
+                }}
+              />
+              <div style={{ flex: 1, fontSize: '13px', color: theme.text.secondary }}>
+                Image ready to send
+              </div>
+              <button
+                onClick={handleRemoveImage}
+                style={{
+                  background: theme.background.card,
+                  border: `1px solid ${theme.border.medium}`,
+                  padding: '6px 12px',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: theme.text.primary,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.background = theme.background.elevated;
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = theme.background.card;
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+
           <form onSubmit={handleSendMessage} style={styles.form}>
+            {/* Attachment Buttons */}
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingImage}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '8px',
+                  borderRadius: '6px',
+                  cursor: uploadingImage ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: theme.text.secondary,
+                  transition: 'all 0.2s ease',
+                  fontSize: '20px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!uploadingImage) {
+                    e.target.style.background = theme.background.card;
+                    e.target.style.color = theme.button.primary;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.background = 'transparent';
+                  e.target.style.color = theme.text.secondary;
+                }}
+                title="Attach image"
+              >
+                📎
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileSelect}
+                style={{ display: 'none' }}
+              />
+              
+              <button
+                type="button"
+                onClick={() => setShowGifPicker(!showGifPicker)}
+                style={{
+                  background: showGifPicker ? theme.background.elevated : 'transparent',
+                  border: 'none',
+                  padding: '8px',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: showGifPicker ? theme.button.primary : theme.text.secondary,
+                  transition: 'all 0.2s ease',
+                  fontSize: '20px'
+                }}
+                onMouseEnter={(e) => {
+                  if (!showGifPicker) {
+                    e.target.style.background = theme.background.card;
+                    e.target.style.color = theme.button.primary;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!showGifPicker) {
+                    e.target.style.background = 'transparent';
+                    e.target.style.color = theme.text.secondary;
+                  }
+                }}
+                title="Send GIF"
+              >
+                🎬
+              </button>
+            </div>
+
             <input
               ref={inputRef}
               type="text"
@@ -357,9 +835,13 @@ export default function DirectMessagingPanel({ friend, onClose }) {
             />
             <button
               type="submit"
-              style={styles.sendButton}
+              disabled={sending || uploadingImage}
+              style={{
+                ...styles.sendButton,
+                opacity: sending || uploadingImage ? 0.5 : styles.sendButton.opacity
+              }}
               onMouseEnter={(e) => {
-                if (newMessage.trim() && !sending) {
+                if (!sending && !uploadingImage && (newMessage.trim() || selectedFile)) {
                   e.target.style.background = theme.button.primaryHover;
                   e.target.style.transform = 'translateY(-1px)';
                 }
@@ -369,11 +851,27 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                 e.target.style.transform = 'translateY(0)';
               }}
             >
-              {sending ? 'Sending...' : 'Send'}
+              {uploadingImage ? 'Uploading...' : sending ? 'Sending...' : 'Send'}
             </button>
           </form>
+
+          {/* GIF Picker */}
+          {showGifPicker && (
+            <GifPicker
+              onSelect={handleGifSelect}
+              onClose={() => setShowGifPicker(false)}
+            />
+          )}
         </div>
       </div>
+
+      {/* Share With Friend Modal */}
+      {showShareModal && (
+        <ShareWithFriendModal
+          friend={friend}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 }

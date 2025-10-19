@@ -22,7 +22,7 @@ import { db } from '../../services/firebase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
-import { getFriendIds } from '../../services/friends';
+import { getFriendIds, removeFriend } from '../../services/friends';
 import Avatar from '../Collaboration/Avatar';
 
 export default function LeaderboardModal({ onClose }) {
@@ -900,6 +900,50 @@ export default function LeaderboardModal({ onClose }) {
                     </div>
                   </div>
                 </div>
+
+                {/* Remove Friend Button - Only show for friends (not yourself) */}
+                {user.uid !== selectedUserId && (
+                  <button
+                    onClick={async () => {
+                      if (!confirm(`Remove from friends? You'll no longer see them on the leaderboard.`)) return;
+                      try {
+                        await removeFriend(user.uid, selectedUserId);
+                        setSelectedUserId(null);
+                        setPopupPosition(null);
+                        // Reload leaderboard to reflect changes
+                        window.location.reload();
+                      } catch (error) {
+                        console.error('[LeaderboardModal] Failed to remove friend:', error);
+                        alert('Failed to remove friend');
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      background: 'transparent',
+                      border: `1px solid ${theme.border.medium}`,
+                      borderRadius: '8px',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: theme.text.secondary,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      marginBottom: '12px'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = '#fee2e2';
+                      e.target.style.borderColor = '#ef4444';
+                      e.target.style.color = '#dc2626';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = 'transparent';
+                      e.target.style.borderColor = theme.border.medium;
+                      e.target.style.color = theme.text.secondary;
+                    }}
+                  >
+                    Remove Friend
+                  </button>
+                )}
 
                 <div style={{
                   fontSize: '12px',
