@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { subscribeToRequests, approveEditRequest, denyEditRequest, deleteRequest } from '../../services/notifications';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -15,7 +16,9 @@ export default function NotificationBell({ onApprove }) {
   const { theme } = useTheme();
   const [requests, setRequests] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const [processingId, setProcessingId] = useState(null);
+  const [buttonRect, setButtonRect] = useState(null);
 
   // Subscribe to edit requests
   useEffect(() => {
@@ -56,13 +59,38 @@ export default function NotificationBell({ onApprove }) {
     }
   };
 
+  const handleOpen = (e) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setButtonRect(rect);
+    setIsOpen(true);
+    // Small delay for smooth animation
+    setTimeout(() => setIsVisible(true), 10);
+  };
+
+  const handleClose = () => {
+    setIsVisible(false);
+    // Wait for animation to complete before unmounting
+    setTimeout(() => {
+      setIsOpen(false);
+      setButtonRect(null);
+    }, 200);
+  };
+
+  const handleToggle = (e) => {
+    if (isOpen) {
+      handleClose();
+    } else {
+      handleOpen(e);
+    }
+  };
+
   if (requests.length === 0) return null;
 
   return (
-    <div style={{ position: 'relative' }}>
+    <>
       {/* Minimal Notification Button */}
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleToggle}
         style={{
           background: theme.background.card,
           border: `1px solid ${theme.border.medium}`,
@@ -106,21 +134,37 @@ export default function NotificationBell({ onApprove }) {
         )}
       </button>
 
-      {/* Notification Dropdown */}
-      {isOpen && (
+      {/* Portal: Click outside to close - MUST render BEFORE dropdown for correct z-index */}
+      {isOpen && createPortal(
+        <div
+          onClick={handleClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 999998
+          }}
+        />,
+        document.body
+      )}
+
+      {/* Portal: Notification Dropdown */}
+      {isOpen && buttonRect && createPortal(
         <div style={{
-          position: 'absolute',
-          top: 'calc(100% + 8px)',
-          right: 0,
+          position: 'fixed',
+          top: `${buttonRect.bottom + 8}px`,
+          right: `${window.innerWidth - buttonRect.right}px`,
           background: theme.background.card,
           border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
           boxShadow: theme.shadow.xl,
           minWidth: '340px',
           maxWidth: '400px',
-          zIndex: 100000,
+          zIndex: 999999,
           maxHeight: '400px',
-          overflowY: 'auto'
+          overflowY: 'auto',
+          opacity: isVisible ? 1 : 0,
+          transform: isVisible ? 'translateY(0)' : 'translateY(-10px)',
+          transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
         }}>
           <div style={{
             padding: '12px 16px',
@@ -217,21 +261,10 @@ export default function NotificationBell({ onApprove }) {
               </div>
             </div>
           ))}
-        </div>
+        </div>,
+        document.body
       )}
-
-      {/* Click outside to close */}
-      {isOpen && (
-        <div
-          onClick={() => setIsOpen(false)}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 99999
-          }}
-        />
-      )}
-    </div>
+    </>
   );
 }
 
