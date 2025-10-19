@@ -443,50 +443,70 @@ function CanvasContent() {
   
   // Watch for permission changes (SEPARATE effect to avoid re-subscription)
   useEffect(() => {
-    if (!user?.email || !CANVAS_ID || canvasAccess.role === 'owner') return;
+    if (!user?.email || !CANVAS_ID) return;
     
     const emailKey = user.email.replace(/[@.]/g, '_');
     const collaboratorRef = ref(rtdb, `canvas/${CANVAS_ID}/collaborators/${emailKey}`);
-    let initialRole = null;
-    let isFirstLoad = true;
+    let previousRole = null;
     
-    console.log('[Canvas] Setting up permission watcher for viewer/editor');
+    console.log('[Canvas] Setting up permission watcher for all non-owner users');
     
     const unsubscribe = onValue(collaboratorRef, (snapshot) => {
       if (snapshot.exists()) {
         const collabData = snapshot.val();
         const newRole = collabData.role;
         
-        // Capture the initial role on first load
-        if (isFirstLoad) {
-          initialRole = newRole;
-          isFirstLoad = false;
-          console.log('[Canvas] Initial role captured:', initialRole);
+        console.log('[Canvas] 📡 Permission update received - Previous:', previousRole, 'New:', newRole);
+        
+        // Skip first callback (initial load)
+        if (previousRole === null) {
+          previousRole = newRole;
+          console.log('[Canvas] Initial role set:', newRole);
           return;
         }
         
-        // Reload if role changed in ANY direction
-        if (initialRole !== newRole) {
-          if (initialRole === 'viewer' && newRole === 'editor') {
-            console.log('[Canvas] 🔄 Permission upgraded: viewer → editor');
-            showFeedback('Access upgraded to editor! Reloading...');
-          } else if (initialRole === 'editor' && newRole === 'viewer') {
-            console.log('[Canvas] 🔄 Permission downgraded: editor → viewer');
-            showFeedback('Access changed to viewer! Reloading...');
+        // Detect any role change
+        if (previousRole !== newRole) {
+          console.log('[Canvas] 🔄 Permission change detected:', previousRole, '→', newRole);
+          
+          // Show feedback message (will clear on reload)
+          if (previousRole === 'viewer' && newRole === 'editor') {
+            setFeedbackMessage('✨ Access upgraded to editor! Reloading...');
+          } else if (previousRole === 'editor' && newRole === 'viewer') {
+            setFeedbackMessage('⚠️ Access changed to viewer! Reloading...');
+          } else {
+            setFeedbackMessage('🔄 Access changed! Reloading...');
           }
           
+          // Auto-clear message after 2 seconds
+          setTimeout(() => setFeedbackMessage(null), 2000);
+          
+          // Immediate reload for instant permission sync
           setTimeout(() => {
+            console.log('[Canvas] 🔄 Reloading page to apply new permissions...');
             window.location.reload();
+          }, 600);
+          
+          return; // Don't update previousRole - we're reloading anyway
+        }
+      } else {
+        // Collaborator entry removed entirely (access revoked)
+        if (previousRole !== null) {
+          console.log('[Canvas] 🔄 Access completely revoked - collaborator entry deleted');
+          setFeedbackMessage('❌ Access revoked! Returning to projects...');
+          
+          // Auto-clear message after 2 seconds
+          setTimeout(() => setFeedbackMessage(null), 2000);
+          
+          setTimeout(() => {
+            navigate('/');
           }, 1000);
         }
-        
-        // Update initial role for future comparisons
-        initialRole = newRole;
       }
     });
     
     return () => unsubscribe();
-  }, [user, CANVAS_ID]); // Don't include canvasAccess.role in deps!
+  }, [user, CANVAS_ID, navigate]); // showFeedback is defined later, don't include in deps
 
   // Listen for notification messages (access granted, etc.)
   useEffect(() => {
