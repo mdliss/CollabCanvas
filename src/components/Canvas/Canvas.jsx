@@ -571,12 +571,22 @@ function CanvasContent() {
     const readStatusRef = ref(rtdb, `chats/${CANVAS_ID}/readStatus/${user.uid}`);
 
     let lastReadTimestamp = 0;
+    let messagesData = [];
 
     // Get user's last read timestamp
     const unsubReadStatus = onValue(readStatusRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
         lastReadTimestamp = data.lastReadTimestamp || 0;
+        
+        // Recalculate unread count whenever read status updates
+        if (messagesData.length > 0) {
+          const unreadCount = messagesData.filter(msg => 
+            msg.userId !== user.uid && 
+            msg.timestamp > lastReadTimestamp
+          ).length;
+          setUnreadChatCount(isChatPanelVisible ? 0 : unreadCount);
+        }
       }
     });
 
@@ -584,26 +594,28 @@ function CanvasContent() {
     const unsubMessages = onValue(messagesRef, (snapshot) => {
       if (!snapshot.exists()) {
         setUnreadChatCount(0);
+        messagesData = [];
         return;
       }
 
       const data = snapshot.val();
-      const messagesList = Object.values(data);
+      messagesData = Object.values(data);
       
       // Count messages from others that are newer than lastRead
-      const unreadCount = messagesList.filter(msg => 
+      // If chat is open, count is always 0
+      const unreadCount = messagesData.filter(msg => 
         msg.userId !== user.uid && 
         msg.timestamp > lastReadTimestamp
       ).length;
 
-      setUnreadChatCount(unreadCount);
+      setUnreadChatCount(isChatPanelVisible ? 0 : unreadCount);
     });
 
     return () => {
       unsubReadStatus();
       unsubMessages();
     };
-  }, [user, CANVAS_ID]);
+  }, [user, CANVAS_ID, isChatPanelVisible]);
 
   // Helper function for user feedback
   const showFeedback = (message) => {
@@ -3720,21 +3732,22 @@ function CanvasContent() {
         {unreadChatCount > 0 && (
           <div style={{
             position: 'absolute',
-            top: '-4px',
-            right: '-4px',
-            minWidth: '18px',
-            height: '18px',
-            background: '#ef4444',
+            top: '-6px',
+            right: '-6px',
+            minWidth: '20px',
+            height: '20px',
+            background: theme.button.danger || '#ef4444',
             color: '#ffffff',
-            borderRadius: '9px',
+            borderRadius: '10px',
             fontSize: '11px',
-            fontWeight: '600',
+            fontWeight: '700',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '0 5px',
-            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
-            border: `2px solid ${theme.background.page}`
+            padding: '0 6px',
+            boxShadow: theme.shadow.md,
+            border: `2px solid ${theme.background.page}`,
+            transition: 'all 0.2s ease'
           }}>
             {unreadChatCount > 99 ? '99+' : unreadChatCount}
           </div>

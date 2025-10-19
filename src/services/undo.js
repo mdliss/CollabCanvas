@@ -330,7 +330,7 @@ export class UndoManager {
       return true;
     }
     
-    console.log('[UndoManager] Ending batch with', this.batchCommands.length, 'commands');
+    console.log('🔵 [HISTORY] Ending batch with', this.batchCommands.length, 'commands');
     
     // Import MultiShapeCommand dynamically to avoid circular dependency
     const { MultiShapeCommand } = await import('../utils/commands.js');
@@ -354,13 +354,16 @@ export class UndoManager {
     
     // Use the metadata from the first command
     if (this.batchCommands[0]?.metadata) {
-      batchCommand.metadata = { ...this.batchCommands[0].metadata };
+      batchCommand.metadata = { 
+        ...this.batchCommands[0].metadata,
+        canvasId: this.canvasId
+      };
     }
     
     // NOW execute the batch command (which executes all collected commands)
     try {
       await batchCommand.execute();
-      console.log('[UndoManager] Batch executed successfully');
+      console.log('🔵 [HISTORY] Batch executed successfully');
     } catch (error) {
       console.error('[UndoManager] Batch execution failed:', error);
       this.batchCommands = [];
@@ -376,8 +379,15 @@ export class UndoManager {
       this.undoStack.shift();
     }
     
+    // Sync to RTDB for shared history
+    if (this.canvasId) {
+      this.syncCommandToRTDB(batchCommand, 'done').catch(err => {
+        console.warn('🔵 [HISTORY] Failed to sync batch to RTDB:', err);
+      });
+    }
+    
     this.notifyListeners();
-    console.log('[UndoManager] Batch added to undo stack. Stack size:', this.undoStack.length);
+    console.log('🔵 [HISTORY] Batch added to undo stack. Stack size:', this.undoStack.length);
     
     this.batchCommands = [];
     this.batchDescription = '';
@@ -564,31 +574,28 @@ export class UndoManager {
 
   /**
    * Revert to a specific point in history
-   * @param {number} index - The index in the undo stack to revert to (0 = oldest, length-1 = newest)
+   * @param {number} index - The index in the history to revert to (0 = oldest, length-1 = newest)
    */
   async revertToPoint(index) {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('[UndoManager] 🎯 REVERT TO POINT called');
-    console.log('[UndoManager] Target index:', index);
-    console.log('[UndoManager] Current undo stack size:', this.undoStack.length);
-    console.log('[UndoManager] Current index:', this.undoStack.length - 1);
+    console.log('🔵 [HISTORY] Revert to point called. Target index:', index);
+    console.log('🔵 [HISTORY] Current undo stack size:', this.undoStack.length);
+    console.log('🔵 [HISTORY] Current index:', this.undoStack.length - 1);
     
     // Special case: index -1 means revert to empty state (undo everything)
     if (index === -1) {
-      console.log('[UndoManager] Reverting to empty state (undoing all)');
+      console.log('🔵 [HISTORY] Reverting to empty state (undoing all)');
       const undoCount = this.undoStack.length;
       for (let i = 0; i < undoCount; i++) {
         await this.undo();
       }
-      console.log('[UndoManager] ✅ Reverted to empty state');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🔵 [HISTORY] Reverted to empty state');
       return true;
     }
     
-    if (index < 0 || index >= this.undoStack.length) {
-      console.error('[UndoManager] ❌ Invalid index for revert:', index);
-      console.error('[UndoManager] Valid range: -1 (empty) to', this.undoStack.length - 1);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    // Validate index range
+    const maxValidIndex = this.undoStack.length + this.redoStack.length - 1;
+    if (index < 0 || index > maxValidIndex) {
+      console.error('🔵 [HISTORY] Invalid index for revert:', index, 'Valid range: -1 to', maxValidIndex);
       return false;
     }
 
@@ -598,30 +605,25 @@ export class UndoManager {
       if (index < currentIndex) {
         // We need to undo commands
         const stepsToUndo = currentIndex - index;
-        console.log(`[UndoManager] Need to UNDO ${stepsToUndo} steps to reach index ${index}`);
+        console.log(`🔵 [HISTORY] Need to UNDO ${stepsToUndo} steps to reach index ${index}`);
         for (let i = 0; i < stepsToUndo; i++) {
-          console.log(`[UndoManager] Undo step ${i + 1}/${stepsToUndo}`);
           await this.undo();
         }
       } else if (index > currentIndex) {
         // We need to redo commands
         const stepsToRedo = index - currentIndex;
-        console.log(`[UndoManager] Need to REDO ${stepsToRedo} steps to reach index ${index}`);
+        console.log(`🔵 [HISTORY] Need to REDO ${stepsToRedo} steps to reach index ${index}`);
         for (let i = 0; i < stepsToRedo; i++) {
-          console.log(`[UndoManager] Redo step ${i + 1}/${stepsToRedo}`);
           await this.redo();
         }
       } else {
-        console.log('[UndoManager] Already at target index - no action needed');
+        console.log('🔵 [HISTORY] Already at target index - no action needed');
       }
       
-      console.log('[UndoManager] ✅ Revert complete - now at index', this.undoStack.length - 1);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('🔵 [HISTORY] Revert complete - now at index', this.undoStack.length - 1);
       return true;
     } catch (error) {
-      console.error('[UndoManager] ❌ Revert to point failed:', error);
-      console.error('[UndoManager] Error stack:', error.stack);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('🔵 [HISTORY] Revert to point failed:', error);
       return false;
     }
   }
@@ -667,6 +669,7 @@ export class UndoManager {
     aiCommand.metadata.timestamp = Date.now();
     aiCommand.metadata.isAI = true;
     aiCommand.metadata.user = aiCommand.user; // Copy user from command for getUserName()
+    aiCommand.metadata.canvasId = this.canvasId;
     
     // Track changes for leaderboard and daily activity (AI OPERATION = 1 CHANGE, not n shapes)
     if (aiCommand.user?.uid && aiCommand.affectedShapeIds) {
@@ -680,8 +683,8 @@ export class UndoManager {
     
     // Add to undo stack (operation already executed by Cloud Function)
     this.undoStack.push(aiCommand);
-    console.log('[UndoManager] AI operation registered:', aiCommand.getDescription(), 
-                'Shapes:', aiCommand.affectedShapeIds.length,
+    console.log('🔵 [HISTORY] AI operation registered:', aiCommand.getDescription(), 
+                'Shapes:', aiCommand.affectedShapeIds?.length || 0,
                 'User:', aiCommand.user?.displayName || aiCommand.user?.email || 'Unknown');
     
     // Clear redo stack (new action invalidates redo history)
@@ -690,6 +693,13 @@ export class UndoManager {
     // Limit stack size
     if (this.undoStack.length > this.maxHistorySize) {
       this.undoStack.shift();
+    }
+    
+    // Sync to RTDB for shared history
+    if (this.canvasId) {
+      this.syncCommandToRTDB(aiCommand, 'done').catch(err => {
+        console.warn('🔵 [HISTORY] Failed to sync AI operation to RTDB:', err);
+      });
     }
     
     this.notifyListeners();
