@@ -230,6 +230,30 @@ export class UndoManager {
     }
     
     try {
+      const commandId = command.metadata?.commandId;
+      
+      // If this is a status update (undo/redo), update existing command
+      if (commandId && status === 'undone') {
+        const { updateCommandStatus } = await import('./sharedHistory.js');
+        console.log('🔵 [HISTORY] Updating command status in RTDB:', commandId.slice(0, 12), '→', status);
+        await updateCommandStatus(this.canvasId, commandId, status);
+        console.log('🔵 [HISTORY] ✅ Status updated successfully:', command.getDescription());
+        return;
+      }
+      
+      // If this is a new command OR a redo (status = 'done'), add/update
+      if (commandId && status === 'done') {
+        // Check if this is a redo by trying to update first
+        const { updateCommandStatus } = await import('./sharedHistory.js');
+        const updated = await updateCommandStatus(this.canvasId, commandId, status);
+        if (updated) {
+          console.log('🔵 [HISTORY] ✅ Command redone in RTDB:', command.getDescription());
+          return;
+        }
+        // If update failed, it's a new command - fall through to addCommand
+      }
+      
+      // New command - add to RTDB
       const { addCommand } = await import('./sharedHistory.js');
       
       const commandData = {
@@ -243,7 +267,7 @@ export class UndoManager {
         commandId: command.metadata?.commandId // Unique ID for tracking
       };
       
-      console.log('🔵 [HISTORY] Syncing to RTDB:', commandData);
+      console.log('🔵 [HISTORY] Adding new command to RTDB:', commandData);
       await addCommand(this.canvasId, commandData);
       console.log('🔵 [HISTORY] ✅ Synced to RTDB successfully:', commandData.description);
     } catch (error) {
@@ -425,8 +449,12 @@ export class UndoManager {
       await command.undo();
       this.redoStack.push(command);
       
-      // Note: RTDB sync disabled for undo/redo to avoid index mismatch issues
-      // Each user manages their own undo/redo stack independently
+      // Sync status to RTDB so all users see the undone state
+      if (this.canvasId) {
+        this.syncCommandToRTDB(command, 'undone').catch(err => {
+          console.warn('🔵 [HISTORY] Failed to sync undo status to RTDB:', err);
+        });
+      }
       
       this.notifyListeners();
       console.log('🔵 [HISTORY] Undo successful, added to redo stack. Redo stack size:', this.redoStack.length);
@@ -457,8 +485,12 @@ export class UndoManager {
       await command.redo();
       this.undoStack.push(command);
       
-      // Note: RTDB sync disabled for undo/redo to avoid index mismatch issues
-      // Each user manages their own undo/redo stack independently
+      // Sync status to RTDB so all users see the redone state
+      if (this.canvasId) {
+        this.syncCommandToRTDB(command, 'done').catch(err => {
+          console.warn('🔵 [HISTORY] Failed to sync redo status to RTDB:', err);
+        });
+      }
       
       this.notifyListeners();
       console.log('🔵 [HISTORY] Redo successful. Undo stack size:', this.undoStack.length);
@@ -779,50 +811,28 @@ export class UndoManager {
       const currentUid = this.currentUserId;
       console.log('🔵 [HISTORY] Returning RTDB history:', this.rtdbHistory.commands.length, 'commands from all users. Current user:', currentUid);
       
-      // Build a Set of command IDs that are in the UNDO stack (active/done)
-      const undoStackCommandIds = new Set(
-        this.undoStack
-          .map(cmd => cmd.metadata?.commandId)
-          .filter(Boolean)
-      );
+      // Find the LAST 'done' command in RTDB (this is the current position for ALL users)
+      // This ensures the pin syncs across all users viewing the same canvas
+      let currentHistoryIndex = -1;
+      for (let i = this.rtdbHistory.commands.length - 1; i >= 0; i--) {
+        if (this.rtdbHistory.commands[i].status === 'done') {
+          currentHistoryIndex = i;
+          break;
+        }
+      }
       
-      // Build a Set of command IDs that are in the REDO stack (undone)
-      const redoStackCommandIds = new Set(
-        this.redoStack
-          .map(cmd => cmd.metadata?.commandId)
-          .filter(Boolean)
-      );
-      
-      // Find the last command ID in undo stack (current position)
-      const lastUndoCommandId = this.undoStack.length > 0 
-        ? this.undoStack[this.undoStack.length - 1].metadata?.commandId 
-        : null;
-      
-      console.log('🔵 [HISTORY] Undo stack command IDs:', Array.from(undoStackCommandIds));
-      console.log('🔵 [HISTORY] Redo stack command IDs:', Array.from(redoStackCommandIds));
-      console.log('🔵 [HISTORY] Current command ID:', lastUndoCommandId);
+      console.log('🔵 [HISTORY] Current position (last done command):', currentHistoryIndex);
       
       return this.rtdbHistory.commands.map((cmd, idx) => {
         const isLocal = cmd.userId === currentUid;
-        const isCurrent = cmd.commandId === lastUndoCommandId;
+        const isCurrent = idx === currentHistoryIndex;
         
-        // Determine status based on which stack contains this command
-        let status = 'done'; // Default for non-local commands
-        
-        if (isLocal && cmd.commandId) {
-          if (undoStackCommandIds.has(cmd.commandId)) {
-            status = 'done'; // In undo stack = active
-          } else if (redoStackCommandIds.has(cmd.commandId)) {
-            status = 'undone'; // In redo stack = undone
-          } else {
-            // Not in either stack - might be another user's command or very old
-            status = 'done';
-          }
-        }
+        // Use RTDB status directly (this syncs across all users!)
+        const status = cmd.status || 'done';
         
         // Log the first few to help debug
         if (idx < 3) {
-          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId?.slice(0, 8)} - isLocal: ${isLocal}, status: ${status}, isCurrent: ${isCurrent}, cmdId: ${cmd.commandId?.slice(0, 12)}`);
+          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId?.slice(0, 8)} - isLocal: ${isLocal}, status: ${status}, isCurrent: ${isCurrent}`);
         }
         
         return {

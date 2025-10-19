@@ -186,6 +186,59 @@ export const redoCommand = async (canvasId) => {
 };
 
 /**
+ * Update the status of an existing command
+ * 
+ * @param {string} canvasId - Canvas ID
+ * @param {string} commandId - The command's unique ID from metadata
+ * @param {string} status - New status ('done' or 'undone')
+ * @returns {Promise<boolean>} True if updated, false if not found
+ */
+export const updateCommandStatus = async (canvasId, commandId, status) => {
+  if (!commandId) {
+    console.warn('[SharedHistory] Cannot update status - no commandId provided');
+    return false;
+  }
+  
+  try {
+    // Find the command in RTDB by searching all commands
+    const historyRef = ref(rtdb, `history/${canvasId}`);
+    const snapshot = await get(historyRef);
+    
+    if (!snapshot.exists()) {
+      console.warn('[SharedHistory] No history found for canvas:', canvasId);
+      return false;
+    }
+    
+    const historyData = snapshot.val();
+    const commands = historyData.commands || {};
+    
+    // Find the command with matching commandId
+    let rtdbCommandKey = null;
+    for (const [key, cmd] of Object.entries(commands)) {
+      if (cmd.commandId === commandId) {
+        rtdbCommandKey = key;
+        break;
+      }
+    }
+    
+    if (!rtdbCommandKey) {
+      console.warn('[SharedHistory] Command not found with commandId:', commandId);
+      return false;
+    }
+    
+    // Update the command's status
+    const commandRef = ref(rtdb, `history/${canvasId}/commands/${rtdbCommandKey}`);
+    await update(commandRef, { status });
+    
+    console.log('[SharedHistory] ✅ Updated command status:', commandId.slice(0, 12), '→', status);
+    return true;
+  } catch (error) {
+    console.error('[SharedHistory] Failed to update command status:', error);
+    return false;
+  }
+};
+
+/**
  * Clear all history for a canvas
  * 
  * @param {string} canvasId - Canvas ID

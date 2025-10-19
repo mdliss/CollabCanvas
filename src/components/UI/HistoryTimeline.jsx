@@ -264,17 +264,24 @@ export default function HistoryTimeline({ isVisible = true }) {
     },
     trashButton: {
       background: 'transparent',
-      border: 'none',
+      border: `1px solid transparent`,
       color: theme.text.tertiary,
       fontSize: '11px',
       fontWeight: '600',
       cursor: 'pointer',
       padding: '4px 8px',
-      borderRadius: '4px',
-      transition: 'all 0.2s ease',
+      borderRadius: '6px',
+      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center'
+    },
+    trashButtonHover: {
+      color: '#ef4444',
+      background: theme.isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)',
+      border: `1px solid rgba(239, 68, 68, 0.3)`,
+      transform: 'translateY(-1px)',
+      boxShadow: theme.shadow.sm
     }
   };
 
@@ -346,13 +353,15 @@ export default function HistoryTimeline({ isVisible = true }) {
               <button
                 style={styles.trashButton}
                 onClick={handleClearHistory}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.color = theme.button.danger || '#ef4444';
-                  e.currentTarget.style.background = theme.isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)';
+                onMouseEnter={(e) => {
+                  Object.assign(e.currentTarget.style, styles.trashButtonHover);
                 }}
-                onMouseOut={(e) => {
+                onMouseLeave={(e) => {
                   e.currentTarget.style.color = theme.text.tertiary;
                   e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.border = '1px solid transparent';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
                 }}
                 title="Clear history"
               >
