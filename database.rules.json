@@ -3,19 +3,24 @@
     "canvas": {
       ".read": "auth != null",
       "$canvasId": {
-        ".write": "auth != null",
+        ".read": "auth != null",
         "shapes": {
+          ".read": "auth != null",
+          ".write": "auth != null",
           "$shapeId": {
-            ".write": "auth != null && (!data.exists() || data.child('isLocked').val() != true || data.child('lockedBy').val() == auth.uid || (now - data.child('lockedAt').val()) > 8000)",
-            ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'createdBy']) && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('x').val() >= -50000 && newData.child('x').val() <= 50000 && newData.child('y').val() >= -50000 && newData.child('y').val() <= 50000"
+            ".read": "auth != null",
+            ".write": "auth != null"
           }
         },
         "metadata": {
+          ".read": "auth != null",
           ".write": "auth != null"
         },
         "collaborators": {
+          ".read": "auth != null",
           ".write": "auth != null"
-        }
+        },
+        ".write": "auth != null && !newData.exists()"
       }
     },
     "sessions": {
@@ -89,6 +94,12 @@
     "globalPresence": {
       "$userId": {
         ".read": "auth != null",
+        ".write": "auth != null && $userId == auth.uid"
+      }
+    },
+    "ai-conversations": {
+      "$userId": {
+        ".read": "auth != null && $userId == auth.uid",
         ".write": "auth != null && $userId == auth.uid"
       }
     }
