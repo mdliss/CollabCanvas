@@ -19,7 +19,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ref, push, onValue, query, limitToLast, orderByKey } from 'firebase/database';
+import { ref, push, onValue, query, limitToLast, orderByKey, set } from 'firebase/database';
 import { rtdb } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -61,6 +61,17 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
         }));
         setMessages(messagesList);
         
+        // Mark messages as read when chat is open and visible
+        if (isOpen && user?.uid && messagesList.length > 0) {
+          const latestMessage = messagesList[messagesList.length - 1];
+          // Mark last read timestamp to latest message time
+          const readStatusRef = ref(rtdb, `chats/${canvasId}/readStatus/${user.uid}`);
+          set(readStatusRef, {
+            lastReadTimestamp: latestMessage.timestamp,
+            lastMessageId: latestMessage.id
+          }).catch(err => console.error('[ChatPanel] Failed to update read status:', err));
+        }
+        
         // Fetch photos for users who don't have them in the message
         const usersNeedingPhotos = messagesList
           .filter(msg => !msg.userPhoto && msg.userId)
@@ -88,7 +99,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     });
 
     return () => unsubscribe();
-  }, [canvasId, userPhotos]);
+  }, [canvasId, userPhotos, isOpen, user]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

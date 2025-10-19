@@ -93,6 +93,12 @@
         ".write": "auth != null"
       }
     },
+    "history": {
+      "$canvasId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
     "projects": {
       "$userId": {
         ".read": "auth != null && $userId == auth.uid",

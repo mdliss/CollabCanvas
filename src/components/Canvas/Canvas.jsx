@@ -170,7 +170,7 @@ import usePresence from "../../hooks/usePresence";
 import useCursors from "../../hooks/useCursors";
 import useDragStreams from "../../hooks/useDragStreams";
 import { usePerformance } from "../../hooks/usePerformance";
-import { useUndo } from "../../contexts/UndoContext";
+import { useUndo, UndoProvider } from "../../contexts/UndoContext";
 import { CreateShapeCommand, UpdateShapeCommand, DeleteShapeCommand, BatchDeleteShapesCommand, MoveShapeCommand } from "../../utils/commands";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
 import { stopDragStream } from "../../services/dragStream";
@@ -188,7 +188,11 @@ import { useTheme } from "../../contexts/ThemeContext";
 
 const GRID_SIZE = 50;
 
-export default function Canvas() {
+/**
+ * CanvasContent - The main canvas component logic
+ * Separated from Canvas wrapper to allow UndoProvider to inject canvasId
+ */
+function CanvasContent() {
   const { user } = useAuth();
   const { theme, currentThemeId } = useTheme();
   
@@ -295,6 +299,7 @@ export default function Canvas() {
   const [selectedIds, setSelectedIds] = useState([]);
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [isChatPanelVisible, setIsChatPanelVisible] = useState(false);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [lastError, setLastError] = useState(null);
   const [isPanning, setIsPanning] = useState(false);
   const [isSpacePressed, setIsSpacePressed] = useState(false);
@@ -557,6 +562,48 @@ export default function Canvas() {
       unsub();
     };
   }, [user]);
+
+  // Track unread chat messages
+  useEffect(() => {
+    if (!user?.uid || !CANVAS_ID) return;
+
+    const messagesRef = ref(rtdb, `chats/${CANVAS_ID}/messages`);
+    const readStatusRef = ref(rtdb, `chats/${CANVAS_ID}/readStatus/${user.uid}`);
+
+    let lastReadTimestamp = 0;
+
+    // Get user's last read timestamp
+    const unsubReadStatus = onValue(readStatusRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.val();
+        lastReadTimestamp = data.lastReadTimestamp || 0;
+      }
+    });
+
+    // Count unread messages
+    const unsubMessages = onValue(messagesRef, (snapshot) => {
+      if (!snapshot.exists()) {
+        setUnreadChatCount(0);
+        return;
+      }
+
+      const data = snapshot.val();
+      const messagesList = Object.values(data);
+      
+      // Count messages from others that are newer than lastRead
+      const unreadCount = messagesList.filter(msg => 
+        msg.userId !== user.uid && 
+        msg.timestamp > lastReadTimestamp
+      ).length;
+
+      setUnreadChatCount(unreadCount);
+    });
+
+    return () => {
+      unsubReadStatus();
+      unsubMessages();
+    };
+  }, [user, CANVAS_ID]);
 
   // Helper function for user feedback
   const showFeedback = (message) => {
@@ -3669,6 +3716,29 @@ export default function Canvas() {
           {/* Chat bubble icon */}
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
+        {/* Unread Badge */}
+        {unreadChatCount > 0 && (
+          <div style={{
+            position: 'absolute',
+            top: '-4px',
+            right: '-4px',
+            minWidth: '18px',
+            height: '18px',
+            background: '#ef4444',
+            color: '#ffffff',
+            borderRadius: '9px',
+            fontSize: '11px',
+            fontWeight: '600',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '0 5px',
+            boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)',
+            border: `2px solid ${theme.background.page}`
+          }}>
+            {unreadChatCount > 99 ? '99+' : unreadChatCount}
+          </div>
+        )}
       </button>
 
       {/* AI Canvas Assistant - Hidden for viewers */}
@@ -3710,5 +3780,22 @@ export default function Canvas() {
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Canvas - Wrapper that provides canvas-specific UndoProvider
+ * 
+ * This wrapper extracts canvasId from route params and provides a canvas-specific
+ * UndoProvider so that each canvas has its own independent, shared history.
+ */
+export default function Canvas() {
+  const { canvasId } = useParams();
+  const CANVAS_ID = canvasId || "global-canvas-v1";
+  
+  return (
+    <UndoProvider canvasId={CANVAS_ID}>
+      <CanvasContent />
+    </UndoProvider>
   );
 }

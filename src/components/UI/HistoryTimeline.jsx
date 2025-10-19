@@ -5,7 +5,7 @@ import ConfirmationModal from './ConfirmationModal';
 
 export default function HistoryTimeline({ isVisible = true }) {
   const { theme } = useTheme();
-  const { getStackSizes, undoStackSize, redoStackSize, clear } = useUndo();
+  const { getStackSizes, undoStackSize, redoStackSize, clear, getFullHistory, revertToPoint } = useUndo();
   const [isExpanded, setIsExpanded] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
   const [history, setHistory] = useState([]);
@@ -15,17 +15,17 @@ export default function HistoryTimeline({ isVisible = true }) {
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
 
   useEffect(() => {
-    // Listen for changes to the undo manager
+    // Get history from the context manager (canvas-specific)
     const interval = setInterval(() => {
-      if (window.undoManager) {
-        // Use the new getFullHistory method
-        const fullHistory = window.undoManager.getFullHistory();
+      if (getFullHistory) {
+        const fullHistory = getFullHistory();
         setHistory(fullHistory.slice(-1000)); // Keep up to 1000 operations
+        console.log('[HistoryTimeline] History updated:', fullHistory.length, 'items');
       }
     }, 500);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [getFullHistory]);
 
   const formatTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -59,9 +59,9 @@ export default function HistoryTimeline({ isVisible = true }) {
   };
 
   const handleConfirmRevert = async () => {
-    if (selectedHistoryIndex !== null && window.undoManager) {
+    if (selectedHistoryIndex !== null && revertToPoint) {
       try {
-        await window.undoManager.revertToPoint(selectedHistoryIndex);
+        await revertToPoint(selectedHistoryIndex);
         setShowConfirmModal(false);
         setSelectedHistoryIndex(null);
         setSelectedHistoryItem(null);

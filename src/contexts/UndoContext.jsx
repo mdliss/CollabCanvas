@@ -1,59 +1,108 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { undoManager } from '../services/undo';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { UndoManager } from '../services/undo';
 
 const UndoContext = createContext();
 
-export function UndoProvider({ children }) {
-  const [state, setState] = useState(undoManager.getState());
+// Global canvas-specific managers (keyed by canvasId)
+const canvasManagers = new Map();
+
+/**
+ * Get or create a canvas-specific undo manager
+ */
+function getCanvasManager(canvasId) {
+  if (!canvasId) {
+    // Legacy: use a default manager for non-canvas contexts
+    if (!canvasManagers.has('__global__')) {
+      canvasManagers.set('__global__', new UndoManager(canvasId));
+    }
+    return canvasManagers.get('__global__');
+  }
+  
+  if (!canvasManagers.has(canvasId)) {
+    console.log('[UndoContext] Creating new canvas-specific manager for:', canvasId);
+    canvasManagers.set(canvasId, new UndoManager(canvasId));
+  }
+  
+  return canvasManagers.get(canvasId);
+}
+
+/**
+ * UndoProvider - Provides canvas-specific undo/redo functionality
+ * 
+ * Each canvas now has its own independent history that is shared among all editors.
+ * 
+ * @param {string} canvasId - Optional canvas ID for canvas-specific history
+ */
+export function UndoProvider({ children, canvasId = null }) {
+  const [currentManager] = useState(() => {
+    const manager = getCanvasManager(canvasId);
+    console.log('[UndoProvider] Initializing with manager for canvas:', canvasId || 'global');
+    return manager;
+  });
+  const [state, setState] = useState(() => currentManager.getState());
 
   useEffect(() => {
-    // Subscribe to undo manager changes
-    const removeListener = undoManager.addListener((newState) => {
+    // Expose canvas-specific manager to window for debugging
+    if (typeof window !== 'undefined' && canvasId) {
+      window.undoManager = currentManager;
+      window.canvasManagers = canvasManagers; // Expose all managers
+      console.log('🔵 [UndoContext] Exposed manager to window.undoManager for canvas:', canvasId);
+    }
+  }, [currentManager, canvasId]);
+
+  useEffect(() => {
+    // Subscribe to manager changes
+    console.log('🔵 [UndoContext] Setting up listener for canvas:', canvasId || 'global');
+    const removeListener = currentManager.addListener((newState) => {
+      console.log('🔵 [UndoContext] State update received:', newState);
       setState(newState);
     });
 
-    return removeListener;
-  }, []);
+    return () => {
+      console.log('🔵 [UndoContext] Cleaning up listener for canvas:', canvasId || 'global');
+      removeListener();
+    };
+  }, [currentManager, canvasId]);
 
   const execute = useCallback(async (command, user = null) => {
-    return await undoManager.execute(command, user);
-  }, []);
+    return await currentManager.execute(command, user);
+  }, [currentManager]);
 
   const undo = useCallback(async () => {
-    return await undoManager.undo();
-  }, []);
+    return await currentManager.undo();
+  }, [currentManager]);
 
   const redo = useCallback(async () => {
-    return await undoManager.redo();
-  }, []);
+    return await currentManager.redo();
+  }, [currentManager]);
 
   const clear = useCallback(() => {
-    undoManager.clear();
-  }, []);
+    currentManager.clear();
+  }, [currentManager]);
 
   const revertToPoint = useCallback(async (index) => {
-    return await undoManager.revertToPoint(index);
-  }, []);
+    return await currentManager.revertToPoint(index);
+  }, [currentManager]);
 
   const startBatch = useCallback((description) => {
-    undoManager.startBatch(description);
-  }, []);
+    currentManager.startBatch(description);
+  }, [currentManager]);
 
   const endBatch = useCallback(async () => {
-    return await undoManager.endBatch();
-  }, []);
+    return await currentManager.endBatch();
+  }, [currentManager]);
 
   const getFullHistory = useCallback(() => {
-    return undoManager.getFullHistory();
-  }, []);
+    return currentManager.getFullHistory();
+  }, [currentManager]);
 
   const logAIAction = useCallback((description, user = null) => {
-    undoManager.logAIAction(description, user);
-  }, []);
+    currentManager.logAIAction(description, user);
+  }, [currentManager]);
   
   const registerAIOperation = useCallback((aiCommand) => {
-    undoManager.registerAIOperation(aiCommand);
-  }, []);
+    currentManager.registerAIOperation(aiCommand);
+  }, [currentManager]);
 
   const value = {
     ...state,
@@ -67,7 +116,7 @@ export function UndoProvider({ children }) {
     getFullHistory,
     logAIAction,
     registerAIOperation,
-    getStackSizes: () => undoManager.getStackSizes()
+    getStackSizes: () => currentManager.getStackSizes()
   };
 
   return (

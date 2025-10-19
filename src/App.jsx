@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { UndoProvider } from "./contexts/UndoContext";
 import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import ModernLogin from "./components/Auth/ModernLogin";
 import LandingPage from "./components/Landing/LandingPage";
@@ -50,7 +49,7 @@ function AppContent() {
         element={user ? <LandingPage /> : <Navigate to="/login" replace />} 
       />
       
-      {/* Canvas Editor */}
+      {/* Canvas Editor - Note: Canvas handles its own UndoProvider internally */}
       <Route 
         path="/canvas/:canvasId" 
         element={
@@ -74,11 +73,9 @@ export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <UndoProvider>
-          <BrowserRouter>
-            <AppContent />
-          </BrowserRouter>
-        </UndoProvider>
+        <BrowserRouter>
+          <AppContent />
+        </BrowserRouter>
       </AuthProvider>
     </ThemeProvider>
   );

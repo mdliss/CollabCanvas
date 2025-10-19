@@ -169,8 +169,9 @@
  * ═══════════════════════════════════════════════════════════════════════════
  */
 
-class UndoManager {
-  constructor(maxHistorySize = 1000) {
+export class UndoManager {
+  constructor(canvasId = null, maxHistorySize = 1000) {
+    this.canvasId = canvasId;
     this.undoStack = [];
     this.redoStack = [];
     this.maxHistorySize = maxHistorySize;
@@ -178,10 +179,77 @@ class UndoManager {
     this.batchMode = false;
     this.batchCommands = [];
     this.batchDescription = '';
+    this.rtdbUnsubscribe = null;
+    
+    // If canvas-specific, set up RTDB sync
+    if (canvasId) {
+      this.setupRTDBSync();
+    }
+    
+    console.log('[UndoManager] Created', canvasId ? `canvas-specific manager for ${canvasId}` : 'global manager');
+  }
+  
+  /**
+   * Set up RTDB sync for shared canvas history
+   */
+  async setupRTDBSync() {
+    // Import RTDB functions dynamically to avoid circular dependencies
+    const { subscribeToHistory } = await import('./sharedHistory.js');
+    
+    console.log('🔵 [HISTORY] Setting up RTDB sync for canvas:', this.canvasId);
+    
+    // Subscribe to history changes from ALL users
+    this.rtdbUnsubscribe = subscribeToHistory(this.canvasId, (historyData) => {
+      console.log('🔵 [HISTORY] RTDB sync received:', historyData.commands.length, 'commands, currentIndex:', historyData.currentIndex);
+      
+      // Update local display history (for HistoryTimeline)
+      // Note: We keep local undo/redo stacks as-is since they contain command objects
+      // RTDB history is just for display/coordination
+      this.rtdbHistory = historyData;
+      this.notifyListeners(); // Trigger UI update
+    });
+  }
+  
+  /**
+   * Cleanup RTDB subscription
+   */
+  destroy() {
+    if (this.rtdbUnsubscribe) {
+      this.rtdbUnsubscribe();
+      this.rtdbUnsubscribe = null;
+    }
+    console.log('[UndoManager] Destroyed manager for canvas:', this.canvasId);
+  }
+
+  /**
+   * Sync command to RTDB for shared history display
+   */
+  async syncCommandToRTDB(command, status = 'done') {
+    if (!this.canvasId) return;
+    
+    try {
+      const { addCommand } = await import('./sharedHistory.js');
+      
+      const commandData = {
+        type: command.constructor.name,
+        description: command.getDescription(),
+        timestamp: command.metadata?.timestamp || Date.now(),
+        userId: command.metadata?.user?.uid || 'unknown',
+        userName: command.metadata?.user?.displayName || command.metadata?.user?.email?.split('@')[0] || 'User',
+        status: status
+      };
+      
+      await addCommand(this.canvasId, commandData);
+      console.log('🔵 [HISTORY] Synced to RTDB:', commandData.description);
+    } catch (error) {
+      console.error('🔵 [HISTORY] RTDB sync failed:', error);
+    }
   }
 
   /**
    * Execute a command and add it to the undo stack
+   * 
+   * For canvas-specific managers, also syncs to RTDB for shared history.
    */
   async execute(command, user = null) {
     try {
@@ -191,6 +259,7 @@ class UndoManager {
       }
       command.metadata.timestamp = Date.now();
       command.metadata.user = user;
+      command.metadata.canvasId = this.canvasId; // Track which canvas
       
       // If in batch mode, collect commands WITHOUT executing them
       // They will be executed by the MultiShapeCommand later
@@ -215,7 +284,7 @@ class UndoManager {
       
       // Add to undo stack
       this.undoStack.push(command);
-      console.log('[UndoManager] Command executed and added to undo stack:', command.getDescription(), 'Stack size:', this.undoStack.length);
+      console.log('🔵 [HISTORY] Command executed:', command.getDescription(), 'Canvas:', this.canvasId || 'global', 'Stack size:', this.undoStack.length);
       
       // Clear redo stack (new action invalidates redo history)
       this.redoStack = [];
@@ -225,6 +294,14 @@ class UndoManager {
         this.undoStack.shift();
       }
       
+      // Sync to RTDB for shared history (canvas-specific only)
+      if (this.canvasId) {
+        this.syncCommandToRTDB(command, 'done').catch(err => {
+          console.warn('🔵 [HISTORY] Failed to sync to RTDB:', err);
+        });
+      }
+      
+      console.log('🔵 [HISTORY] Notifying', this.listeners.size, 'listeners');
       this.notifyListeners();
       return true;
     } catch (error) {
@@ -317,13 +394,21 @@ class UndoManager {
     }
 
     const command = this.undoStack.pop();
-    console.log('[UndoManager] Undoing:', command.getDescription(), 'Remaining in undo stack:', this.undoStack.length);
+    console.log('🔵 [HISTORY] Undoing:', command.getDescription(), 'Remaining in undo stack:', this.undoStack.length);
     
     try {
       await command.undo();
       this.redoStack.push(command);
+      
+      // Sync undo to RTDB (mark command as undone)
+      if (this.canvasId) {
+        const { undoCommand } = await import('./sharedHistory.js');
+        await undoCommand(this.canvasId);
+        console.log('🔵 [HISTORY] Undo synced to RTDB');
+      }
+      
       this.notifyListeners();
-      console.log('[UndoManager] Undo successful, added to redo stack. Redo stack size:', this.redoStack.length);
+      console.log('🔵 [HISTORY] Undo successful, added to redo stack. Redo stack size:', this.redoStack.length);
       return command.getDescription();
     } catch (error) {
       console.error('[UndoManager] Undo failed:', error);
@@ -337,40 +422,34 @@ class UndoManager {
    * Redo the last undone command
    */
   async redo() {
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('[UndoManager] 🔄 REDO called');
-    console.log('[UndoManager] Redo stack size:', this.redoStack.length);
-    console.log('[UndoManager] Undo stack size:', this.undoStack.length);
+    console.log('🔵 [HISTORY] Redo called. Redo stack size:', this.redoStack.length);
     
     if (!this.canRedo()) {
-      console.warn('[UndoManager] ❌ Cannot redo: redo stack is empty');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.warn('🔵 [HISTORY] Cannot redo: redo stack is empty');
       return null;
     }
 
     const command = this.redoStack.pop();
-    console.log('[UndoManager] Redoing command:', command.getDescription());
-    console.log('[UndoManager] Command type:', command.constructor.name);
-    console.log('[UndoManager] Remaining in redo stack:', this.redoStack.length);
+    console.log('🔵 [HISTORY] Redoing:', command.getDescription());
     
     try {
-      const startTime = performance.now();
       await command.redo();
-      const redoTime = performance.now() - startTime;
-      
       this.undoStack.push(command);
-      this.notifyListeners();
       
-      console.log(`[UndoManager] ✅ Redo successful in ${redoTime.toFixed(0)}ms`);
-      console.log('[UndoManager] New undo stack size:', this.undoStack.length);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      // Sync redo to RTDB (mark command as done)
+      if (this.canvasId) {
+        const { redoCommand } = await import('./sharedHistory.js');
+        await redoCommand(this.canvasId);
+        console.log('🔵 [HISTORY] Redo synced to RTDB');
+      }
+      
+      this.notifyListeners();
+      console.log('🔵 [HISTORY] Redo successful. Undo stack size:', this.undoStack.length);
       return command.getDescription();
     } catch (error) {
-      console.error('[UndoManager] ❌ Redo failed:', error);
-      console.error('[UndoManager] Error stack:', error.stack);
+      console.error('🔵 [HISTORY] Redo failed:', error);
       // Re-add to redo stack if redo failed
       this.redoStack.push(command);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       throw error;
     }
   }
@@ -433,7 +512,11 @@ class UndoManager {
    */
   addListener(listener) {
     this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
+    console.log('🔵 [HISTORY] Listener added. Canvas:', this.canvasId || 'global', 'Total listeners:', this.listeners.size);
+    return () => {
+      this.listeners.delete(listener);
+      console.log('🔵 [HISTORY] Listener removed. Canvas:', this.canvasId || 'global', 'Remaining listeners:', this.listeners.size);
+    };
   }
 
   /**
@@ -646,8 +729,25 @@ class UndoManager {
 
   /**
    * Get the full history with metadata
+   * For canvas-specific managers, returns shared RTDB history
+   * For global managers, returns local history
    */
   getFullHistory() {
+    // If we have RTDB history (canvas-specific), use that for display
+    if (this.rtdbHistory && this.rtdbHistory.commands) {
+      return this.rtdbHistory.commands.map((cmd, idx) => ({
+        id: cmd.id || `history-${idx}`,
+        index: idx,
+        description: cmd.description,
+        timestamp: cmd.timestamp,
+        user: { uid: cmd.userId, displayName: cmd.userName },
+        status: cmd.status,
+        isCurrent: idx === this.rtdbHistory.currentIndex,
+        isAI: cmd.description?.startsWith('AI:') || false
+      }));
+    }
+    
+    // Fallback to local history (for global manager or if RTDB not ready yet)
     const currentIndex = this.undoStack.length - 1;
     
     return [
@@ -675,11 +775,13 @@ class UndoManager {
   }
 }
 
-// Singleton instance
-export const undoManager = new UndoManager();
+// Legacy global instance for backward compatibility (used outside Canvas)
+const globalUndoManager = new UndoManager(null);
+export const undoManager = globalUndoManager;
 
 // Expose globally for debugging
 if (typeof window !== 'undefined') {
-  window.undoManager = undoManager;
+  window.undoManager = globalUndoManager;
+  window.UndoManager = UndoManager; // Expose class for debugging
 }
 
