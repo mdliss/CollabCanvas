@@ -191,23 +191,16 @@ export class UndoManager {
   
   /**
    * Set up RTDB sync for shared canvas history
+   * 
+   * Note: RTDB history is for DISPLAY only (show all users' commands in timeline).
+   * Undo/redo operations are local-only to avoid index mismatch issues.
    */
   async setupRTDBSync() {
-    // Import RTDB functions dynamically to avoid circular dependencies
-    const { subscribeToHistory } = await import('./sharedHistory.js');
-    
     console.log('🔵 [HISTORY] Setting up RTDB sync for canvas:', this.canvasId);
     
-    // Subscribe to history changes from ALL users
-    this.rtdbUnsubscribe = subscribeToHistory(this.canvasId, (historyData) => {
-      console.log('🔵 [HISTORY] RTDB sync received:', historyData.commands.length, 'commands, currentIndex:', historyData.currentIndex);
-      
-      // Update local display history (for HistoryTimeline)
-      // Note: We keep local undo/redo stacks as-is since they contain command objects
-      // RTDB history is just for display/coordination
-      this.rtdbHistory = historyData;
-      this.notifyListeners(); // Trigger UI update
-    });
+    // RTDB sync is now used only for storing commands, not coordinating undo/redo
+    // Each user maintains their own local undo/redo stacks
+    // This prevents the complexity of syncing undo/redo operations across users
   }
   
   /**
@@ -415,12 +408,8 @@ export class UndoManager {
       await command.undo();
       this.redoStack.push(command);
       
-      // Sync undo to RTDB (mark command as undone)
-      if (this.canvasId) {
-        const { undoCommand } = await import('./sharedHistory.js');
-        await undoCommand(this.canvasId);
-        console.log('🔵 [HISTORY] Undo synced to RTDB');
-      }
+      // Note: RTDB sync disabled for undo/redo to avoid index mismatch issues
+      // Each user manages their own undo/redo stack independently
       
       this.notifyListeners();
       console.log('🔵 [HISTORY] Undo successful, added to redo stack. Redo stack size:', this.redoStack.length);
@@ -451,12 +440,8 @@ export class UndoManager {
       await command.redo();
       this.undoStack.push(command);
       
-      // Sync redo to RTDB (mark command as done)
-      if (this.canvasId) {
-        const { redoCommand } = await import('./sharedHistory.js');
-        await redoCommand(this.canvasId);
-        console.log('🔵 [HISTORY] Redo synced to RTDB');
-      }
+      // Note: RTDB sync disabled for undo/redo to avoid index mismatch issues
+      // Each user manages their own undo/redo stack independently
       
       this.notifyListeners();
       console.log('🔵 [HISTORY] Redo successful. Undo stack size:', this.undoStack.length);
@@ -758,25 +743,12 @@ export class UndoManager {
 
   /**
    * Get the full history with metadata
-   * For canvas-specific managers, returns shared RTDB history
-   * For global managers, returns local history
+   * Always returns local history (each user manages their own undo/redo)
+   * RTDB history is for display/coordination only
    */
   getFullHistory() {
-    // If we have RTDB history (canvas-specific), use that for display
-    if (this.rtdbHistory && this.rtdbHistory.commands) {
-      return this.rtdbHistory.commands.map((cmd, idx) => ({
-        id: cmd.id || `history-${idx}`,
-        index: idx,
-        description: cmd.description,
-        timestamp: cmd.timestamp,
-        user: { uid: cmd.userId, displayName: cmd.userName },
-        status: cmd.status,
-        isCurrent: idx === this.rtdbHistory.currentIndex,
-        isAI: cmd.description?.startsWith('AI:') || false
-      }));
-    }
-    
-    // Fallback to local history (for global manager or if RTDB not ready yet)
+    // Always use local history for now (simpler, more reliable)
+    // Each user can only undo/redo their own changes
     const currentIndex = this.undoStack.length - 1;
     
     return [

@@ -186,6 +186,7 @@ import { checkCanvasAccess } from "../../services/sharing";
 import { createEditRequest, hasPendingRequest, subscribeToMessages, markMessageAsRead } from "../../services/notifications";
 import { useTheme } from "../../contexts/ThemeContext";
 import ShareModal from "../Landing/ShareModal";
+import NotificationBell from "../Landing/NotificationBell";
 import { getUserSubscription } from "../../services/projects";
 
 const GRID_SIZE = 50;
@@ -3224,7 +3225,8 @@ function CanvasContent() {
             alignItems: 'center',
             gap: '8px',
             opacity: isUIVisible ? 1 : 0,
-            transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)'
+            transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)',
+            outline: 'none'
           }}
           onMouseEnter={(e) => {
             e.target.style.background = theme.background.elevated;
@@ -3236,9 +3238,23 @@ function CanvasContent() {
           }}
           title="Share canvas"
         >
-          <span>👥</span>
           <span>Share</span>
         </button>
+      )}
+
+      {/* Notification Bell - For owners to approve edit requests */}
+      {canvasAccess.role === 'owner' && (
+        <div style={{
+          position: 'fixed',
+          top: isViewer ? '64px' : '20px',
+          left: '252px',
+          zIndex: 10000,
+          opacity: isUIVisible ? 1 : 0,
+          transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1) 0.1s'
+        }}>
+          <NotificationBell />
+        </div>
       )}
       
       {/* Performance Monitor - Upper right, left of presence list */}
@@ -3785,8 +3801,8 @@ function CanvasContent() {
             right: '-6px',
             minWidth: '20px',
             height: '20px',
-            background: theme.accent.red,
-            color: '#ffffff',
+            background: theme.button.primary,
+            color: theme.text.inverse,
             borderRadius: '10px',
             fontSize: '11px',
             fontWeight: '700',
@@ -3794,7 +3810,7 @@ function CanvasContent() {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '0 6px',
-            boxShadow: `${theme.shadow.md}, 0 0 8px ${theme.accent.red}40`,
+            boxShadow: theme.shadow.lg,
             border: `2px solid ${theme.background.page}`,
             transition: 'all 0.2s ease'
           }}>
