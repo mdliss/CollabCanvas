@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { getUserProfile } from '../../services/userProfile';
 import Avatar from '../Collaboration/Avatar';
+import PremiumBadge from '../UI/PremiumBadge';
 
 // Social Media Icons (reused from ProfileModal)
 const XIcon = ({ size = 16, color = 'currentColor' }) => (
@@ -94,6 +95,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
   }, []);
 
   const handleBackdropClick = (e) => {
+    e.stopPropagation(); // Prevent closing parent modals/panels
     if (e.target === e.currentTarget) {
       handleClose();
     }

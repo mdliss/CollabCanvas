@@ -112,7 +112,7 @@ export default function MessagingButton({ onOpenMessaging }) {
         }}
         title="Messages"
       >
-        <span style={{ fontSize: '13px', fontWeight: '500' }}>Messages</span>
+        Messages
       </button>
 
       {/* Portal: Backdrop */}

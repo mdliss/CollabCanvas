@@ -3,6 +3,7 @@ import Avatar from './Avatar';
 import { getUserProfile, updateUserBio } from '../../services/userProfile';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
+import PremiumBadge from '../UI/PremiumBadge';
 
 /**
  * PresenceList - Shows all online users with avatars
@@ -170,6 +171,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                 />
                 <span style={{ color: theme.text.secondary, fontSize: "13px", flex: 1, display: "flex", alignItems: "center", gap: "4px" }}>
                   {user.displayName}
+                  {userProfile?.isPremium && <PremiumBadge size={14} />}
                   {canvasOwnerId && user.uid === canvasOwnerId && (
                     <span style={{ fontSize: "15px", color: theme.text.primary, fontWeight: "600" }} title="Canvas Owner">♔</span>
                   )}
@@ -249,10 +251,15 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
                             fontWeight: "600",
                             color: theme.text.primary,
                             margin: "0 0 4px 0",
-                            textAlign: "center"
+                            textAlign: "center",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            gap: "6px"
                           }}
                         >
                           {user.displayName}
+                          {userProfile?.isPremium && <PremiumBadge size={16} />}
                         </h3>
 
                         {/* Email */}

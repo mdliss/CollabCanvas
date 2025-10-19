@@ -25,6 +25,8 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
 import { areFriends, removeFriend } from '../../services/friends';
 import Avatar from '../Collaboration/Avatar';
+import PremiumBadge from '../UI/PremiumBadge';
+import UserProfileView from '../Landing/UserProfileView';
 
 export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, onShowShare }) {
   const { user } = useAuth();
@@ -33,14 +35,11 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
-  const [selectedUserRank, setSelectedUserRank] = useState(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [isFriend, setIsFriend] = useState(false);
+  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
+  const [selectedUserData, setSelectedUserData] = useState(null);
   const [userPhotos, setUserPhotos] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
-  const profilePopupRef = useRef(null);
 
   // Load chat messages from RTDB
   useEffect(() => {
@@ -102,60 +101,6 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
   }, [isOpen]);
 
   // Load user profile when avatar is clicked
-  useEffect(() => {
-    if (!selectedMessageId) {
-      setSelectedUserProfile(null);
-      setSelectedUserRank(null);
-      setIsFriend(false);
-      return;
-    }
-
-    // Find the message to get userId
-    const message = messages.find(m => m.id === selectedMessageId);
-    if (!message || !user?.uid) return;
-
-    setIsLoadingProfile(true);
-    Promise.all([
-      getUserProfile(message.userId),
-      getUserRank(message.userId),
-      areFriends(user.uid, message.userId)
-    ])
-      .then(([profile, rank, friendStatus]) => {
-        setSelectedUserProfile(profile);
-        setSelectedUserRank(rank);
-        setIsFriend(friendStatus);
-        setIsLoadingProfile(false);
-      })
-      .catch(err => {
-        console.error('[ChatPanel] Failed to load profile:', err);
-        setIsLoadingProfile(false);
-      });
-  }, [selectedMessageId, messages, user]);
-
-  // Click outside to close profile popup
-  useEffect(() => {
-    if (!selectedMessageId) return;
-
-    const handleClickOutside = (e) => {
-      if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
-        setSelectedMessageId(null);
-      }
-    };
-
-    const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        setSelectedMessageId(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
-  }, [selectedMessageId]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -473,7 +418,15 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
               <div key={message.id} style={styles.message(isOwn)}>
                 {/* Always show avatar for all messages */}
                 <div 
-                  onClick={() => setSelectedMessageId(message.id)}
+                  onClick={() => {
+                    setSelectedUserData({
+                      userId: message.userId,
+                      userName: message.userName,
+                      userEmail: message.userEmail || null,
+                      userPhoto: message.userPhoto
+                    });
+                    setShowUserProfileModal(true);
+                  }}
                   style={{ 
                     cursor: 'pointer',
                     position: 'relative',
@@ -495,208 +448,6 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                       fontSize: '12px'
                     }}
                   />
-                  
-                  {/* Profile Popup */}
-                  {selectedMessageId === message.id && (
-                    <div
-                      ref={profilePopupRef}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        position: 'absolute',
-                        left: isOwn ? 'auto' : '50px',
-                        right: isOwn ? '50px' : 'auto',
-                        top: 0,
-                        width: '280px',
-                        background: theme.background.card,
-                        borderRadius: '12px',
-                        boxShadow: theme.shadow.xl,
-                        border: `1px solid ${theme.border.normal}`,
-                        zIndex: 10001,
-                        padding: '16px'
-                      }}
-                    >
-                      {isLoadingProfile ? (
-                        <div style={{ textAlign: 'center', padding: '20px', color: theme.text.tertiary }}>
-                          Loading...
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'center',
-                            marginBottom: '12px'
-                          }}>
-                            <Avatar
-                              src={message.userPhoto || userPhotos[message.userId] || selectedUserProfile?.photoURL || null}
-                              name={message.userName}
-                              color={message.userColor || '#4285f4'}
-                              size="lg"
-                              style={{ 
-                                width: '64px', 
-                                height: '64px',
-                                fontSize: '24px',
-                                marginBottom: '8px'
-                              }}
-                            />
-                            <h4 style={{ 
-                              fontSize: '16px', 
-                              fontWeight: '600', 
-                              color: theme.text.primary,
-                              margin: '0 0 4px 0'
-                            }}>
-                              {message.userName}
-                            </h4>
-                            {selectedUserProfile?.email && (
-                              <p style={{ 
-                                fontSize: '12px', 
-                                color: theme.text.secondary,
-                                margin: 0
-                              }}>
-                                {selectedUserProfile.email}
-                              </p>
-                            )}
-                          </div>
-                          
-                          {selectedUserProfile?.bio && (
-                            <div style={{
-                              padding: '12px',
-                              background: theme.background.elevated,
-                              borderRadius: '8px',
-                              marginBottom: '12px'
-                            }}>
-                              <div style={{
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                color: theme.text.secondary,
-                                marginBottom: '6px',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em'
-                              }}>
-                                Bio
-                              </div>
-                              <p style={{
-                                fontSize: '13px',
-                                color: theme.text.primary,
-                                margin: 0,
-                                lineHeight: '1.4',
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word'
-                              }}>
-                                {selectedUserProfile.bio}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Stats */}
-                          <div style={{
-                            display: 'flex',
-                            gap: '12px',
-                            marginBottom: '12px'
-                          }}>
-                            {selectedUserRank && (
-                              <div style={{
-                                flex: 1,
-                                padding: '10px',
-                                background: theme.background.elevated,
-                                borderRadius: '8px',
-                                textAlign: 'center'
-                              }}>
-                                <div style={{
-                                  fontSize: '11px',
-                                  color: theme.text.secondary,
-                                  marginBottom: '4px'
-                                }}>
-                                  Rank
-                                </div>
-                                <div style={{
-                                  fontSize: '18px',
-                                  fontWeight: '700',
-                                  color: theme.button.primary
-                                }}>
-                                  #{selectedUserRank}
-                                </div>
-                              </div>
-                            )}
-                            {selectedUserProfile?.changesCount !== undefined && (
-                              <div style={{
-                                flex: 1,
-                                padding: '10px',
-                                background: theme.background.elevated,
-                                borderRadius: '8px',
-                                textAlign: 'center'
-                              }}>
-                                <div style={{
-                                  fontSize: '11px',
-                                  color: theme.text.secondary,
-                                  marginBottom: '4px'
-                                }}>
-                                  Changes
-                                </div>
-                                <div style={{
-                                  fontSize: '18px',
-                                  fontWeight: '700',
-                                  color: theme.button.primary
-                                }}>
-                                  {selectedUserProfile.changesCount || 0}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Remove Friend Button - Only show if they are friends */}
-                          {isFriend && message.userId !== user?.uid && (
-                            <button
-                              onClick={async () => {
-                                if (!confirm(`Remove ${message.userName} from friends?`)) return;
-                                try {
-                                  await removeFriend(user.uid, message.userId);
-                                  setSelectedMessageId(null);
-                                  alert('Friend removed');
-                                } catch (error) {
-                                  console.error('[ChatPanel] Failed to remove friend:', error);
-                                  alert('Failed to remove friend');
-                                }
-                              }}
-                              style={{
-                                width: '100%',
-                                padding: '8px',
-                                background: 'transparent',
-                                border: `1px solid ${theme.border.medium}`,
-                                borderRadius: '6px',
-                                fontSize: '12px',
-                                fontWeight: '500',
-                                color: theme.text.secondary,
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                marginBottom: '12px'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.target.style.background = '#fee2e2';
-                                e.target.style.borderColor = '#ef4444';
-                                e.target.style.color = '#dc2626';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.target.style.background = 'transparent';
-                                e.target.style.borderColor = theme.border.medium;
-                                e.target.style.color = theme.text.secondary;
-                              }}
-                            >
-                              Remove Friend
-                            </button>
-                          )}
-
-                          <div style={{
-                            fontSize: '12px',
-                            color: theme.text.tertiary,
-                            textAlign: 'center'
-                          }}>
-                            Click outside to close
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </div>
                 <div style={styles.messageContent(isOwn)}>
                   <div style={styles.messageHeader}>
@@ -748,6 +499,20 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
           </button>
         </form>
       </div>
+
+      {/* User Profile View Modal */}
+      {showUserProfileModal && selectedUserData && (
+        <UserProfileView
+          userId={selectedUserData.userId}
+          userName={selectedUserData.userName}
+          userEmail={selectedUserData.userEmail}
+          userPhoto={selectedUserData.userPhoto}
+          onClose={() => {
+            setShowUserProfileModal(false);
+            setSelectedUserData(null);
+          }}
+        />
+      )}
     </div>
   );
 }

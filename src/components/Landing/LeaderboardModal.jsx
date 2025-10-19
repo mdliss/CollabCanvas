@@ -22,9 +22,11 @@ import { db } from '../../services/firebase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
-import { getFriendIds, removeFriend } from '../../services/friends';
+import { getFriendIds, removeFriend, sendFriendRequest } from '../../services/friends';
 import { getActivityData } from '../../services/dailyActivity';
 import Avatar from '../Collaboration/Avatar';
+import UserProfileView from './UserProfileView';
+import PremiumBadge from '../UI/PremiumBadge';
 
 export default function LeaderboardModal({ onClose }) {
   const { theme } = useTheme();
@@ -32,18 +34,22 @@ export default function LeaderboardModal({ onClose }) {
   const [isVisible, setIsVisible] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
-  const [selectedUserRank, setSelectedUserRank] = useState(null);
-  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
-  const [popupPosition, setPopupPosition] = useState(null);
+  const [contentVisible, setContentVisible] = useState(false);
+  const [selectedUserData, setSelectedUserData] = useState(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
   const [activityData, setActivityData] = useState([]);
-  const profilePopupRef = useRef(null);
   
   // Trigger entrance animation
   useEffect(() => {
     setTimeout(() => setIsVisible(true), 50);
   }, []);
+
+  // Trigger content fade-in after loading completes
+  useEffect(() => {
+    if (!loading) {
+      setTimeout(() => setContentVisible(true), 100);
+    }
+  }, [loading]);
 
   // Escape key handler
   useEffect(() => {
@@ -664,14 +670,23 @@ export default function LeaderboardModal({ onClose }) {
               Loading leaderboard...
             </div>
           ) : leaderboard.length === 0 ? (
-            <div style={styles.emptyState}>
+            <div style={{...styles.emptyState,
+              opacity: contentVisible ? 1 : 0,
+              transform: contentVisible ? 'translateY(0)' : 'translateY(10px)',
+              transition: 'opacity 0.4s ease, transform 0.4s ease'
+            }}>
               <div style={styles.emptyIcon}>👥</div>
               <p style={styles.emptyText}>
                 No friends yet! Add friends via the Messaging button to see them on the leaderboard.
               </p>
             </div>
           ) : (
-            leaderboard.map((leaderboardUser, index) => {
+            <div style={{
+              opacity: contentVisible ? 1 : 0,
+              transform: contentVisible ? 'translateY(0)' : 'translateY(10px)',
+              transition: 'opacity 0.4s ease, transform 0.4s ease'
+            }}>
+            {leaderboard.map((leaderboardUser, index) => {
               const rank = index + 1;
               const isSelected = selectedUserId === leaderboardUser.uid;
               
@@ -715,7 +730,8 @@ export default function LeaderboardModal({ onClose }) {
                   </div>
                 </div>
               );
-            })
+            })}
+            </div>
           )}
           </div>
 

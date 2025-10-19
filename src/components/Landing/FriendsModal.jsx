@@ -27,6 +27,8 @@ import {
 } from '../../services/friends';
 import { watchMultipleUsersPresence } from '../../services/presence';
 import Avatar from '../Collaboration/Avatar';
+import UserProfileView from './UserProfileView';
+import PremiumBadge from '../UI/PremiumBadge';
 
 export default function FriendsModal({ onClose }) {
   const { user } = useAuth();
