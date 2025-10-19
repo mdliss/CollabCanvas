@@ -225,7 +225,10 @@ export class UndoManager {
    * Sync command to RTDB for shared history display
    */
   async syncCommandToRTDB(command, status = 'done') {
-    if (!this.canvasId) return;
+    if (!this.canvasId) {
+      console.warn('🔵 [HISTORY] No canvasId - skipping RTDB sync');
+      return;
+    }
     
     try {
       const { addCommand } = await import('./sharedHistory.js');
@@ -236,13 +239,15 @@ export class UndoManager {
         timestamp: command.metadata?.timestamp || Date.now(),
         userId: command.metadata?.user?.uid || 'unknown',
         userName: command.metadata?.user?.displayName || command.metadata?.user?.email?.split('@')[0] || 'User',
-        status: status
+        status: status,
+        isAI: command.metadata?.isAI || false
       };
       
+      console.log('🔵 [HISTORY] Syncing to RTDB:', commandData);
       await addCommand(this.canvasId, commandData);
-      console.log('🔵 [HISTORY] Synced to RTDB:', commandData.description);
+      console.log('🔵 [HISTORY] ✅ Synced to RTDB successfully:', commandData.description);
     } catch (error) {
-      console.error('🔵 [HISTORY] RTDB sync failed:', error);
+      console.error('🔵 [HISTORY] ❌ RTDB sync failed:', error.message, error.stack);
     }
   }
 
@@ -498,9 +503,23 @@ export class UndoManager {
    * Clear all history
    */
   clear() {
+    console.log('🔵 [HISTORY] Clearing all history. Canvas:', this.canvasId || 'global');
+    console.log('🔵 [HISTORY] Before clear - Undo stack:', this.undoStack.length, 'Redo stack:', this.redoStack.length);
+    
     this.undoStack = [];
     this.redoStack = [];
+    
+    // Clear RTDB history for canvas-specific managers
+    if (this.canvasId) {
+      import('./sharedHistory.js').then(({ clearHistory }) => {
+        clearHistory(this.canvasId).catch(err => {
+          console.error('🔵 [HISTORY] Failed to clear RTDB history:', err);
+        });
+      });
+    }
+    
     this.notifyListeners();
+    console.log('🔵 [HISTORY] History cleared successfully');
   }
 
   /**

@@ -75,6 +75,13 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
       return;
     }
     
+    // If another profile is open, close it first with fade animation
+    if (selectedUserId && selectedUserId !== clickedUserId) {
+      setIsPopupVisible(false);
+      // Wait for fade-out before opening new profile
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
     // Calculate popup position near the clicked element with boundary detection
     const rect = event.currentTarget.getBoundingClientRect();
     const popupWidth = 320;
@@ -109,6 +116,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
     
     setSelectedUserId(clickedUserId);
     setIsLoadingProfile(true);
+    setIsPopupVisible(false); // Start hidden for fade-in
     
     // Trigger fade-in animation after a brief delay
     setTimeout(() => setIsPopupVisible(true), 10);

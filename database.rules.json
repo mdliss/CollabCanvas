@@ -116,6 +116,12 @@
         ".read": "auth != null && $userId == auth.uid",
         ".write": "auth != null && $userId == auth.uid"
       }
+    },
+    "ai-operations": {
+      "$userId": {
+        ".read": "auth != null && $userId == auth.uid",
+        ".write": "auth != null && $userId == auth.uid"
+      }
     }
   }
 }

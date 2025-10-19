@@ -240,7 +240,8 @@ export default function HistoryTimeline({ isVisible = true }) {
       background: 'transparent',
       border: 'none',
       color: theme.text.tertiary,
-      fontSize: '16px',
+      fontSize: '11px',
+      fontWeight: '600',
       cursor: 'pointer',
       padding: '4px 8px',
       borderRadius: '4px',
@@ -314,13 +315,13 @@ export default function HistoryTimeline({ isVisible = true }) {
             )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Garbage can - only visible when expanded */}
+            {/* Delete button - only visible when expanded */}
             {isExpanded && totalOperations > 0 && (
               <button
                 style={styles.trashButton}
                 onClick={handleClearHistory}
                 onMouseOver={(e) => {
-                  e.currentTarget.style.color = theme.button.danger;
+                  e.currentTarget.style.color = theme.button.danger || '#ef4444';
                   e.currentTarget.style.background = theme.isDark ? 'rgba(239, 68, 68, 0.2)' : 'rgba(239, 68, 68, 0.1)';
                 }}
                 onMouseOut={(e) => {
@@ -329,7 +330,7 @@ export default function HistoryTimeline({ isVisible = true }) {
                 }}
                 title="Clear history"
               >
-                🗑️
+                Delete
               </button>
             )}
             <span style={styles.expandIcon}>▼</span>

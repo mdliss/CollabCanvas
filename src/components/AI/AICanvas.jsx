@@ -799,11 +799,17 @@ export default function AICanvas({
        */
       if (data.toolsExecuted > 0 && data.operationId && registerAIOperation) {
         try {
+          console.log('🔵 [AI UNDO] Starting AI operation registration. OpId:', data.operationId);
+          
           // Fetch AI operation data from RTDB to get affected shape IDs
           const operationPath = `ai-operations/${user.uid}/operations/${data.operationId}`;
+          console.log('🔵 [AI UNDO] Fetching from path:', operationPath);
+          
           const operationRef = ref(rtdb, operationPath);
           const operationSnapshot = await get(operationRef);
           const operationData = operationSnapshot.val();
+          
+          console.log('🔵 [AI UNDO] Operation data fetched:', operationData ? 'SUCCESS' : 'NO DATA');
 
           if (operationData && operationData.toolCalls) {
             // Extract all affected shape IDs from tool calls
@@ -816,6 +822,7 @@ export default function AICanvas({
 
             // Deduplicate shape IDs
             const uniqueShapeIds = [...new Set(allShapeIds)];
+            console.log('🔵 [AI UNDO] Found', uniqueShapeIds.length, 'affected shapes');
 
             if (uniqueShapeIds.length > 0) {
               // Fetch current shape data for redo capability
@@ -828,6 +835,8 @@ export default function AICanvas({
               const shapeData = uniqueShapeIds
                 .map(id => allShapes[id])
                 .filter(Boolean); // Filter out null/undefined
+              
+              console.log('🔵 [AI UNDO] Fetched shape data for', shapeData.length, 'shapes');
 
               // Create AI operation command
               const historyDesc = `AI: ${fullMessage.substring(0, 50)}${fullMessage.length > 50 ? '...' : ''}`;
@@ -842,15 +851,28 @@ export default function AICanvas({
                 createShapeFn: createShape
               });
 
+              console.log('🔵 [AI UNDO] Calling registerAIOperation...');
               // Register with undo manager
               registerAIOperation(aiCommand);
-              console.log(`✅ AI operation registered: ${uniqueShapeIds.length} shapes`);
+              console.log('🔵 [AI UNDO] ✅ AI operation registered successfully:', uniqueShapeIds.length, 'shapes');
+            } else {
+              console.warn('🔵 [AI UNDO] ⚠️ No shapes found in operation');
             }
+          } else {
+            console.warn('🔵 [AI UNDO] ⚠️ No operation data or toolCalls');
           }
         } catch (error) {
-          console.error('❌ Failed to register AI operation for undo:', error.message);
+          console.error('🔵 [AI UNDO] ❌ Failed to register AI operation:', error.message);
+          console.error('🔵 [AI UNDO] Error stack:', error.stack);
+          console.error('🔵 [AI UNDO] Full error:', error);
           // Non-critical error - shapes were created successfully, just can't undo
         }
+      } else {
+        console.log('🔵 [AI UNDO] Skipping registration:', {
+          toolsExecuted: data.toolsExecuted,
+          hasOperationId: !!data.operationId,
+          hasRegisterFunc: !!registerAIOperation
+        });
       }
       
       // CRITICAL: Re-focus input after response for seamless conversation flow

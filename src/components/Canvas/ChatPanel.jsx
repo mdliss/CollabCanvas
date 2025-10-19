@@ -498,6 +498,13 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                       return;
                     }
                     
+                    // If another profile is open, close it first with fade animation
+                    if (selectedUserId && selectedUserId !== clickedUserId) {
+                      setIsPopupVisible(false);
+                      // Wait for fade-out before opening new profile
+                      await new Promise(resolve => setTimeout(resolve, 200));
+                    }
+                    
                     // Calculate popup position near the clicked avatar with boundary detection
                     const rect = e.currentTarget.getBoundingClientRect();
                     const popupWidth = 320;
@@ -532,6 +539,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                     
                     setSelectedUserId(clickedUserId);
                     setIsLoadingProfile(true);
+                    setIsPopupVisible(false); // Start hidden for fade-in
                     
                     // Trigger fade-in animation after a brief delay
                     setTimeout(() => setIsPopupVisible(true), 10);

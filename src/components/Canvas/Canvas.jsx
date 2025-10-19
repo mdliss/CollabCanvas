@@ -185,6 +185,8 @@ import ChatPanel from "./ChatPanel";
 import { checkCanvasAccess } from "../../services/sharing";
 import { createEditRequest, hasPendingRequest, subscribeToMessages, markMessageAsRead } from "../../services/notifications";
 import { useTheme } from "../../contexts/ThemeContext";
+import ShareModal from "../Landing/ShareModal";
+import { getUserSubscription } from "../../services/projects";
 
 const GRID_SIZE = 50;
 
@@ -291,6 +293,8 @@ function CanvasContent() {
   const [canvasOwnerId, setCanvasOwnerId] = useState(null);
   const [canvasName, setCanvasName] = useState('Canvas');
   const [hasRequestedAccess, setHasRequestedAccess] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [subscription, setSubscription] = useState({ isPremium: false, tier: 'free' });
   
   // Permission flags - Must be defined early for use in useEffect dependencies
   const isViewer = canvasAccess.role === 'viewer';
@@ -528,6 +532,17 @@ function CanvasContent() {
     
     checkExistingRequest();
   }, [isViewer, canvasOwnerId, user, CANVAS_ID]);
+
+  // Load subscription status (for share button premium check)
+  useEffect(() => {
+    if (!user?.uid) return;
+    
+    getUserSubscription(user.uid).then(sub => {
+      setSubscription(sub);
+    }).catch(err => {
+      console.error('[Canvas] Failed to load subscription:', err);
+    });
+  }, [user]);
 
   // Trigger UI entrance animations
   useEffect(() => {
@@ -3186,6 +3201,46 @@ function CanvasContent() {
         <span>Projects</span>
       </button>
       
+      {/* Share Button - Only for owner */}
+      {canvasAccess.role === 'owner' && (
+        <button
+          onClick={() => setShowShareModal(true)}
+          style={{
+            position: 'fixed',
+            top: isViewer ? '64px' : '20px',
+            left: '154px',
+            padding: '10px 16px',
+            background: theme.background.card,
+            border: `1px solid ${theme.border.normal}`,
+            borderRadius: '10px',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: theme.text.primary,
+            cursor: 'pointer',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            boxShadow: theme.shadow.md,
+            zIndex: 10000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            opacity: isUIVisible ? 1 : 0,
+            transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)'
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.background = theme.background.elevated;
+            e.target.style.borderColor = theme.border.strong;
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.background = theme.background.card;
+            e.target.style.borderColor = theme.border.normal;
+          }}
+          title="Share canvas"
+        >
+          <span>👥</span>
+          <span>Share</span>
+        </button>
+      )}
+      
       {/* Performance Monitor - Upper right, left of presence list */}
       <PerformanceMonitor 
         isVisible={isVisible} 
@@ -3309,12 +3364,6 @@ function CanvasContent() {
       {canEdit && <HistoryTimeline isVisible={isUIVisible} />}
       
       {/* Presence List - Shows online users in top-right with owner crown */}
-      {console.log('[Canvas] Rendering PresenceList with:', { 
-        onlineUsersCount: onlineUsers.length, 
-        canvasOwnerId, 
-        isUIVisible,
-        users: onlineUsers.map(u => u.displayName).join(', ')
-      })}
       <PresenceList 
         users={onlineUsers} 
         canvasOwnerId={canvasOwnerId} 
@@ -3736,7 +3785,7 @@ function CanvasContent() {
             right: '-6px',
             minWidth: '20px',
             height: '20px',
-            background: theme.button.danger || '#ef4444',
+            background: theme.accent.red,
             color: '#ffffff',
             borderRadius: '10px',
             fontSize: '11px',
@@ -3745,7 +3794,7 @@ function CanvasContent() {
             alignItems: 'center',
             justifyContent: 'center',
             padding: '0 6px',
-            boxShadow: theme.shadow.md,
+            boxShadow: `${theme.shadow.md}, 0 0 8px ${theme.accent.red}40`,
             border: `2px solid ${theme.background.page}`,
             transition: 'all 0.2s ease'
           }}>
@@ -3788,10 +3837,20 @@ function CanvasContent() {
         onClose={() => setIsChatPanelVisible(false)}
         hasSharedAccess={true}
         onShowShare={() => {
-          // Navigate to landing page to share
-          navigate('/');
+          // Open share modal instead of navigating away
+          setShowShareModal(true);
         }}
       />
+
+      {/* Share Modal - For owners to manage collaborators */}
+      {showShareModal && canvasAccess.role === 'owner' && (
+        <ShareModal
+          project={{ canvasId: CANVAS_ID, name: canvasName }}
+          currentUser={user}
+          isPremium={subscription.isPremium}
+          onClose={() => setShowShareModal(false)}
+        />
+      )}
     </div>
   );
 }
