@@ -3249,6 +3249,13 @@ export default function Canvas() {
       {/* History Timeline - Hidden for viewers */}
       {canEdit && <HistoryTimeline isVisible={isUIVisible} />}
       
+      {/* Presence List - Shows online users in top-right with owner crown */}
+      {console.log('[Canvas] Rendering PresenceList with:', { 
+        onlineUsersCount: onlineUsers.length, 
+        canvasOwnerId, 
+        isUIVisible,
+        users: onlineUsers.map(u => u.displayName).join(', ')
+      })}
       <PresenceList 
         users={onlineUsers} 
         canvasOwnerId={canvasOwnerId} 

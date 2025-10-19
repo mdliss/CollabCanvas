@@ -46,14 +46,23 @@ export const setUserOffline = async (canvasId, uid) => {
 };
 
 export const watchPresence = (canvasId, callback) => {
+  console.log('[watchPresence] Setting up presence watcher for canvas:', canvasId);
+  
   return onValue(ref(rtdb, getPresencePath(canvasId)), (s) => {
     const v = s.val() || {};
+    console.log('[watchPresence] RTDB data received:', JSON.stringify(v, null, 2));
+    
     // Only include users who are actually online with valid data
     const arr = Object.entries(v)
-      .filter(([, x]) => {
-        // CRITICAL FIX: Only include entries that are explicitly online AND have valid displayName
-        // This prevents "User" fallback for corrupted/partial entries
-        return x && x.online === true && x.displayName && x.displayName.trim().length > 0;
+      .filter(([uid, x]) => {
+        const isValid = x && x.online === true && x.displayName && x.displayName.trim().length > 0;
+        console.log(`[watchPresence] Checking user ${uid}:`, {
+          exists: !!x,
+          online: x?.online,
+          displayName: x?.displayName,
+          isValid
+        });
+        return isValid;
       })
       .map(([uid, x]) => ({
         uid,
@@ -62,6 +71,8 @@ export const watchPresence = (canvasId, callback) => {
         photoURL: x.photoURL || null,
         online: true
       }));
+    
+    console.log('[watchPresence] ✅ Filtered to', arr.length, 'valid online users');
     callback(arr);
   });
 };

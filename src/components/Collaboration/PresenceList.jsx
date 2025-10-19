@@ -71,7 +71,12 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
   }, [selectedUserId, isEditingBio]);
 
   // MOVED: Early return AFTER hooks
-  if (!users || users.length === 0) return null;
+  if (!users || users.length === 0) {
+    console.log('[PresenceList] Not rendering - no users online');
+    return null;
+  }
+
+  console.log('[PresenceList] Rendering with', users.length, 'online users:', users.map(u => u.displayName).join(', '));
 
   const handleUserClick = (userId) => {
     if (selectedUserId === userId) {
@@ -111,6 +116,14 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
   };
 
   const isOwnProfile = selectedUserId === currentUser?.uid;
+
+  console.log('[PresenceList] Current state:', {
+    usersCount: users.length,
+    isVisible,
+    isChatPanelVisible,
+    canvasOwnerId,
+    users: users.map(u => ({ uid: u.uid, name: u.displayName, isOwner: u.uid === canvasOwnerId }))
+  });
 
   return (
     <div

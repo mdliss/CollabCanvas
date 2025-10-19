@@ -18,7 +18,10 @@ export default function usePresence(canvasId = 'global-canvas-v1') {
 
   // Main presence effect
   useEffect(() => {
-    if (!user?.uid || !canvasId) return;
+    if (!user?.uid || !canvasId) {
+      console.log('[usePresence] Skipping - no user or canvasId');
+      return;
+    }
 
     const uid = user.uid;
     const name = user.displayName || user.email?.split('@')[0] || 'User';
@@ -27,16 +30,26 @@ export default function usePresence(canvasId = 'global-canvas-v1') {
 
     console.log('[usePresence] Setting user online:', uid, name, photoURL ? '(with photo)' : '(no photo)', 'Canvas:', canvasId);
 
-    setUserOnline(canvasId, uid, name, color, photoURL);
+    // Set user online
+    setUserOnline(canvasId, uid, name, color, photoURL).then(() => {
+      console.log('[usePresence] ✅ User marked online in RTDB');
+    }).catch(err => {
+      console.error('[usePresence] ❌ Failed to mark user online:', err);
+    });
 
-    const unsub = watchPresence(canvasId, setOnlineUsers);
+    // Watch all online users
+    console.log('[usePresence] Starting to watch presence for canvas:', canvasId);
+    const unsub = watchPresence(canvasId, (users) => {
+      console.log('[usePresence] 👥 Online users updated:', users.length, 'users');
+      setOnlineUsers(users);
+    });
 
     return () => {
       console.log('[usePresence] CLEANUP: Removing user from presence:', uid, 'Canvas:', canvasId);
       if (unsub) unsub();
       setUserOffline(canvasId, uid);
     };
-  }, [user, canvasId]);
+  }, [user?.uid, canvasId]);
 
   // Watch Firestore profile for photoURL AND displayName changes and sync to RTDB
   useEffect(() => {
