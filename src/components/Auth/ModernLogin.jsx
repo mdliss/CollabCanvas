@@ -114,12 +114,12 @@ export default function ModernLogin() {
               onClick={handleGoogleLogin}
               style={styles.googleButton}
               onMouseEnter={(e) => {
-                e.target.style.background = '#fafafa';
-                e.target.style.borderColor = 'rgba(0, 0, 0, 0.12)';
+                e.target.style.background = theme.background.elevated;
+                e.target.style.borderColor = theme.border.strong;
               }}
               onMouseLeave={(e) => {
-                e.target.style.background = '#ffffff';
-                e.target.style.borderColor = 'rgba(0, 0, 0, 0.08)';
+                e.target.style.background = theme.background.card;
+                e.target.style.borderColor = theme.border.medium;
               }}
             >
               <svg width="20" height="20" viewBox="0 0 24 24" style={{ marginRight: '12px' }}>

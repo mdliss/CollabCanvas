@@ -105,10 +105,20 @@ export default function AIDesignSuggestions({
   const [hoveredButton, setHoveredButton] = useState(null);
   const [lastAppliedCommand, setLastAppliedCommand] = useState(null);
   
-  
-  
-  
-  
+  // Escape key handler - Close panel when open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen]);
   
   // Listen for keyboard shortcut (Shift+I)
   useEffect(() => {

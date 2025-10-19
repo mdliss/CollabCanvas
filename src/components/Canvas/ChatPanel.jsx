@@ -100,6 +100,21 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     }
   }, [isOpen]);
 
+  // Escape key handler - Close panel even when typing
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
   // Load user profile when avatar is clicked
 
   const handleSendMessage = async (e) => {
@@ -507,6 +522,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
           userName={selectedUserData.userName}
           userEmail={selectedUserData.userEmail}
           userPhoto={selectedUserData.userPhoto}
+          wide={true}
           onClose={() => {
             setShowUserProfileModal(false);
             setSelectedUserData(null);

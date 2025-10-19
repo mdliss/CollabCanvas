@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * ColorPicker - Full-spectrum color picker with opacity control
@@ -7,8 +8,11 @@ import { useState, useRef, useEffect } from 'react';
  * - Opacity slider (0-100%)
  * - Hex input field
  * - Visual preview with checkerboard background
+ * - Smooth animations
+ * - Theme-aware styling
  */
 export default function ColorPicker({ initialColor = '#FF0000', initialOpacity = 100, onColorChange, onClose }) {
+  const { theme } = useTheme();
   const [hue, setHue] = useState(0);
   const [saturation, setSaturation] = useState(100);
   const [value, setValue] = useState(100);
@@ -16,9 +20,27 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
   const [hexInput, setHexInput] = useState(initialColor);
   const [isDragging, setIsDragging] = useState(false);
   const [dragType, setDragType] = useState(null);
+  const [isVisible, setIsVisible] = useState(false);
   
   const svSquareRef = useRef(null);
   const hueSliderRef = useRef(null);
+
+  // Trigger entrance animation
+  useEffect(() => {
+    setTimeout(() => setIsVisible(true), 50);
+  }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
 
   // Parse initial color to HSV
   useEffect(() => {
@@ -161,14 +183,17 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
     }
   };
 
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose(), 300);
+  };
+
   // Handle apply button
   const handleApply = () => {
     if (onColorChange) {
       onColorChange(getCurrentHex(), opacity);
     }
-    if (onClose) {
-      onClose();
-    }
+    handleClose();
   };
 
   // Mouse event handlers for dragging
@@ -206,39 +231,45 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      background: theme.backdrop,
+      backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 100000,
-      backdropFilter: 'blur(4px)'
+      opacity: isVisible ? 1 : 0,
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     panel: {
-      backgroundColor: '#2a2a2a',
-      borderRadius: '12px',
-      padding: '24px',
-      width: '320px',
-      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      color: '#fff'
+      background: theme.background.card,
+      borderRadius: '16px',
+      padding: '32px',
+      width: '380px',
+      boxShadow: theme.shadow.xl,
+      border: `1px solid ${theme.border.normal}`,
+      color: theme.text.primary,
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     header: {
-      fontSize: '18px',
-      fontWeight: 'bold',
-      marginBottom: '20px',
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'center'
+      fontSize: '20px',
+      fontWeight: '600',
+      margin: '0 0 24px 0',
+      textAlign: 'center',
+      color: theme.text.primary,
+      letterSpacing: '-0.02em'
     },
     svSquare: {
       width: '100%',
-      height: '200px',
-      borderRadius: '8px',
-      marginBottom: '16px',
+      height: '220px',
+      borderRadius: '12px',
+      marginBottom: '20px',
       cursor: 'crosshair',
       position: 'relative',
       background: `linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, hsl(${hue}, 100%, 50%))`,
-      border: '2px solid rgba(255, 255, 255, 0.2)'
+      border: `1px solid ${theme.border.medium}`,
+      boxShadow: theme.shadow.sm
     },
     svCursor: {
       position: 'absolute',
@@ -254,13 +285,14 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
     },
     hueSlider: {
       width: '100%',
-      height: '20px',
-      borderRadius: '10px',
-      marginBottom: '16px',
+      height: '24px',
+      borderRadius: '12px',
+      marginBottom: '20px',
       cursor: 'pointer',
       position: 'relative',
       background: 'linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)',
-      border: '2px solid rgba(255, 255, 255, 0.2)'
+      border: `1px solid ${theme.border.medium}`,
+      boxShadow: theme.shadow.sm
     },
     hueCursor: {
       position: 'absolute',
@@ -279,13 +311,14 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
     },
     label: {
       fontSize: '13px',
-      marginBottom: '6px',
-      opacity: 0.8
+      marginBottom: '10px',
+      color: theme.text.secondary,
+      fontWeight: '500'
     },
     opacitySlider: {
       width: '100%',
-      height: '20px',
-      borderRadius: '10px',
+      height: '24px',
+      borderRadius: '12px',
       cursor: 'pointer',
       position: 'relative',
       backgroundImage: `
@@ -296,7 +329,8 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
       `,
       backgroundSize: '10px 10px',
       backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0px',
-      border: '2px solid rgba(255, 255, 255, 0.2)'
+      border: `1px solid ${theme.border.medium}`,
+      boxShadow: theme.shadow.sm
     },
     opacityGradient: {
       width: '100%',
@@ -318,21 +352,24 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
     },
     hexInput: {
       width: '100%',
-      padding: '10px',
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      border: '1px solid rgba(255, 255, 255, 0.2)',
-      borderRadius: '6px',
-      color: '#fff',
-      fontSize: '14px',
+      padding: '12px',
+      background: theme.background.elevated,
+      border: `1px solid ${theme.border.medium}`,
+      borderRadius: '8px',
+      color: theme.text.primary,
+      fontSize: '15px',
       fontFamily: 'monospace',
-      marginBottom: '16px',
-      textAlign: 'center'
+      fontWeight: '500',
+      marginBottom: '20px',
+      textAlign: 'center',
+      outline: 'none',
+      transition: 'border-color 0.2s ease'
     },
     preview: {
       width: '100%',
-      height: '50px',
-      borderRadius: '8px',
-      marginBottom: '20px',
+      height: '60px',
+      borderRadius: '12px',
+      marginBottom: '24px',
       backgroundImage: `
         linear-gradient(45deg, #ccc 25%, transparent 25%),
         linear-gradient(-45deg, #ccc 25%, transparent 25%),
@@ -341,13 +378,14 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
       `,
       backgroundSize: '10px 10px',
       backgroundPosition: '0 0, 0 5px, 5px -5px, -5px 0px',
-      border: '2px solid rgba(255, 255, 255, 0.2)',
+      border: `1px solid ${theme.border.medium}`,
+      boxShadow: theme.shadow.sm,
       position: 'relative'
     },
     previewColor: {
       width: '100%',
       height: '100%',
-      borderRadius: '6px',
+      borderRadius: '10px',
       backgroundColor: getCurrentRgba()
     },
     buttons: {
@@ -365,22 +403,22 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
       transition: 'all 0.2s ease'
     },
     applyButton: {
-      backgroundColor: '#22c55e',
-      color: '#fff'
+      background: theme.button.primary,
+      color: theme.text.inverse
     },
     cancelButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      color: '#fff'
+      background: theme.background.elevated,
+      color: theme.text.primary,
+      border: `1px solid ${theme.border.medium}`
     }
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <div style={styles.overlay} onClick={handleClose}>
       <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
-          <span>🎨 Custom Color</span>
-          <span style={{ fontSize: '13px', opacity: 0.6 }}>{opacity}%</span>
-        </div>
+        <h3 style={styles.header}>
+          Custom Color
+        </h3>
 
         {/* Saturation/Value Square */}
         <div
@@ -441,6 +479,8 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
           placeholder="#FFFFFF"
           style={styles.hexInput}
           maxLength={7}
+          onFocus={(e) => e.target.style.borderColor = theme.button.primary}
+          onBlur={(e) => e.target.style.borderColor = theme.border.medium}
         />
 
         {/* Preview */}
@@ -452,17 +492,23 @@ export default function ColorPicker({ initialColor = '#FF0000', initialOpacity =
         <div style={styles.buttons}>
           <button
             style={{ ...styles.button, ...styles.cancelButton }}
-            onClick={onClose}
-            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
+            onClick={handleClose}
+            onMouseEnter={(e) => {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.strong;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.medium;
+            }}
           >
             Cancel
           </button>
           <button
             style={{ ...styles.button, ...styles.applyButton }}
             onClick={handleApply}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#16a34a'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#22c55e'}
+            onMouseEnter={(e) => e.target.style.background = theme.button.primaryHover}
+            onMouseLeave={(e) => e.target.style.background = theme.button.primary}
           >
             Apply
           </button>

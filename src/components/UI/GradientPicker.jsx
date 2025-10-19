@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * GradientPicker - Simple two-color gradient picker
@@ -7,19 +8,43 @@ import { useState } from 'react';
  * - Angle control (0-360 degrees)
  * - Linear gradient only (for simplicity)
  * - Visual preview
+ * - Smooth animations
+ * - Theme-aware styling
  */
 export default function GradientPicker({ onApply, onClose }) {
+  const { theme } = useTheme();
   const [color1, setColor1] = useState('#FF6B6B');
   const [color2, setColor2] = useState('#4ECDC4');
   const [angle, setAngle] = useState(90);
+  const [isVisible, setIsVisible] = useState(false);
+
+  // Trigger entrance animation
+  useEffect(() => {
+    setTimeout(() => setIsVisible(true), 50);
+  }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose(), 300);
+  };
 
   const handleApply = () => {
     if (onApply) {
       onApply({ color1, color2, angle });
     }
-    if (onClose) {
-      onClose();
-    }
+    handleClose();
   };
 
   const presetGradients = [
@@ -29,6 +54,12 @@ export default function GradientPicker({ onApply, onClose }) {
     { name: 'Fire', colors: ['#F2994A', '#F2C94C'], angle: 45 },
     { name: 'Purple', colors: ['#667EEA', '#764BA2'], angle: 135 },
     { name: 'Mint', colors: ['#00B4DB', '#0083B0'], angle: 90 },
+    { name: 'Rose', colors: ['#FF6B9D', '#C23866'], angle: 120 },
+    { name: 'Sky', colors: ['#38B2AC', '#2C5282'], angle: 90 },
+    { name: 'Peach', colors: ['#FFDAB9', '#FFB6C1'], angle: 45 },
+    { name: 'Night', colors: ['#2C3E50', '#3498DB'], angle: 180 },
+    { name: 'Autumn', colors: ['#F09819', '#EDDE5D'], angle: 135 },
+    { name: 'Spring', colors: ['#56AB2F', '#A8E063'], angle: 90 },
   ];
 
   const styles = {
@@ -38,43 +69,52 @@ export default function GradientPicker({ onApply, onClose }) {
       left: 0,
       right: 0,
       bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      background: theme.backdrop,
+      backdropFilter: 'blur(8px)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 100000,
-      backdropFilter: 'blur(4px)'
+      opacity: isVisible ? 1 : 0,
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     panel: {
-      backgroundColor: '#2a2a2a',
-      borderRadius: '12px',
-      padding: '24px',
-      width: '340px',
-      boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
-      border: '1px solid rgba(255, 255, 255, 0.1)',
-      color: '#fff'
+      background: theme.background.card,
+      borderRadius: '16px',
+      padding: '32px',
+      width: '500px',
+      maxWidth: '90vw',
+      boxShadow: theme.shadow.xl,
+      border: `1px solid ${theme.border.normal}`,
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     header: {
-      fontSize: '18px',
-      fontWeight: 'bold',
-      marginBottom: '20px'
+      fontSize: '20px',
+      fontWeight: '600',
+      margin: '0 0 24px 0',
+      color: theme.text.primary,
+      textAlign: 'center',
+      letterSpacing: '-0.02em'
     },
     preview: {
       width: '100%',
-      height: '100px',
-      borderRadius: '8px',
-      marginBottom: '20px',
+      height: '120px',
+      borderRadius: '12px',
+      marginBottom: '24px',
       background: `linear-gradient(${angle}deg, ${color1}, ${color2})`,
-      border: '2px solid rgba(255, 255, 255, 0.2)',
-      boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.2)'
+      border: `1px solid ${theme.border.medium}`,
+      boxShadow: theme.shadow.md
     },
     section: {
       marginBottom: '20px'
     },
     label: {
       fontSize: '13px',
-      marginBottom: '8px',
-      opacity: 0.8
+      marginBottom: '10px',
+      color: theme.text.secondary,
+      fontWeight: '500'
     },
     colorInputs: {
       display: 'flex',
@@ -86,17 +126,19 @@ export default function GradientPicker({ onApply, onClose }) {
     },
     colorBox: {
       width: '100%',
-      height: '50px',
-      borderRadius: '6px',
-      border: '2px solid rgba(255, 255, 255, 0.2)',
+      height: '56px',
+      borderRadius: '8px',
+      border: `1px solid ${theme.border.medium}`,
       cursor: 'pointer',
-      marginBottom: '6px'
+      marginBottom: '8px',
+      transition: 'all 0.2s ease'
     },
     colorLabel: {
-      fontSize: '11px',
+      fontSize: '12px',
       textAlign: 'center',
-      opacity: 0.6,
-      fontFamily: 'monospace'
+      color: theme.text.tertiary,
+      fontFamily: 'monospace',
+      fontWeight: '500'
     },
     angleControl: {
       marginBottom: '20px'
@@ -106,9 +148,10 @@ export default function GradientPicker({ onApply, onClose }) {
       marginBottom: '6px'
     },
     angleDisplay: {
-      fontSize: '13px',
+      fontSize: '14px',
       textAlign: 'center',
-      opacity: 0.8
+      color: theme.text.primary,
+      fontWeight: '500'
     },
     presets: {
       marginBottom: '20px'
@@ -116,20 +159,24 @@ export default function GradientPicker({ onApply, onClose }) {
     presetGrid: {
       display: 'grid',
       gridTemplateColumns: 'repeat(3, 1fr)',
-      gap: '8px'
+      gap: '12px'
     },
     preset: {
-      height: '50px',
-      borderRadius: '6px',
-      border: '2px solid rgba(255, 255, 255, 0.2)',
+      height: '80px',
+      borderRadius: '12px',
+      border: `1px solid ${theme.border.medium}`,
       cursor: 'pointer',
       transition: 'all 0.2s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      fontSize: '11px',
-      fontWeight: '500',
-      textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
+      fontSize: '13px',
+      fontWeight: '600',
+      color: '#ffffff',
+      textShadow: '0 1px 3px rgba(0, 0, 0, 0.8)',
+      boxShadow: theme.shadow.sm,
+      padding: 0,
+      outline: 'none'
     },
     buttons: {
       display: 'flex',
@@ -146,113 +193,61 @@ export default function GradientPicker({ onApply, onClose }) {
       transition: 'all 0.2s ease'
     },
     applyButton: {
-      backgroundColor: '#22c55e',
-      color: '#fff'
+      background: theme.button.primary,
+      color: theme.text.inverse
     },
     cancelButton: {
-      backgroundColor: 'rgba(255, 255, 255, 0.1)',
-      color: '#fff'
+      background: theme.background.elevated,
+      color: theme.text.primary,
+      border: `1px solid ${theme.border.medium}`
     }
   };
 
   return (
-    <div style={styles.overlay} onClick={onClose}>
+    <div style={styles.overlay} onClick={handleClose}>
       <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.header}>
-          🌈 Gradient Picker
-        </div>
+        <h3 style={styles.header}>
+          Gradient Picker
+        </h3>
 
-        {/* Preview */}
-        <div style={styles.preview} />
-
-        {/* Color Inputs */}
-        <div style={styles.section}>
-          <div style={styles.label}>Gradient Colors</div>
-          <div style={styles.colorInputs}>
-            <div style={styles.colorInput}>
-              <div
-                style={{ ...styles.colorBox, backgroundColor: color1 }}
-                onClick={() => {
-                  const newColor = prompt('Enter hex color (e.g., #FF6B6B):', color1);
-                  if (newColor && /^#[0-9A-F]{6}$/i.test(newColor)) {
-                    setColor1(newColor);
-                  }
-                }}
-              />
-              <div style={styles.colorLabel}>Start: {color1}</div>
-            </div>
-            <div style={styles.colorInput}>
-              <div
-                style={{ ...styles.colorBox, backgroundColor: color2 }}
-                onClick={() => {
-                  const newColor = prompt('Enter hex color (e.g., #4ECDC4):', color2);
-                  if (newColor && /^#[0-9A-F]{6}$/i.test(newColor)) {
-                    setColor2(newColor);
-                  }
-                }}
-              />
-              <div style={styles.colorLabel}>End: {color2}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Angle Control */}
-        <div style={styles.angleControl}>
-          <div style={styles.label}>Angle</div>
-          <input
-            type="range"
-            min="0"
-            max="360"
-            value={angle}
-            onChange={(e) => setAngle(parseInt(e.target.value))}
-            style={styles.angleSlider}
-          />
-          <div style={styles.angleDisplay}>{angle}°</div>
-        </div>
-
-        {/* Presets */}
-        <div style={styles.presets}>
-          <div style={styles.label}>Presets</div>
-          <div style={styles.presetGrid}>
-            {presetGradients.map((preset) => (
-              <div
-                key={preset.name}
-                style={{
-                  ...styles.preset,
-                  background: `linear-gradient(${preset.angle}deg, ${preset.colors[0]}, ${preset.colors[1]})`
-                }}
-                onClick={() => {
-                  setColor1(preset.colors[0]);
-                  setColor2(preset.colors[1]);
-                  setAngle(preset.angle);
-                }}
-                onMouseEnter={(e) => e.target.style.borderColor = '#22c55e'}
-                onMouseLeave={(e) => e.target.style.borderColor = 'rgba(255, 255, 255, 0.2)'}
-              >
+        {/* Gradient Presets Grid - Simple selection */}
+        <div style={styles.presetGrid}>
+          {presetGradients.map((preset) => (
+            <button
+              key={preset.name}
+              style={{
+                ...styles.preset,
+                background: `linear-gradient(${preset.angle}deg, ${preset.colors[0]}, ${preset.colors[1]})`
+              }}
+              onClick={() => {
+                onApply({ 
+                  color1: preset.colors[0], 
+                  color2: preset.colors[1], 
+                  angle: preset.angle 
+                });
+                handleClose();
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = theme.button.primary;
+                e.currentTarget.style.transform = 'scale(1.05)';
+                e.currentTarget.style.boxShadow = theme.shadow.md;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = theme.border.medium;
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = theme.shadow.sm;
+              }}
+            >
+              <span style={{
+                background: 'rgba(0, 0, 0, 0.3)',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                backdropFilter: 'blur(4px)'
+              }}>
                 {preset.name}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={styles.buttons}>
-          <button
-            style={{ ...styles.button, ...styles.cancelButton }}
-            onClick={onClose}
-            onMouseEnter={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.15)'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = 'rgba(255, 255, 255, 0.1)'}
-          >
-            Cancel
-          </button>
-          <button
-            style={{ ...styles.button, ...styles.applyButton }}
-            onClick={handleApply}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#16a34a'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#22c55e'}
-          >
-            Apply Gradient
-          </button>
+              </span>
+            </button>
+          ))}
         </div>
       </div>
     </div>

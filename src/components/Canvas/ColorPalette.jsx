@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { COLOR_PALETTE } from './constants';
 import { useColorHistory } from '../../hooks/useColorHistory';
+import { useTheme } from '../../contexts/ThemeContext';
 import ColorPicker from '../UI/ColorPicker';
 import GradientPicker from '../UI/GradientPicker';
 
@@ -13,11 +14,11 @@ import GradientPicker from '../UI/GradientPicker';
  * - Gradient picker button
  */
 export default function ColorPalette({ onColorSelect, onGradientSelect, selectedCount, isVisible = true }) {
+  const { theme } = useTheme();
   const [scrollIndex, setScrollIndex] = useState(0);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showGradientPicker, setShowGradientPicker] = useState(false);
-  const [isHistoryHovered, setIsHistoryHovered] = useState(false);
-  const { history, addColor, addGradient, clearHistory } = useColorHistory();
+  const { history, addColor, addGradient } = useColorHistory();
   const paletteRef = useRef(null);
   
   const VISIBLE_COLORS = 10; // Show 10 colors at a time
@@ -129,16 +130,16 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           bottom: '0',
           left: '50%',
           transform: isVisible ? 'translateX(-50%)' : 'translate(-50%, 10px)',
-          background: 'rgba(255, 255, 255, 0.95)',
+          background: theme.isDark ? 'rgba(26, 29, 36, 0.98)' : 'rgba(255, 255, 255, 0.95)',
           backdropFilter: 'blur(10px)',
           borderRadius: '12px 12px 0 0',
-          boxShadow: '0 -4px 12px rgba(0, 0, 0, 0.15)',
+          boxShadow: theme.shadow.lg,
           padding: '12px 16px',
           display: 'flex',
           alignItems: 'center',
           gap: '8px',
           zIndex: 9998,
-          border: '1px solid rgba(0, 0, 0, 0.1)',
+          border: `1px solid ${theme.border.normal}`,
           borderBottom: 'none',
           opacity: isVisible ? 1 : 0,
           transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.3s',
@@ -150,7 +151,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           style={{
             fontSize: '13px',
             fontWeight: '500',
-            color: '#666',
+            color: theme.text.secondary,
             marginRight: '4px',
             whiteSpace: 'nowrap'
           }}
@@ -160,19 +161,16 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
 
         {/* Color History - Shows last 4 colors/gradients with opacity */}
         {history.length > 0 && (
-          <>
-            <div
-              onMouseEnter={() => setIsHistoryHovered(true)}
-              onMouseLeave={() => setIsHistoryHovered(false)}
-              style={{
-                display: 'flex',
-                gap: '3px',
-                alignItems: 'center',
-                paddingRight: '8px',
-                borderRight: '1px solid rgba(0, 0, 0, 0.1)',
-                position: 'relative'
-              }}
-            >
+          <div
+            style={{
+              display: 'flex',
+              gap: '3px',
+              alignItems: 'center',
+              paddingRight: '8px',
+              borderRight: '1px solid rgba(0, 0, 0, 0.1)',
+              position: 'relative'
+            }}
+          >
               {history.slice(0, 4).map((item, idx) => {
                 // Generate unique key based on item type
                 const itemKey = item.type === 'solid' 
@@ -254,49 +252,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
                   </button>
                 );
               })}
-              
-              {/* Clear History Button - Only visible on hover */}
-              {isHistoryHovered && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (window.confirm('Clear all color history?')) {
-                      clearHistory();
-                    }
-                  }}
-                  style={{
-                    width: '28px',
-                    height: '28px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.3)',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    padding: '0',
-                    outline: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px',
-                    marginLeft: '4px'
-                  }}
-                  title="Clear history"
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.2)';
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.5)';
-                    e.currentTarget.style.transform = 'scale(1.05)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.1)';
-                    e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.3)';
-                    e.currentTarget.style.transform = 'scale(1)';
-                  }}
-                >
-                  🗑️
-                </button>
-              )}
-            </div>
-          </>
+          </div>
         )}
 
         {/* Scroll Left Button */}
@@ -306,14 +262,15 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           style={{
             width: '32px',
             height: '40px',
-            backgroundColor: canScrollLeft ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)',
-            border: '1px solid rgba(0, 0, 0, 0.15)',
+            background: canScrollLeft ? theme.background.elevated : theme.background.card,
+            border: `1px solid ${theme.border.medium}`,
             borderRadius: '6px',
             cursor: canScrollLeft ? 'pointer' : 'default',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '14px',
+            color: theme.text.primary,
             opacity: canScrollLeft ? 1 : 0.3,
             transition: 'all 0.15s ease',
             padding: 0,
@@ -321,12 +278,12 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           }}
           onMouseEnter={(e) => {
             if (canScrollLeft) {
-              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.background = theme.background.card;
               e.currentTarget.style.transform = 'scale(1.05)';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = canScrollLeft ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)';
+            e.currentTarget.style.background = canScrollLeft ? theme.background.elevated : theme.background.card;
             e.currentTarget.style.transform = 'scale(1)';
           }}
           title="Previous colors"
@@ -383,14 +340,15 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           style={{
             width: '32px',
             height: '40px',
-            backgroundColor: canScrollRight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)',
-            border: '1px solid rgba(0, 0, 0, 0.15)',
+            background: canScrollRight ? theme.background.elevated : theme.background.card,
+            border: `1px solid ${theme.border.medium}`,
             borderRadius: '6px',
             cursor: canScrollRight ? 'pointer' : 'default',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             fontSize: '14px',
+            color: theme.text.primary,
             opacity: canScrollRight ? 1 : 0.3,
             transition: 'all 0.15s ease',
             padding: 0,
@@ -398,12 +356,12 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           }}
           onMouseEnter={(e) => {
             if (canScrollRight) {
-              e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.15)';
+              e.currentTarget.style.background = theme.background.card;
               e.currentTarget.style.transform = 'scale(1.05)';
             }
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = canScrollRight ? 'rgba(0, 0, 0, 0.1)' : 'rgba(0, 0, 0, 0.02)';
+            e.currentTarget.style.background = canScrollRight ? theme.background.elevated : theme.background.card;
             e.currentTarget.style.transform = 'scale(1)';
           }}
           title="Next colors"
@@ -416,7 +374,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
           style={{
             width: '1px',
             height: '32px',
-            backgroundColor: 'rgba(0, 0, 0, 0.1)'
+            background: theme.border.light
           }}
         />
 
@@ -427,7 +385,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
             width: '40px',
             height: '40px',
             background: 'linear-gradient(135deg, #FF6B6B, #4ECDC4)',
-            border: '2px solid rgba(0, 0, 0, 0.2)',
+            border: `2px solid ${theme.border.medium}`,
             borderRadius: '8px',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
@@ -436,19 +394,22 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '16px'
+            fontSize: '13px',
+            fontWeight: '600',
+            color: '#ffffff',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.5)'
           }}
           title="Gradient"
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.5)';
+            e.currentTarget.style.borderColor = theme.border.strong;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+            e.currentTarget.style.borderColor = theme.border.medium;
           }}
         >
-          🌈
+          ∇
         </button>
 
         {/* Custom Color Button */}
@@ -458,7 +419,7 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
             width: '40px',
             height: '40px',
             background: 'conic-gradient(from 0deg, red, yellow, lime, aqua, blue, magenta, red)',
-            border: '2px solid rgba(0, 0, 0, 0.2)',
+            border: `2px solid ${theme.border.medium}`,
             borderRadius: '8px',
             cursor: 'pointer',
             transition: 'all 0.15s ease',
@@ -467,48 +428,24 @@ export default function ColorPalette({ onColorSelect, onGradientSelect, selected
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '16px',
+            fontSize: '18px',
+            fontWeight: '600',
+            color: '#ffffff',
+            textShadow: '0 1px 2px rgba(0, 0, 0, 0.8)',
             position: 'relative'
           }}
           title="Custom Color"
           onMouseEnter={(e) => {
             e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.5)';
+            e.currentTarget.style.borderColor = theme.border.strong;
           }}
           onMouseLeave={(e) => {
             e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.borderColor = 'rgba(0, 0, 0, 0.2)';
+            e.currentTarget.style.borderColor = theme.border.medium;
           }}
         >
-          <span
-            style={{
-              backgroundColor: 'rgba(255, 255, 255, 0.9)',
-              width: '24px',
-              height: '24px',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            +
-          </span>
+          +
         </button>
-
-        {/* Scroll hint */}
-        {(canScrollLeft || canScrollRight) && (
-          <div
-            style={{
-              fontSize: '10px',
-              opacity: 0.5,
-              whiteSpace: 'nowrap',
-              marginLeft: '4px',
-              fontStyle: 'italic'
-            }}
-          >
-            Scroll here →
-          </div>
-        )}
 
         <style>
           {`

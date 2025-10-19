@@ -310,13 +310,20 @@ export default function FriendsModal({ onClose }) {
             onClick={() => setActiveTab('all')}
             style={{
               ...styles.tab,
-              ...(activeTab === 'all' ? styles.tabActive : styles.tabInactive)
+              color: activeTab === 'all' ? theme.text.primary : theme.text.secondary,
+              borderBottomColor: activeTab === 'all' ? theme.button.primary : 'transparent'
             }}
             onMouseEnter={(e) => {
-              if (activeTab !== 'all') e.target.style.color = theme.text.primary;
+              if (activeTab !== 'all') {
+                e.target.style.color = theme.text.primary;
+                e.target.style.borderBottomColor = theme.border.medium;
+              }
             }}
             onMouseLeave={(e) => {
-              if (activeTab !== 'all') e.target.style.color = theme.text.secondary;
+              if (activeTab !== 'all') {
+                e.target.style.color = theme.text.secondary;
+                e.target.style.borderBottomColor = 'transparent';
+              }
             }}
           >
             All Friends ({friends.length})
@@ -325,13 +332,20 @@ export default function FriendsModal({ onClose }) {
             onClick={() => setActiveTab('pending')}
             style={{
               ...styles.tab,
-              ...(activeTab === 'pending' ? styles.tabActive : styles.tabInactive)
+              color: activeTab === 'pending' ? theme.text.primary : theme.text.secondary,
+              borderBottomColor: activeTab === 'pending' ? theme.button.primary : 'transparent'
             }}
             onMouseEnter={(e) => {
-              if (activeTab !== 'pending') e.target.style.color = theme.text.primary;
+              if (activeTab !== 'pending') {
+                e.target.style.color = theme.text.primary;
+                e.target.style.borderBottomColor = theme.border.medium;
+              }
             }}
             onMouseLeave={(e) => {
-              if (activeTab !== 'pending') e.target.style.color = theme.text.secondary;
+              if (activeTab !== 'pending') {
+                e.target.style.color = theme.text.secondary;
+                e.target.style.borderBottomColor = 'transparent';
+              }
             }}
           >
             Requests
@@ -355,13 +369,20 @@ export default function FriendsModal({ onClose }) {
             onClick={() => setActiveTab('add')}
             style={{
               ...styles.tab,
-              ...(activeTab === 'add' ? styles.tabActive : styles.tabInactive)
+              color: activeTab === 'add' ? theme.text.primary : theme.text.secondary,
+              borderBottomColor: activeTab === 'add' ? theme.button.primary : 'transparent'
             }}
             onMouseEnter={(e) => {
-              if (activeTab !== 'add') e.target.style.color = theme.text.primary;
+              if (activeTab !== 'add') {
+                e.target.style.color = theme.text.primary;
+                e.target.style.borderBottomColor = theme.border.medium;
+              }
             }}
             onMouseLeave={(e) => {
-              if (activeTab !== 'add') e.target.style.color = theme.text.secondary;
+              if (activeTab !== 'add') {
+                e.target.style.color = theme.text.secondary;
+                e.target.style.borderBottomColor = 'transparent';
+              }
             }}
           >
             Add Friend
