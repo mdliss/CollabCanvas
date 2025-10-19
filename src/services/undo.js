@@ -203,14 +203,13 @@ class UndoManager {
       // Not in batch mode - execute immediately and add to stack
       await command.execute();
       
-      // Track change for leaderboard (non-blocking, lazy import to avoid circular deps)
+      // Track change for leaderboard and daily activity (non-blocking, lazy import)
       if (user?.uid) {
-        import('./userProfile').then(({ incrementChangesCount }) => {
-          incrementChangesCount(user.uid, 1).catch(err => {
-            console.warn('[UndoManager] Failed to track change for leaderboard:', err);
-          });
-        }).catch(() => {
-          // Silently fail if userProfile module can't be loaded
+        Promise.all([
+          import('./userProfile').then(({ incrementChangesCount }) => incrementChangesCount(user.uid, 1)),
+          import('./dailyActivity').then(({ incrementTodayActivity }) => incrementTodayActivity(user.uid))
+        ]).catch(err => {
+          console.warn('[UndoManager] Failed to track change:', err);
         });
       }
       
@@ -265,15 +264,14 @@ class UndoManager {
       this.batchDescription
     );
     
-    // Track changes for leaderboard (BATCH = 1 CHANGE, not n changes)
+    // Track changes for leaderboard and daily activity (BATCH = 1 CHANGE, not n changes)
     const firstCommand = this.batchCommands[0];
     if (firstCommand?.metadata?.user?.uid) {
-      import('./userProfile').then(({ incrementChangesCount }) => {
-        incrementChangesCount(firstCommand.metadata.user.uid, 1).catch(err => {
-          console.warn('[UndoManager] Failed to track batch changes for leaderboard:', err);
-        });
-      }).catch(() => {
-        // Silently fail if userProfile module can't be loaded
+      Promise.all([
+        import('./userProfile').then(({ incrementChangesCount }) => incrementChangesCount(firstCommand.metadata.user.uid, 1)),
+        import('./dailyActivity').then(({ incrementTodayActivity }) => incrementTodayActivity(firstCommand.metadata.user.uid))
+      ]).catch(err => {
+        console.warn('[UndoManager] Failed to track batch changes:', err);
       });
     }
     
@@ -587,14 +585,13 @@ class UndoManager {
     aiCommand.metadata.isAI = true;
     aiCommand.metadata.user = aiCommand.user; // Copy user from command for getUserName()
     
-    // Track changes for leaderboard (AI OPERATION = 1 CHANGE, not n shapes)
+    // Track changes for leaderboard and daily activity (AI OPERATION = 1 CHANGE, not n shapes)
     if (aiCommand.user?.uid && aiCommand.affectedShapeIds) {
-      import('./userProfile').then(({ incrementChangesCount }) => {
-        incrementChangesCount(aiCommand.user.uid, 1).catch(err => {
-          console.warn('[UndoManager] Failed to track AI changes for leaderboard:', err);
-        });
-      }).catch(() => {
-        // Silently fail if userProfile module can't be loaded
+      Promise.all([
+        import('./userProfile').then(({ incrementChangesCount }) => incrementChangesCount(aiCommand.user.uid, 1)),
+        import('./dailyActivity').then(({ incrementTodayActivity }) => incrementTodayActivity(aiCommand.user.uid))
+      ]).catch(err => {
+        console.warn('[UndoManager] Failed to track AI changes:', err);
       });
     }
     

@@ -29,6 +29,18 @@ export default function ShareWithFriendModal({ friend, onClose }) {
     }).finally(() => setLoading(false));
   }, [user]);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && !sharing) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [sharing, onClose]);
+
   const handleShare = async () => {
     if (!selectedProject || !friend || !user) return;
 

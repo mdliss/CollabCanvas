@@ -40,6 +40,18 @@ export default function SubscriptionModal({ onClose, currentProjectCount = 0 }) 
     return () => clearTimeout(timer);
   }, []);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && !loading) {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [loading]);
+
   const handleSubscribe = async () => {
     setLoading(true);
     setError('');

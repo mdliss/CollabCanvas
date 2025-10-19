@@ -128,9 +128,12 @@ export const listSharedCanvases = async (userEmail) => {
       if (collaborators[emailKey]) {
         const collab = collaborators[emailKey];
         
+        const projectName = canvasData.metadata?.projectName || 'Shared Canvas';
+        console.log(`[Projects] Loading shared canvas ${canvasId}: "${projectName}" (updated: ${new Date(canvasData.metadata?.lastUpdated || 0).toLocaleString()})`);
+        
         sharedCanvases.push({
           id: `shared_${canvasId}`,
-          name: canvasData.metadata?.projectName || 'Shared Canvas',
+          name: projectName,
           canvasId: canvasId,
           createdAt: canvasData.metadata?.createdAt || Date.now(),
           updatedAt: canvasData.metadata?.lastUpdated || Date.now(),

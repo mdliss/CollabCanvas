@@ -23,9 +23,9 @@ export const getConversationId = (userId1, userId2) => {
 };
 
 /**
- * Send a direct message to a friend (with optional attachment)
+ * Send a direct message to a friend (with optional attachment and reply)
  */
-export const sendDirectMessage = async (fromUser, toUserId, messageText, attachment = null) => {
+export const sendDirectMessage = async (fromUser, toUserId, messageText, attachment = null, replyTo = null) => {
   try {
     const conversationId = getConversationId(fromUser.uid, toUserId);
     const timestamp = Date.now();
@@ -43,6 +43,11 @@ export const sendDirectMessage = async (fromUser, toUserId, messageText, attachm
     // Add attachment if provided
     if (attachment) {
       messageData.attachment = attachment;
+    }
+
+    // Add reply reference if provided
+    if (replyTo) {
+      messageData.replyTo = replyTo;
     }
     
     await push(messagesRef, messageData);

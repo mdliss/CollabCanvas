@@ -34,6 +34,18 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
     };
   }, []);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
   const handleBackdropClick = (e) => {
     console.log('[SETTINGS MODAL] Backdrop clicked');
     if (e.target === e.currentTarget) {
@@ -188,7 +200,8 @@ export default function SettingsModal({ onClose, isPremium = false, onShowUpgrad
       gridTemplateColumns: 'repeat(3, 1fr)',
       gap: '12px',
       marginTop: '16px',
-      paddingRight: '8px'
+      paddingRight: '8px',
+      paddingLeft: '4px'
     },
     
     themeOption: (isActive, isLocked) => ({

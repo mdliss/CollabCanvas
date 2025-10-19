@@ -36,6 +36,18 @@ export default function CouponModal({ onClose, onSuccess }) {
     }
   }, [success]);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && !loading && !success) {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [loading, success]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!code.trim()) return;

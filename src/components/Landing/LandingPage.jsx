@@ -85,6 +85,24 @@ export default function LandingPage() {
     }
   }, [showDeleteConfirm]);
 
+  // Escape key handler for confirmations
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (showLogoutConfirm) {
+          handleCloseLogoutConfirm();
+        } else if (showDeleteConfirm) {
+          handleCloseDeleteConfirm();
+        }
+      }
+    };
+
+    if (showLogoutConfirm || showDeleteConfirm) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showLogoutConfirm, showDeleteConfirm]);
+
   // Handle logout confirmation close with animation
   const handleCloseLogoutConfirm = () => {
     setLogoutConfirmVisible(false);

@@ -25,6 +25,18 @@ export default function ShareModal({ project, currentUser, isPremium, onClose })
     loadCollaborators();
   }, []);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && !loading) {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [loading]);
+
   const loadCollaborators = async () => {
     try {
       const collab = await getCollaborators(project.canvasId);

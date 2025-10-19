@@ -23,6 +23,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
 import { getFriendIds, removeFriend } from '../../services/friends';
+import { getActivityData } from '../../services/dailyActivity';
 import Avatar from '../Collaboration/Avatar';
 
 export default function LeaderboardModal({ onClose }) {
@@ -43,6 +44,23 @@ export default function LeaderboardModal({ onClose }) {
   useEffect(() => {
     setTimeout(() => setIsVisible(true), 50);
   }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (selectedUserId) {
+          setSelectedUserId(null);
+          setPopupPosition(null);
+        } else {
+          handleClose();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [selectedUserId]);
 
   // Load leaderboard data (filtered to friends only)
   useEffect(() => {
@@ -81,9 +99,10 @@ export default function LeaderboardModal({ onClose }) {
         
         setLeaderboard(filteredUsers);
         
-        // Generate activity data for top contributors
+        // Load REAL activity data for top contributors
         const topUsers = filteredUsers.slice(0, 10); // Top 10 for the graph
-        const activity = generateActivityData(topUsers);
+        const userIds = topUsers.map(u => u.uid);
+        const activity = await getActivityData(userIds, 7);
         setActivityData(activity);
         
         setLoading(false);
@@ -198,35 +217,6 @@ export default function LeaderboardModal({ onClose }) {
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
     if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
     return count || 0;
-  };
-
-  // Generate activity data for the last 7 days (NO FABRICATED DATA)
-  const generateActivityData = (users) => {
-    const days = 7;
-    const today = new Date();
-    const data = [];
-
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-
-      const dayData = {
-        date: dateStr,
-        label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        fullLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
-      };
-
-      // Set activity to 0 for all users (real data would come from Firestore)
-      // TODO: Track daily activity in Firestore to show real data
-      users.forEach(user => {
-        dayData[user.uid] = 0; // No fabricated data - all zeros until we track real activity
-      });
-
-      data.push(dayData);
-    }
-
-    return data;
   };
 
   const getRankBadge = (rank) => {

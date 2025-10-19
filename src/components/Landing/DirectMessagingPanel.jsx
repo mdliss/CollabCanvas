@@ -11,10 +11,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToConversation, sendDirectMessage, deleteDirectMessage, editDirectMessage, getConversationId } from '../../services/directMessages';
-import { getUserProfile } from '../../services/userProfile';
+import { getUserProfile, getUserRank } from '../../services/userProfile';
 import { uploadMessageImage } from '../../services/messageAttachments';
 import { removeFriend } from '../../services/friends';
 import { watchMultipleUsersPresence } from '../../services/presence';
+import { createPortal } from 'react-dom';
 import Avatar from '../Collaboration/Avatar';
 import GifPicker from '../Messaging/GifPicker';
 import ShareWithFriendModal from './ShareWithFriendModal';
@@ -27,6 +28,8 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const [sending, setSending] = useState(false);
   const [userProfile, setUserProfile] = useState(null);
   const [friendProfile, setFriendProfile] = useState(null);
+  const [showFriendProfile, setShowFriendProfile] = useState(false);
+  const [friendRank, setFriendRank] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -34,26 +37,31 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
   const messagesEndRef = useRef(null);
+  const messageRefs = useRef({});
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const editInputRef = useRef(null);
+  const profilePopupRef = useRef(null);
 
   // Load user and friend profiles from Firestore
   useEffect(() => {
     if (!user?.uid || !friend?.id) return;
 
-    // Load both profiles
+    // Load both profiles and friend's rank
     Promise.all([
       getUserProfile(user.uid),
-      getUserProfile(friend.id)
-    ]).then(([userProf, friendProf]) => {
+      getUserProfile(friend.id),
+      getUserRank(friend.id)
+    ]).then(([userProf, friendProf, rank]) => {
       setUserProfile(userProf);
       setFriendProfile(friendProf);
+      setFriendRank(rank);
     }).catch(err => {
       console.error('[DirectMessaging] Failed to load profiles:', err);
     });
@@ -87,6 +95,44 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 300);
   }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (editingMessageId) {
+          handleCancelEdit();
+        } else if (replyingTo) {
+          handleCancelReply();
+        } else if (showGifPicker) {
+          setShowGifPicker(false);
+        } else if (showShareModal) {
+          setShowShareModal(false);
+        } else if (showFriendProfile) {
+          setShowFriendProfile(false);
+        } else {
+          onClose();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [editingMessageId, replyingTo, showGifPicker, showShareModal, showFriendProfile]);
+
+  // Click outside to close profile popup
+  useEffect(() => {
+    if (!showFriendProfile) return;
+
+    const handleClickOutside = (e) => {
+      if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
+        setShowFriendProfile(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFriendProfile]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -163,10 +209,11 @@ export default function DirectMessagingPanel({ friend, onClose }) {
 
     setSending(true);
     try {
-      await sendDirectMessage(user, friend.id, text || '', attachment);
+      await sendDirectMessage(user, friend.id, text || '', attachment, replyingTo);
       setNewMessage('');
       setImagePreview(null);
       setSelectedFile(null);
+      setReplyingTo(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -200,10 +247,11 @@ export default function DirectMessagingPanel({ friend, onClose }) {
         setUploadingImage(false);
       }
 
-      await sendDirectMessage(user, friend.id, newMessage.trim(), attachment);
+      await sendDirectMessage(user, friend.id, newMessage.trim(), attachment, replyingTo);
       setNewMessage('');
       setImagePreview(null);
       setSelectedFile(null);
+      setReplyingTo(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -252,6 +300,32 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const handleCancelEdit = () => {
     setEditingMessageId(null);
     setEditingText('');
+  };
+
+  const handleStartReply = (message) => {
+    setReplyingTo({
+      messageId: message.id,
+      text: message.text || (message.attachment?.type === 'image' ? '📷 Image' : message.attachment?.type === 'gif' ? 'GIF' : ''),
+      from: message.from,
+      fromName: message.fromName
+    });
+    inputRef.current?.focus();
+  };
+
+  const handleCancelReply = () => {
+    setReplyingTo(null);
+  };
+
+  const scrollToMessage = (messageId) => {
+    const messageElement = messageRefs.current[messageId];
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight briefly
+      messageElement.style.background = `${theme.button.primary}20`;
+      setTimeout(() => {
+        messageElement.style.background = 'transparent';
+      }, 2000);
+    }
   };
 
   const handleRemoveFriend = async () => {
@@ -482,7 +556,15 @@ export default function DirectMessagingPanel({ friend, onClose }) {
       <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={styles.header}>
-          <div style={styles.headerLeft}>
+          <div 
+            style={{
+              ...styles.headerLeft,
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+            onClick={() => setShowFriendProfile(!showFriendProfile)}
+            title="View profile"
+          >
             <div style={{ position: 'relative' }}>
               <Avatar
                 src={friendProfile?.photoURL || friend.userPhoto}
@@ -520,6 +602,212 @@ export default function DirectMessagingPanel({ friend, onClose }) {
               </div>
               <div style={styles.friendEmail}>{friend.userEmail}</div>
             </div>
+
+            {/* Profile Popup - Portal */}
+            {showFriendProfile && createPortal(
+              <div
+                ref={profilePopupRef}
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: 'fixed',
+                  top: '80px',
+                  left: '50%',
+                  transform: 'translateX(-50%)',
+                  width: '320px',
+                  maxHeight: '80vh',
+                  overflowY: 'auto',
+                  background: theme.background.card,
+                  borderRadius: '12px',
+                  boxShadow: theme.shadow.xl,
+                  border: `2px solid ${theme.button.primary}`,
+                  zIndex: 999999,
+                  padding: '20px'
+                }}
+              >
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <Avatar
+                    src={friendProfile?.photoURL || friend.userPhoto}
+                    name={friend.userName}
+                    size="lg"
+                    style={{ 
+                      width: '72px', 
+                      height: '72px',
+                      fontSize: '28px',
+                      marginBottom: '12px'
+                    }}
+                  />
+                  <h4 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: theme.text.primary,
+                    margin: '0 0 4px 0'
+                  }}>
+                    {friend.userName}
+                  </h4>
+                  <p style={{ 
+                    fontSize: '13px', 
+                    color: theme.text.secondary,
+                    margin: 0
+                  }}>
+                    {friend.userEmail}
+                  </p>
+                </div>
+
+                {friendProfile?.bio && (
+                  <div style={{
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: theme.text.secondary,
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      Bio
+                    </div>
+                    <p style={{
+                      fontSize: '13px',
+                      color: theme.text.primary,
+                      margin: 0,
+                      lineHeight: '1.4',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {friendProfile.bio}
+                    </p>
+                  </div>
+                )}
+
+                {/* Social Links */}
+                {(friendProfile?.socialLinks?.twitter || friendProfile?.socialLinks?.github) && (
+                  <div style={{
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: theme.text.secondary,
+                      marginBottom: '8px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      Social Links
+                    </div>
+                    {friendProfile.socialLinks.twitter && (
+                      <a
+                        href={`https://twitter.com/${friendProfile.socialLinks.twitter.replace('@', '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'block',
+                          padding: '6px',
+                          fontSize: '12px',
+                          color: theme.button.primary,
+                          textDecoration: 'none',
+                          marginBottom: friendProfile.socialLinks.github ? '6px' : 0
+                        }}
+                      >
+                        X: @{friendProfile.socialLinks.twitter.replace('@', '')}
+                      </a>
+                    )}
+                    {friendProfile.socialLinks.github && (
+                      <a
+                        href={`https://github.com/${friendProfile.socialLinks.github}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'block',
+                          padding: '6px',
+                          fontSize: '12px',
+                          color: theme.button.primary,
+                          textDecoration: 'none'
+                        }}
+                      >
+                        GitHub: {friendProfile.socialLinks.github}
+                      </a>
+                    )}
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  marginBottom: '12px'
+                }}>
+                  {friendRank && (
+                    <div style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: theme.background.elevated,
+                      borderRadius: '8px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{
+                        fontSize: '11px',
+                        color: theme.text.secondary,
+                        marginBottom: '4px'
+                      }}>
+                        Rank
+                      </div>
+                      <div style={{
+                        fontSize: '24px',
+                        fontWeight: '700',
+                        color: theme.button.primary
+                      }}>
+                        #{friendRank}
+                      </div>
+                    </div>
+                  )}
+                  {friendProfile?.changesCount !== undefined && (
+                    <div style={{
+                      flex: 1,
+                      padding: '12px',
+                      background: theme.background.elevated,
+                      borderRadius: '8px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{
+                        fontSize: '11px',
+                        color: theme.text.secondary,
+                        marginBottom: '4px'
+                      }}>
+                        Changes
+                      </div>
+                      <div style={{
+                        fontSize: '24px',
+                        fontWeight: '700',
+                        color: theme.button.primary
+                      }}>
+                        {friendProfile.changesCount || 0}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{
+                  fontSize: '12px',
+                  color: theme.text.tertiary,
+                  textAlign: 'center'
+                }}>
+                  Click outside to close
+                </div>
+              </div>,
+              document.body
+            )}
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
@@ -637,7 +925,8 @@ export default function DirectMessagingPanel({ friend, onClose }) {
               
               return (
                 <div 
-                  key={message.id} 
+                  key={message.id}
+                  ref={(el) => { if (el) messageRefs.current[message.id] = el; }}
                   style={styles.message(isOwn)}
                   onMouseEnter={() => setHoveredMessageId(message.id)}
                   onMouseLeave={() => setHoveredMessageId(null)}
@@ -666,10 +955,10 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                           </span>
                         )}
                       </span>
-                      {isOwn && isHovered && editingMessageId !== message.id && (
+                      {isHovered && editingMessageId !== message.id && (
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button
-                            onClick={() => handleStartEdit(message)}
+                            onClick={() => handleStartReply(message)}
                             style={{
                               background: 'transparent',
                               border: 'none',
@@ -689,35 +978,64 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                               e.target.style.background = 'transparent';
                               e.target.style.color = theme.text.tertiary;
                             }}
-                            title="Edit message"
+                            title="Reply to message"
                           >
-                            Edit
+                            Reply
                           </button>
-                          <button
-                            onClick={() => handleDeleteMessage(message.id, message.from)}
-                            style={{
-                              background: 'transparent',
-                              border: 'none',
-                              color: theme.text.tertiary,
-                              cursor: 'pointer',
-                              fontSize: '11px',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              transition: 'all 0.2s ease',
-                              fontWeight: '500'
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.background = '#fee2e2';
-                              e.target.style.color = '#dc2626';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.background = 'transparent';
-                              e.target.style.color = theme.text.tertiary;
-                            }}
-                            title="Delete message"
-                          >
-                            Delete
-                          </button>
+                          {isOwn && (
+                            <>
+                              <button
+                                onClick={() => handleStartEdit(message)}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: theme.text.tertiary,
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  transition: 'all 0.2s ease',
+                                  fontWeight: '500'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.background = theme.background.elevated;
+                                  e.target.style.color = theme.button.primary;
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.background = 'transparent';
+                                  e.target.style.color = theme.text.tertiary;
+                                }}
+                                title="Edit message"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteMessage(message.id, message.from)}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: theme.text.tertiary,
+                                  cursor: 'pointer',
+                                  fontSize: '11px',
+                                  padding: '2px 6px',
+                                  borderRadius: '4px',
+                                  transition: 'all 0.2s ease',
+                                  fontWeight: '500'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.background = '#fee2e2';
+                                  e.target.style.color = '#dc2626';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.background = 'transparent';
+                                  e.target.style.color = theme.text.tertiary;
+                                }}
+                                title="Delete message"
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
                         </div>
                       )}
                     </div>
@@ -727,9 +1045,11 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                       <div style={{
                         background: theme.background.elevated,
                         padding: '8px',
-                        borderRadius: '8px',
+                        borderRadius: '12px',
                         border: `1px solid ${theme.border.medium}`,
-                        maxWidth: '80%'
+                        width: '100%',
+                        maxWidth: '80%',
+                        minWidth: '300px'
                       }}>
                         <input
                           ref={editInputRef}
@@ -805,6 +1125,47 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                     ) : (
                       // View Mode
                       <div style={styles.messageBubble(isOwn)}>
+                        {/* Replied-to Message */}
+                        {message.replyTo && (
+                          <div
+                            onClick={() => scrollToMessage(message.replyTo.messageId)}
+                            style={{
+                              padding: '8px',
+                              marginBottom: '8px',
+                              background: isOwn ? 'rgba(255,255,255,0.15)' : theme.background.card,
+                              borderLeft: `3px solid ${theme.button.primary}`,
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = isOwn ? 'rgba(255,255,255,0.25)' : theme.background.elevated;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = isOwn ? 'rgba(255,255,255,0.15)' : theme.background.card;
+                            }}
+                          >
+                            <div style={{
+                              fontSize: '10px',
+                              fontWeight: '600',
+                              color: isOwn ? 'rgba(255,255,255,0.7)' : theme.text.secondary,
+                              marginBottom: '4px'
+                            }}>
+                              Reply to {message.replyTo.fromName}
+                            </div>
+                            <div style={{
+                              fontSize: '12px',
+                              color: isOwn ? 'rgba(255,255,255,0.9)' : theme.text.primary,
+                              opacity: 0.8,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {message.replyTo.text}
+                            </div>
+                          </div>
+                        )}
+
                         {message.attachment?.type === 'image' && (
                           <img
                             src={message.attachment.url}
@@ -846,6 +1207,58 @@ export default function DirectMessagingPanel({ friend, onClose }) {
 
         {/* Input */}
         <div style={styles.inputContainer}>
+          {/* Reply Preview */}
+          {replyingTo && (
+            <div style={{
+              marginBottom: '12px',
+              padding: '10px 12px',
+              background: theme.background.elevated,
+              borderRadius: '8px',
+              border: `1px solid ${theme.border.light}`,
+              borderLeft: `3px solid ${theme.button.primary}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{
+                  fontSize: '11px',
+                  fontWeight: '600',
+                  color: theme.text.secondary,
+                  marginBottom: '4px'
+                }}>
+                  Replying to {replyingTo.fromName}
+                </div>
+                <div style={{
+                  fontSize: '13px',
+                  color: theme.text.primary,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {replyingTo.text}
+                </div>
+              </div>
+              <button
+                onClick={handleCancelReply}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: theme.text.tertiary,
+                  cursor: 'pointer',
+                  fontSize: '18px',
+                  padding: '4px',
+                  transition: 'color 0.2s ease'
+                }}
+                onMouseEnter={(e) => e.target.style.color = theme.text.primary}
+                onMouseLeave={(e) => e.target.style.color = theme.text.tertiary}
+                title="Cancel reply"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           {/* Image Preview */}
           {imagePreview && (
             <div style={{

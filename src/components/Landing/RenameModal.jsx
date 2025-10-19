@@ -13,6 +13,18 @@ export default function RenameModal({ project, onSave, onClose }) {
     setTimeout(() => setIsVisible(true), 50);
   }, []);
 
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        handleClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (name.trim()) {

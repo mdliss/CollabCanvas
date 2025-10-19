@@ -25,10 +25,13 @@ import Avatar from '../Collaboration/Avatar';
 export default function ProfileModal({ onClose }) {
   const { theme } = useTheme();
   const { user } = useAuth();
-  const { profile, saveBio } = useUserProfile();
+  const { profile, loading: loadingProfile, saveBio } = useUserProfile();
   const [isVisible, setIsVisible] = useState(false);
   const [isEditingBio, setIsEditingBio] = useState(false);
   const [bioText, setBioText] = useState('');
+  const [isEditingSocial, setIsEditingSocial] = useState(false);
+  const [twitterHandle, setTwitterHandle] = useState('');
+  const [githubUsername, setGithubUsername] = useState('');
   const [userRank, setUserRank] = useState(null);
   const [loadingRank, setLoadingRank] = useState(true);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -39,6 +42,24 @@ export default function ProfileModal({ onClose }) {
   useEffect(() => {
     setTimeout(() => setIsVisible(true), 50);
   }, []);
+
+  // Escape key handler
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape') {
+        if (isEditingBio) {
+          handleBioCancel();
+        } else if (isEditingSocial) {
+          handleSocialCancel();
+        } else {
+          handleClose();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isEditingBio, isEditingSocial]);
 
   // Load user's leaderboard rank
   useEffect(() => {
@@ -81,6 +102,34 @@ export default function ProfileModal({ onClose }) {
   const handleBioCancel = () => {
     setIsEditingBio(false);
     setBioText('');
+  };
+
+  const startEditingSocial = () => {
+    setTwitterHandle(profile?.socialLinks?.twitter || '');
+    setGithubUsername(profile?.socialLinks?.github || '');
+    setIsEditingSocial(true);
+  };
+
+  const handleSocialSave = async () => {
+    try {
+      const { updateUserProfile } = await import('../../services/userProfile');
+      await updateUserProfile(user.uid, {
+        socialLinks: {
+          twitter: twitterHandle.trim(),
+          github: githubUsername.trim()
+        }
+      });
+      setIsEditingSocial(false);
+    } catch (err) {
+      console.error('[ProfileModal] Failed to save social links:', err);
+      alert('Failed to save social links. Please try again.');
+    }
+  };
+
+  const handleSocialCancel = () => {
+    setIsEditingSocial(false);
+    setTwitterHandle('');
+    setGithubUsername('');
   };
 
   const handlePhotoSelect = (e) => {
@@ -568,25 +617,42 @@ export default function ProfileModal({ onClose }) {
               </div>
             ) : (
               <div>
-                <div
-                  onClick={startEditingBio}
-                  style={styles.bioDisplay}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = theme.background.elevated;
-                    e.target.style.borderColor = theme.border.medium;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = theme.background.card;
-                    e.target.style.borderColor = 'transparent';
-                  }}
-                >
-                  <span style={{ 
-                    color: profile?.bio ? theme.text.primary : theme.text.tertiary,
-                    fontStyle: profile?.bio ? 'normal' : 'italic'
+                {loadingProfile ? (
+                  <div style={{
+                    padding: '12px',
+                    fontSize: '14px',
+                    color: theme.text.tertiary,
+                    lineHeight: '1.5',
+                    minHeight: '60px',
+                    borderRadius: '8px',
+                    background: theme.background.card,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}>
-                    {profile?.bio || 'Click to add a bio...'}
-                  </span>
-                </div>
+                    Loading...
+                  </div>
+                ) : (
+                  <div
+                    onClick={startEditingBio}
+                    style={styles.bioDisplay}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = theme.background.elevated;
+                      e.target.style.borderColor = theme.border.medium;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = theme.background.card;
+                      e.target.style.borderColor = 'transparent';
+                    }}
+                  >
+                    <span style={{ 
+                      color: profile?.bio ? theme.text.primary : theme.text.tertiary,
+                      fontStyle: profile?.bio ? 'normal' : 'italic'
+                    }}>
+                      {profile?.bio || 'Click to add a bio...'}
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={startEditingBio}
                   style={{...styles.button, ...styles.editButton, marginTop: '12px'}}
@@ -600,6 +666,204 @@ export default function ProfileModal({ onClose }) {
                   }}
                 >
                   Edit Bio
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Social Links Section */}
+          <div style={styles.bioSection}>
+            <label style={styles.bioLabel}>Social Links</label>
+            
+            {isEditingSocial ? (
+              <div>
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ 
+                    fontSize: '11px', 
+                    fontWeight: '500', 
+                    color: theme.text.secondary,
+                    marginBottom: '6px',
+                    display: 'block'
+                  }}>
+                    X / Twitter Username
+                  </label>
+                  <input
+                    type="text"
+                    value={twitterHandle}
+                    onChange={(e) => setTwitterHandle(e.target.value)}
+                    placeholder="@username or username"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: `1px solid ${theme.border.medium}`,
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      background: theme.background.card,
+                      color: theme.text.primary,
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                
+                <div style={{ marginBottom: '12px' }}>
+                  <label style={{ 
+                    fontSize: '11px', 
+                    fontWeight: '500', 
+                    color: theme.text.secondary,
+                    marginBottom: '6px',
+                    display: 'block'
+                  }}>
+                    GitHub Username
+                  </label>
+                  <input
+                    type="text"
+                    value={githubUsername}
+                    onChange={(e) => setGithubUsername(e.target.value)}
+                    placeholder="username"
+                    style={{
+                      width: '100%',
+                      padding: '8px',
+                      border: `1px solid ${theme.border.medium}`,
+                      borderRadius: '6px',
+                      fontSize: '13px',
+                      background: theme.background.card,
+                      color: theme.text.primary,
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+
+                <div style={styles.buttonGroup}>
+                  <button
+                    onClick={handleSocialCancel}
+                    style={{...styles.button, ...styles.secondaryButton}}
+                    onMouseEnter={(e) => {
+                      e.target.style.background = theme.background.elevated;
+                      e.target.style.borderColor = theme.border.strong;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.background = theme.background.card;
+                      e.target.style.borderColor = theme.border.medium;
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSocialSave}
+                    style={{...styles.button, ...styles.primaryButton}}
+                    onMouseEnter={(e) => e.target.style.background = theme.button.primaryHover}
+                    onMouseLeave={(e) => e.target.style.background = theme.button.primary}
+                  >
+                    Save
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {loadingProfile ? (
+                  <div style={{
+                    padding: '12px',
+                    fontSize: '13px',
+                    color: theme.text.tertiary,
+                    textAlign: 'center'
+                  }}>
+                    Loading...
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {profile?.socialLinks?.twitter && (
+                      <a
+                        href={`https://twitter.com/${profile.socialLinks.twitter.replace('@', '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px',
+                          background: theme.background.card,
+                          borderRadius: '6px',
+                          border: `1px solid ${theme.border.light}`,
+                          fontSize: '13px',
+                          color: theme.text.primary,
+                          textDecoration: 'none',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = theme.background.elevated;
+                          e.target.style.borderColor = theme.border.medium;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = theme.background.card;
+                          e.target.style.borderColor = theme.border.light;
+                        }}
+                      >
+                        <span>X:</span>
+                        <span style={{ fontWeight: '500' }}>@{profile.socialLinks.twitter.replace('@', '')}</span>
+                      </a>
+                    )}
+                    {profile?.socialLinks?.github && (
+                      <a
+                        href={`https://github.com/${profile.socialLinks.github}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px',
+                          background: theme.background.card,
+                          borderRadius: '6px',
+                          border: `1px solid ${theme.border.light}`,
+                          fontSize: '13px',
+                          color: theme.text.primary,
+                          textDecoration: 'none',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.background = theme.background.elevated;
+                          e.target.style.borderColor = theme.border.medium;
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.background = theme.background.card;
+                          e.target.style.borderColor = theme.border.light;
+                        }}
+                      >
+                        <span>GitHub:</span>
+                        <span style={{ fontWeight: '500' }}>{profile.socialLinks.github}</span>
+                      </a>
+                    )}
+                    {!profile?.socialLinks?.twitter && !profile?.socialLinks?.github && (
+                      <div style={{
+                        padding: '12px',
+                        fontSize: '13px',
+                        color: theme.text.tertiary,
+                        fontStyle: 'italic',
+                        textAlign: 'center'
+                      }}>
+                        No social links added
+                      </div>
+                    )}
+                  </div>
+                )}
+                <button
+                  onClick={startEditingSocial}
+                  disabled={loadingProfile}
+                  style={{...styles.button, ...styles.editButton, marginTop: '12px'}}
+                  onMouseEnter={(e) => {
+                    if (!loadingProfile) {
+                      e.target.style.background = theme.background.elevated;
+                      e.target.style.borderColor = theme.border.strong;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!loadingProfile) {
+                      e.target.style.background = theme.background.card;
+                      e.target.style.borderColor = theme.border.medium;
+                    }
+                  }}
+                >
+                  Edit Social Links
                 </button>
               </div>
             )}
