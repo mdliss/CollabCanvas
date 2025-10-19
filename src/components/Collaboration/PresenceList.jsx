@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import Avatar from './Avatar';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -18,15 +18,25 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [popupPosition, setPopupPosition] = useState(null);
+  const [isPopupVisible, setIsPopupVisible] = useState(false);
   const profilePopupRef = useRef(null);
+
+  // Helper function to close popup with fade animation
+  const closePopup = useCallback(() => {
+    setIsPopupVisible(false);
+    // Wait for fade-out animation to complete before removing
+    setTimeout(() => {
+      setSelectedUserId(null);
+      setPopupPosition(null);
+      setSelectedUserProfile(null);
+    }, 200); // 200ms fade-out duration
+  }, []);
 
   // Close popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
-        setSelectedUserId(null);
-        setPopupPosition(null);
-        setSelectedUserProfile(null);
+        closePopup();
       }
     };
     
@@ -34,7 +44,22 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [selectedUserId]);
+  }, [selectedUserId, closePopup]);
+
+  // Close popup on Escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && selectedUserId) {
+        e.preventDefault();
+        closePopup();
+      }
+    };
+    
+    if (selectedUserId) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [selectedUserId, closePopup]);
 
   // Early return AFTER all hooks
   if (!users || users.length === 0) {
@@ -47,11 +72,9 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
   const handleUserClick = async (clickedUserId, event) => {
     event.stopPropagation();
     
-    // If clicking same user, close popup
+    // If clicking same user, close popup with fade
     if (selectedUserId === clickedUserId) {
-      setSelectedUserId(null);
-      setPopupPosition(null);
-      setSelectedUserProfile(null);
+      closePopup();
       return;
     }
     
@@ -89,6 +112,9 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
     
     setSelectedUserId(clickedUserId);
     setIsLoadingProfile(true);
+    
+    // Trigger fade-in animation after a brief delay
+    setTimeout(() => setIsPopupVisible(true), 10);
     
     // Load user profile and rank
     try {
@@ -206,7 +232,10 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
             boxShadow: theme.shadow.xl,
             border: `2px solid ${theme.button.primary}`,
             zIndex: 999999,
-            padding: '20px'
+            padding: '20px',
+            opacity: isPopupVisible ? 1 : 0,
+            transform: isPopupVisible ? 'scale(1)' : 'scale(0.95)',
+            transition: 'opacity 0.2s ease, transform 0.2s ease'
           }}
         >
           {isLoadingProfile ? (

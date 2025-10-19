@@ -17,7 +17,7 @@
  * - Smooth slide-in/out animations
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ref, push, onValue, query, limitToLast, orderByKey } from 'firebase/database';
 import { rtdb } from '../../services/firebase';
@@ -39,6 +39,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [popupPosition, setPopupPosition] = useState(null);
+  const [isPopupVisible, setIsPopupVisible] = useState(false);
   const [userPhotos, setUserPhotos] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -118,13 +119,22 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
+  // Helper function to close popup with fade animation
+  const closePopup = useCallback(() => {
+    setIsPopupVisible(false);
+    // Wait for fade-out animation to complete before removing
+    setTimeout(() => {
+      setSelectedUserId(null);
+      setPopupPosition(null);
+      setSelectedUserProfile(null);
+    }, 200); // 200ms fade-out duration
+  }, []);
+
   // Close profile popup when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
-        setSelectedUserId(null);
-        setPopupPosition(null);
-        setSelectedUserProfile(null);
+        closePopup();
       }
     };
     
@@ -132,7 +142,23 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
       document.addEventListener('mousedown', handleClickOutside);
       return () => document.removeEventListener('mousedown', handleClickOutside);
     }
-  }, [selectedUserId]);
+  }, [selectedUserId, closePopup]);
+
+  // Close popup on Escape key
+  useEffect(() => {
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && selectedUserId) {
+        e.preventDefault();
+        e.stopPropagation(); // Prevent closing chat panel
+        closePopup();
+      }
+    };
+    
+    if (selectedUserId) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [selectedUserId, closePopup]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -455,11 +481,9 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                     
                     const clickedUserId = message.userId;
                     
-                    // If clicking same user, close popup
+                    // If clicking same user, close popup with fade
                     if (selectedUserId === clickedUserId) {
-                      setSelectedUserId(null);
-                      setPopupPosition(null);
-                      setSelectedUserProfile(null);
+                      closePopup();
                       return;
                     }
                     
@@ -497,6 +521,9 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                     
                     setSelectedUserId(clickedUserId);
                     setIsLoadingProfile(true);
+                    
+                    // Trigger fade-in animation after a brief delay
+                    setTimeout(() => setIsPopupVisible(true), 10);
                     
                     // Load user profile and rank
                     try {
@@ -601,7 +628,10 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
             boxShadow: theme.shadow.xl,
             border: `2px solid ${theme.button.primary}`,
             zIndex: 999999,
-            padding: '20px'
+            padding: '20px',
+            opacity: isPopupVisible ? 1 : 0,
+            transform: isPopupVisible ? 'scale(1)' : 'scale(0.95)',
+            transition: 'opacity 0.2s ease, transform 0.2s ease'
           }}
         >
           {isLoadingProfile ? (
