@@ -1,38 +1,37 @@
 {
   "rules": {
     "canvas": {
+      ".read": "auth != null",
       "$canvasId": {
-        ".read": "auth != null",
+        ".write": "auth != null",
         "shapes": {
           "$shapeId": {
-            ".write": "auth != null && (
-              !data.exists() ||
-              !data.child('isLocked').val() ||
-              data.child('lockedBy').val() == auth.uid ||
-              (now - data.child('lockedAt').val()) > 8000
-            )",
-            ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'createdBy']) && 
-              newData.child('x').isNumber() && 
-              newData.child('y').isNumber() && 
-              newData.child('x').val() >= -50000 && newData.child('x').val() <= 50000 &&
-              newData.child('y').val() >= -50000 && newData.child('y').val() <= 50000"
+            ".write": "auth != null && (!data.exists() || data.child('isLocked').val() != true || data.child('lockedBy').val() == auth.uid || (now - data.child('lockedAt').val()) > 8000)",
+            ".validate": "newData.hasChildren(['id', 'type', 'x', 'y', 'createdBy']) && newData.child('x').isNumber() && newData.child('y').isNumber() && newData.child('x').val() >= -50000 && newData.child('x').val() <= 50000 && newData.child('y').val() >= -50000 && newData.child('y').val() <= 50000"
           }
         },
         "metadata": {
+          ".write": "auth != null"
+        },
+        "collaborators": {
           ".write": "auth != null"
         }
       }
     },
     "sessions": {
-      "$userId": {
-        ".read": "auth != null",
-        ".write": "auth != null && $userId == auth.uid"
+      "$canvasId": {
+        "$userId": {
+          ".read": "auth != null",
+          ".write": "auth != null && $userId == auth.uid"
+        }
       }
     },
     "selections": {
-      "$userId": {
+      "$canvasId": {
         ".read": "auth != null",
-        ".write": "auth != null && $userId == auth.uid"
+        "$shapeId": {
+          ".write": "auth != null"
+        }
       }
     },
     "drags": {
@@ -41,6 +40,56 @@
         "$shapeId": {
           ".write": "auth != null"
         }
+      }
+    },
+    "friends": {
+      "$userId": {
+        ".read": "auth != null",
+        "pending": {
+          "$friendId": {
+            ".write": "auth != null && ($userId == auth.uid || $friendId == auth.uid)"
+          }
+        },
+        "outgoing": {
+          "$friendId": {
+            ".write": "auth != null && ($userId == auth.uid || $friendId == auth.uid)"
+          }
+        },
+        "accepted": {
+          "$friendId": {
+            ".write": "auth != null && ($userId == auth.uid || $friendId == auth.uid)"
+          }
+        }
+      }
+    },
+    "directMessages": {
+      "$conversationId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "notifications": {
+      "$userId": {
+        ".read": "auth != null && $userId == auth.uid",
+        ".write": "auth != null"
+      }
+    },
+    "chats": {
+      "$canvasId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "projects": {
+      "$userId": {
+        ".read": "auth != null && $userId == auth.uid",
+        ".write": "auth != null && $userId == auth.uid"
+      }
+    },
+    "globalPresence": {
+      "$userId": {
+        ".read": "auth != null",
+        ".write": "auth != null && $userId == auth.uid"
       }
     }
   }

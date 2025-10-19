@@ -71,8 +71,11 @@ export default function LeaderboardModal({ onClose }) {
       }
 
       try {
+        console.log('[LeaderboardModal] 🔄 Loading leaderboard for user:', user.uid);
+        
         // Get user's friend IDs first
         const friendIds = await getFriendIds(user.uid);
+        console.log('[LeaderboardModal] Found', friendIds.length, 'friends');
         
         // Include self in the leaderboard
         const userIdsToShow = [user.uid, ...friendIds];
@@ -93,6 +96,7 @@ export default function LeaderboardModal({ onClose }) {
         
         // Filter to only include self and friends
         const filteredUsers = allUsers.filter(u => userIdsToShow.includes(u.uid));
+        console.log('[LeaderboardModal] Filtered to', filteredUsers.length, 'users (self + friends)');
         
         // Sort by changes count (in case filtering affected order)
         filteredUsers.sort((a, b) => (b.changesCount || 0) - (a.changesCount || 0));
@@ -102,12 +106,14 @@ export default function LeaderboardModal({ onClose }) {
         // Load REAL activity data for top contributors
         const topUsers = filteredUsers.slice(0, 10); // Top 10 for the graph
         const userIds = topUsers.map(u => u.uid);
+        console.log('[LeaderboardModal] Loading activity for top', userIds.length, 'users');
         const activity = await getActivityData(userIds, 7);
+        console.log('[LeaderboardModal] Activity data loaded:', activity.length, 'days');
         setActivityData(activity);
         
         setLoading(false);
       } catch (error) {
-        console.error('[LeaderboardModal] Failed to load leaderboard:', error);
+        console.error('[LeaderboardModal] ❌ Failed to load leaderboard:', error);
         setLoading(false);
       }
     };
@@ -723,15 +729,29 @@ export default function LeaderboardModal({ onClose }) {
             }}>
               Activity Timeline
             </div>
-            {activityData.length > 0 && leaderboard.length > 0 ? (
+            {loading ? (
+              <div style={styles.loading}>
+                Loading activity data...
+              </div>
+            ) : activityData.length > 0 && leaderboard.length > 0 ? (
               <ActivityChart 
                 data={activityData}
                 users={leaderboard.slice(0, 10)}
                 highlightUserId={selectedUserId}
               />
+            ) : leaderboard.length === 0 ? (
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>📊</div>
+                <p style={styles.emptyText}>
+                  No activity data available.<br/>Add friends to see activity timeline.
+                </p>
+              </div>
             ) : (
-              <div style={styles.loading}>
-                Loading activity data...
+              <div style={styles.emptyState}>
+                <div style={styles.emptyIcon}>📊</div>
+                <p style={styles.emptyText}>
+                  No activity recorded yet.<br/>Start making changes to see your activity!
+                </p>
               </div>
             )}
           </div>

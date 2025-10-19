@@ -17,9 +17,9 @@ const getSelectionsPath = (canvasId) => `/selections/${canvasId}`;
 export const setSelection = (canvasId, shapeId, uid, name, color) => {
   const selectionRef = ref(rtdb, `${getSelectionsPath(canvasId)}/${shapeId}`);
   set(selectionRef, {
-    uid,
-    name,
-    color,
+    uid: uid || '',
+    name: name || 'User',
+    color: color || '#888888',
     ts: serverTimestamp()
   });
 };

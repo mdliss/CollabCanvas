@@ -65,7 +65,7 @@ export const sendFriendRequest = async (fromUser, toEmail) => {
     await set(ref(rtdb, `friends/${toUser.uid}/pending/${fromUser.uid}`), {
       userId: fromUser.uid,
       userName: fromUser.displayName || fromUser.email?.split('@')[0] || 'User',
-      userEmail: fromUser.email,
+      userEmail: fromUser.email || '',
       userPhoto: fromUser.photoURL || null,
       createdAt: timestamp
     });
@@ -74,7 +74,7 @@ export const sendFriendRequest = async (fromUser, toEmail) => {
     await set(ref(rtdb, `friends/${fromUser.uid}/outgoing/${toUser.uid}`), {
       userId: toUser.uid,
       userName: toUser.displayName || toUser.email?.split('@')[0] || 'User',
-      userEmail: toUser.email,
+      userEmail: toUser.email || '',
       userPhoto: toUser.photoURL || null,
       createdAt: timestamp
     });
@@ -113,16 +113,16 @@ export const acceptFriendRequest = async (userId, friendId) => {
     // Add to both users' accepted friends
     await set(ref(rtdb, `friends/${userId}/accepted/${friendId}`), {
       userId: friendId,
-      userName: friendData.userName,
-      userEmail: friendData.userEmail,
-      userPhoto: friendData.userPhoto,
+      userName: friendData.userName || 'User',
+      userEmail: friendData.userEmail || '',
+      userPhoto: friendData.userPhoto || null,
       acceptedAt: timestamp
     });
     
     await set(ref(rtdb, `friends/${friendId}/accepted/${userId}`), {
       userId: userId,
       userName: userData?.displayName || userData?.email?.split('@')[0] || 'User',
-      userEmail: userData?.email,
+      userEmail: userData?.email || '',
       userPhoto: userData?.photoURL || null,
       acceptedAt: timestamp
     });

@@ -1763,7 +1763,7 @@ export default function Canvas() {
       if (user?.uid) {
         const name = user.displayName || user.email?.split('@')[0] || 'User';
         const color = generateUserColor(user.uid);
-        setSelection(shapeId, user.uid, name, color);
+        setSelection(CANVAS_ID, shapeId, user.uid, name, color);
       }
       
       console.log(`[Selection] 🎯 Single-select complete:`, {

@@ -63,6 +63,19 @@ service cloud.firestore {
         && (!request.resource.data.keys().hasAny(['bio']) 
             || (request.resource.data.bio is string 
                 && request.resource.data.bio.size() <= 200));
+      
+      // Daily activity subcollection
+      match /dailyActivity/{dateKey} {
+        // Any authenticated user can read (for leaderboard activity timeline)
+        allow read: if isAuthenticated();
+        
+        // Only the user can write their own daily activity
+        allow write: if isAuthenticated() && request.auth.uid == userId
+          && request.resource.data.keys().hasAll(['date', 'changes'])
+          && request.resource.data.date is string
+          && request.resource.data.changes is int
+          && request.resource.data.changes >= 0;
+      }
     }
     
     // Block all other reads/writes by default

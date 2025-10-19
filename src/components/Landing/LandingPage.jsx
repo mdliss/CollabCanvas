@@ -25,6 +25,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { subscribeToProjects, createProject, deleteProject, updateProject, getUserSubscription, listProjects, listSharedCanvases } from '../../services/projects';
 import { setGlobalUserOnline } from '../../services/presence';
+import { exposeAdminUtils } from '../../services/adminUtils';
 import SubscriptionModal from './SubscriptionModal';
 import RenameModal from './RenameModal';
 import CouponModal from './CouponModal';
@@ -125,6 +126,13 @@ export default function LandingPage() {
     setGlobalUserOnline(user.uid).catch(err => {
       console.error('[LandingPage] Failed to set global presence:', err);
     });
+  }, [user]);
+
+  // Expose admin utilities for debugging (dev only)
+  useEffect(() => {
+    if ((process.env.NODE_ENV === 'development' || window.location.hostname === 'localhost') && user?.uid) {
+      exposeAdminUtils(user.uid);
+    }
   }, [user]);
 
   // Load projects and subscription status
