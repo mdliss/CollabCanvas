@@ -3697,7 +3697,7 @@ function CanvasContent() {
           {shapes.map(shape => {
             const selection = selections[shape.id];
             const isLockedByOther = shape.isLocked && shape.lockedBy && shape.lockedBy !== user?.uid;
-            const isSelectedByOther = selection && selection.userId !== user?.uid;
+            const isSelectedByOther = selection && selection.uid !== user?.uid;
             
             // CRITICAL: Hide badge if shape is being actively dragged by anyone
             // This keeps the canvas clean during drag operations
