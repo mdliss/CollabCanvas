@@ -42,6 +42,8 @@ export default function FriendsModal({ onClose }) {
   const [addingFriend, setAddingFriend] = useState(false);
   const [processingId, setProcessingId] = useState(null);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'pending', 'add'
+  const [selectedFriend, setSelectedFriend] = useState(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
   // Trigger entrance animation
   useEffect(() => {
@@ -52,13 +54,17 @@ export default function FriendsModal({ onClose }) {
   useEffect(() => {
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        handleClose();
+        if (showUserProfile) {
+          setShowUserProfile(false);
+        } else {
+          handleClose();
+        }
       }
     };
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, []);
+  }, [showUserProfile]);
 
   // Subscribe to friend requests and friends list
   useEffect(() => {
@@ -170,6 +176,11 @@ export default function FriendsModal({ onClose }) {
     } finally {
       setProcessingId(null);
     }
+  };
+
+  const handleFriendClick = (friend) => {
+    setSelectedFriend(friend);
+    setShowUserProfile(true);
   };
 
   const styles = {
@@ -397,7 +408,11 @@ export default function FriendsModal({ onClose }) {
                         e.currentTarget.style.borderColor = theme.border.light;
                       }}
                     >
-                      <div style={{ position: 'relative' }}>
+                      <div 
+                        style={{ position: 'relative', cursor: 'pointer' }}
+                        onClick={() => handleFriendClick(friend)}
+                        title="View profile"
+                      >
                         <Avatar 
                           src={friend.userPhoto}
                           name={friend.userName}
@@ -417,7 +432,11 @@ export default function FriendsModal({ onClose }) {
                         }} />
                       </div>
                       
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                      <div 
+                        style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+                        onClick={() => handleFriendClick(friend)}
+                        title="View profile"
+                      >
                         <div style={{ 
                           fontWeight: '500', 
                           color: theme.text.primary, 
@@ -436,7 +455,10 @@ export default function FriendsModal({ onClose }) {
                       </div>
 
                       <button
-                        onClick={() => handleRemoveFriend(friend)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveFriend(friend);
+                        }}
                         disabled={processingId === friend.id}
                         style={{
                           background: 'transparent',
@@ -500,7 +522,11 @@ export default function FriendsModal({ onClose }) {
                           border: `1px solid ${theme.border.light}`
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                        <div 
+                          style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px', cursor: 'pointer' }}
+                          onClick={() => handleFriendClick({ id: request.id, userName: request.userName, userEmail: request.userEmail, userPhoto: request.userPhoto })}
+                          title="View profile"
+                        >
                           <Avatar 
                             src={request.userPhoto}
                             name={request.userName}
@@ -517,7 +543,10 @@ export default function FriendsModal({ onClose }) {
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button
-                            onClick={() => handleAccept(request)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAccept(request);
+                            }}
                             disabled={processingId === request.id}
                             style={{
                               flex: 1,
@@ -546,7 +575,10 @@ export default function FriendsModal({ onClose }) {
                             Accept
                           </button>
                           <button
-                            onClick={() => handleDeny(request)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeny(request);
+                            }}
                             disabled={processingId === request.id}
                             style={{
                               flex: 1,
@@ -609,12 +641,22 @@ export default function FriendsModal({ onClose }) {
                           gap: '12px'
                         }}
                       >
-                        <Avatar 
-                          src={request.userPhoto}
-                          name={request.userName}
-                          size="md"
-                        />
-                        <div style={{ flex: 1 }}>
+                        <div 
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => handleFriendClick({ id: request.id, userName: request.userName, userEmail: request.userEmail, userPhoto: request.userPhoto })}
+                          title="View profile"
+                        >
+                          <Avatar 
+                            src={request.userPhoto}
+                            name={request.userName}
+                            size="md"
+                          />
+                        </div>
+                        <div 
+                          style={{ flex: 1, cursor: 'pointer' }}
+                          onClick={() => handleFriendClick({ id: request.id, userName: request.userName, userEmail: request.userEmail, userPhoto: request.userPhoto })}
+                          title="View profile"
+                        >
                           <div style={{ fontWeight: '500', color: theme.text.primary, fontSize: '14px' }}>
                             {request.userName}
                           </div>
@@ -623,7 +665,10 @@ export default function FriendsModal({ onClose }) {
                           </div>
                         </div>
                         <button
-                          onClick={() => handleCancelOutgoing(request)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCancelOutgoing(request);
+                          }}
                           disabled={processingId === request.id}
                           style={{
                             background: 'transparent',
@@ -735,6 +780,20 @@ export default function FriendsModal({ onClose }) {
           )}
         </div>
       </div>
+
+      {/* User Profile Modal */}
+      {showUserProfile && selectedFriend && (
+        <UserProfileView
+          userId={selectedFriend.id}
+          userName={selectedFriend.userName}
+          userEmail={selectedFriend.userEmail}
+          userPhoto={selectedFriend.userPhoto}
+          onClose={() => {
+            setShowUserProfile(false);
+            setSelectedFriend(null);
+          }}
+        />
+      )}
     </div>
   );
 }

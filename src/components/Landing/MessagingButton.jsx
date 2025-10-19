@@ -26,6 +26,7 @@ export default function MessagingButton({ onOpenMessaging }) {
   const [buttonRect, setButtonRect] = useState(null);
   const [friends, setFriends] = useState([]);
   const [onlineStatuses, setOnlineStatuses] = useState({});
+  const [selectedFriend, setSelectedFriend] = useState(null);
   const dropdownRef = useRef(null);
 
   // Subscribe to friends list
@@ -76,8 +77,12 @@ export default function MessagingButton({ onOpenMessaging }) {
   };
 
   const handleOpenChat = (friend) => {
+    setSelectedFriend(friend);
     handleClose();
-    onOpenMessaging(friend);
+    // Delay to allow dropdown close animation
+    setTimeout(() => {
+      onOpenMessaging(friend);
+    }, 200);
   };
 
   return (

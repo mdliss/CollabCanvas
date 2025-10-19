@@ -38,6 +38,12 @@ export default function LeaderboardModal({ onClose }) {
   const [selectedUserData, setSelectedUserData] = useState(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [activityData, setActivityData] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [selectedUserRank, setSelectedUserRank] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const profilePopupRef = useRef(null);
   
   // Trigger entrance animation
   useEffect(() => {
@@ -800,9 +806,9 @@ export default function LeaderboardModal({ onClose }) {
               Loading...
             </div>
           ) : (() => {
-            const user = leaderboard.find(u => u.uid === selectedUserId);
+            const selectedUser = leaderboard.find(u => u.uid === selectedUserId);
             const rank = leaderboard.findIndex(u => u.uid === selectedUserId) + 1;
-            if (!user) return null;
+            if (!selectedUser) return null;
             
             return (
               <>
@@ -813,8 +819,8 @@ export default function LeaderboardModal({ onClose }) {
                   marginBottom: '16px'
                 }}>
                   <Avatar
-                    src={user.photoURL}
-                    name={user.displayName || user.email}
+                    src={selectedUser.photoURL}
+                    name={selectedUser.displayName || selectedUser.email}
                     size="lg"
                     style={{ 
                       width: '72px', 
@@ -829,15 +835,15 @@ export default function LeaderboardModal({ onClose }) {
                     color: theme.text.primary,
                     margin: '0 0 4px 0'
                   }}>
-                    {user.displayName || user.email?.split('@')[0] || 'Anonymous'}
+                    {selectedUser.displayName || selectedUser.email?.split('@')[0] || 'Anonymous'}
                   </h4>
-                  {user.email && (
+                  {selectedUser.email && (
                     <p style={{ 
                       fontSize: '13px', 
                       color: theme.text.secondary,
                       margin: 0
                     }}>
-                      {user.email}
+                      {selectedUser.email}
                     </p>
                   )}
                 </div>
@@ -919,13 +925,13 @@ export default function LeaderboardModal({ onClose }) {
                       fontWeight: '700',
                       color: theme.button.primary
                     }}>
-                      {formatCount(user.changesCount)}
+                      {formatCount(selectedUser.changesCount)}
                     </div>
                   </div>
                 </div>
 
                 {/* Remove Friend Button - Only show for friends (not yourself) */}
-                {user.uid !== selectedUserId && (
+                {user?.uid && selectedUserId && user.uid !== selectedUserId && (
                   <button
                     onClick={async () => {
                       if (!confirm(`Remove from friends? You'll no longer see them on the leaderboard.`)) return;

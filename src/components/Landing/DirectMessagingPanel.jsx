@@ -15,10 +15,10 @@ import { getUserProfile, getUserRank } from '../../services/userProfile';
 import { uploadMessageImage } from '../../services/messageAttachments';
 import { removeFriend } from '../../services/friends';
 import { watchMultipleUsersPresence } from '../../services/presence';
-import { createPortal } from 'react-dom';
 import Avatar from '../Collaboration/Avatar';
 import GifPicker from '../Messaging/GifPicker';
 import ShareWithFriendModal from './ShareWithFriendModal';
+import UserProfileView from './UserProfileView';
 
 export default function DirectMessagingPanel({ friend, onClose }) {
   const { user } = useAuth();
@@ -42,12 +42,17 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [isOnline, setIsOnline] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const messagesEndRef = useRef(null);
   const messageRefs = useRef({});
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const editInputRef = useRef(null);
-  const profilePopupRef = useRef(null);
+
+  // Trigger entrance animation
+  useEffect(() => {
+    setTimeout(() => setIsVisible(true), 50);
+  }, []);
 
   // Load user and friend profiles from Firestore
   useEffect(() => {
@@ -120,19 +125,6 @@ export default function DirectMessagingPanel({ friend, onClose }) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [editingMessageId, replyingTo, showGifPicker, showShareModal, showFriendProfile]);
 
-  // Click outside to close profile popup
-  useEffect(() => {
-    if (!showFriendProfile) return;
-
-    const handleClickOutside = (e) => {
-      if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
-        setShowFriendProfile(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFriendProfile]);
 
   const handleFileSelect = (e) => {
     const file = e.target.files?.[0];
@@ -369,7 +361,8 @@ export default function DirectMessagingPanel({ friend, onClose }) {
       alignItems: 'center',
       justifyContent: 'center',
       zIndex: 10003,
-      animation: 'fadeIn 0.2s ease'
+      opacity: isVisible ? 1 : 0,
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
 
     panel: {
@@ -383,7 +376,10 @@ export default function DirectMessagingPanel({ friend, onClose }) {
       flexDirection: 'column',
       boxShadow: theme.shadow.xl,
       border: `1px solid ${theme.border.normal}`,
-      overflow: 'hidden'
+      overflow: 'hidden',
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
     },
 
     header: {
@@ -551,8 +547,13 @@ export default function DirectMessagingPanel({ friend, onClose }) {
     }
   };
 
+  const handleClose = () => {
+    setIsVisible(false);
+    setTimeout(() => onClose(), 300);
+  };
+
   return (
-    <div style={styles.backdrop} onClick={onClose}>
+    <div style={styles.backdrop} onClick={handleClose}>
       <div style={styles.panel} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div style={styles.header}>
@@ -602,212 +603,6 @@ export default function DirectMessagingPanel({ friend, onClose }) {
               </div>
               <div style={styles.friendEmail}>{friend.userEmail}</div>
             </div>
-
-            {/* Profile Popup - Portal */}
-            {showFriendProfile && createPortal(
-              <div
-                ref={profilePopupRef}
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: 'fixed',
-                  top: '80px',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  width: '320px',
-                  maxHeight: '80vh',
-                  overflowY: 'auto',
-                  background: theme.background.card,
-                  borderRadius: '12px',
-                  boxShadow: theme.shadow.xl,
-                  border: `2px solid ${theme.button.primary}`,
-                  zIndex: 999999,
-                  padding: '20px'
-                }}
-              >
-                <div style={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  alignItems: 'center',
-                  marginBottom: '16px'
-                }}>
-                  <Avatar
-                    src={friendProfile?.photoURL || friend.userPhoto}
-                    name={friend.userName}
-                    size="lg"
-                    style={{ 
-                      width: '72px', 
-                      height: '72px',
-                      fontSize: '28px',
-                      marginBottom: '12px'
-                    }}
-                  />
-                  <h4 style={{ 
-                    fontSize: '18px', 
-                    fontWeight: '600', 
-                    color: theme.text.primary,
-                    margin: '0 0 4px 0'
-                  }}>
-                    {friend.userName}
-                  </h4>
-                  <p style={{ 
-                    fontSize: '13px', 
-                    color: theme.text.secondary,
-                    margin: 0
-                  }}>
-                    {friend.userEmail}
-                  </p>
-                </div>
-
-                {friendProfile?.bio && (
-                  <div style={{
-                    padding: '12px',
-                    background: theme.background.elevated,
-                    borderRadius: '8px',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      color: theme.text.secondary,
-                      marginBottom: '6px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
-                    }}>
-                      Bio
-                    </div>
-                    <p style={{
-                      fontSize: '13px',
-                      color: theme.text.primary,
-                      margin: 0,
-                      lineHeight: '1.4',
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word'
-                    }}>
-                      {friendProfile.bio}
-                    </p>
-                  </div>
-                )}
-
-                {/* Social Links */}
-                {(friendProfile?.socialLinks?.twitter || friendProfile?.socialLinks?.github) && (
-                  <div style={{
-                    padding: '12px',
-                    background: theme.background.elevated,
-                    borderRadius: '8px',
-                    marginBottom: '12px'
-                  }}>
-                    <div style={{
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      color: theme.text.secondary,
-                      marginBottom: '8px',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em'
-                    }}>
-                      Social Links
-                    </div>
-                    {friendProfile.socialLinks.twitter && (
-                      <a
-                        href={`https://twitter.com/${friendProfile.socialLinks.twitter.replace('@', '')}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: 'block',
-                          padding: '6px',
-                          fontSize: '12px',
-                          color: theme.button.primary,
-                          textDecoration: 'none',
-                          marginBottom: friendProfile.socialLinks.github ? '6px' : 0
-                        }}
-                      >
-                        X: @{friendProfile.socialLinks.twitter.replace('@', '')}
-                      </a>
-                    )}
-                    {friendProfile.socialLinks.github && (
-                      <a
-                        href={`https://github.com/${friendProfile.socialLinks.github}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: 'block',
-                          padding: '6px',
-                          fontSize: '12px',
-                          color: theme.button.primary,
-                          textDecoration: 'none'
-                        }}
-                      >
-                        GitHub: {friendProfile.socialLinks.github}
-                      </a>
-                    )}
-                  </div>
-                )}
-
-                {/* Stats */}
-                <div style={{
-                  display: 'flex',
-                  gap: '12px',
-                  marginBottom: '12px'
-                }}>
-                  {friendRank && (
-                    <div style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: theme.background.elevated,
-                      borderRadius: '8px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: theme.text.secondary,
-                        marginBottom: '4px'
-                      }}>
-                        Rank
-                      </div>
-                      <div style={{
-                        fontSize: '24px',
-                        fontWeight: '700',
-                        color: theme.button.primary
-                      }}>
-                        #{friendRank}
-                      </div>
-                    </div>
-                  )}
-                  {friendProfile?.changesCount !== undefined && (
-                    <div style={{
-                      flex: 1,
-                      padding: '12px',
-                      background: theme.background.elevated,
-                      borderRadius: '8px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{
-                        fontSize: '11px',
-                        color: theme.text.secondary,
-                        marginBottom: '4px'
-                      }}>
-                        Changes
-                      </div>
-                      <div style={{
-                        fontSize: '24px',
-                        fontWeight: '700',
-                        color: theme.button.primary
-                      }}>
-                        {friendProfile.changesCount || 0}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div style={{
-                  fontSize: '12px',
-                  color: theme.text.tertiary,
-                  textAlign: 'center'
-                }}>
-                  Click outside to close
-                </div>
-              </div>,
-              document.body
-            )}
           </div>
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             <button
@@ -863,7 +658,7 @@ export default function DirectMessagingPanel({ friend, onClose }) {
               Remove Friend
             </button>
             <button
-              onClick={onClose}
+              onClick={handleClose}
               style={styles.closeButton}
               onMouseEnter={(e) => {
                 e.target.style.background = theme.background.card;
@@ -1438,6 +1233,18 @@ export default function DirectMessagingPanel({ friend, onClose }) {
         <ShareWithFriendModal
           friend={friend}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+
+      {/* User Profile Modal */}
+      {showFriendProfile && (
+        <UserProfileView
+          userId={friend.id}
+          userName={friend.userName}
+          userEmail={friend.userEmail}
+          userPhoto={friend.userPhoto}
+          rank={friendRank}
+          onClose={() => setShowFriendProfile(false)}
         />
       )}
     </div>
