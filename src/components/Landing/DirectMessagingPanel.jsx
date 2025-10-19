@@ -37,6 +37,10 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const [editingAttachment, setEditingAttachment] = useState(null);
+  const [editingAttachmentAction, setEditingAttachmentAction] = useState('keep'); // 'keep' | 'remove' | 'replace'
+  const [editingNewFile, setEditingNewFile] = useState(null);
+  const [editingImagePreview, setEditingImagePreview] = useState(null);
   const [replyingTo, setReplyingTo] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
@@ -48,6 +52,7 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
   const editInputRef = useRef(null);
+  const editFileInputRef = useRef(null);
 
   // Trigger entrance animation
   useEffect(() => {
@@ -270,28 +275,92 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const handleStartEdit = (message) => {
     setEditingMessageId(message.id);
     setEditingText(message.text || '');
+    setEditingAttachment(message.attachment || null);
+    setEditingAttachmentAction('keep');
+    setEditingNewFile(null);
+    setEditingImagePreview(null);
     setTimeout(() => editInputRef.current?.focus(), 100);
   };
 
+  const handleEditImageSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('Image must be less than 10MB');
+      return;
+    }
+
+    setEditingNewFile(file);
+    setEditingAttachmentAction('replace');
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setEditingImagePreview(event.target.result);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSaveEdit = async (messageId, messageSenderId) => {
-    if (!editingText.trim()) {
-      alert('Message cannot be empty');
+    // Find the message to check if it has an attachment
+    const messageToEdit = messages.find(m => m.id === messageId);
+    
+    // Determine final attachment state
+    const willHaveAttachment = editingAttachmentAction === 'replace' || 
+                               (editingAttachmentAction === 'keep' && messageToEdit?.attachment);
+    
+    // Allow empty text only if message will have an attachment
+    if (!editingText.trim() && !willHaveAttachment) {
+      alert('Message cannot be empty (must have either text or an image)');
       return;
     }
 
     try {
-      await editDirectMessage(user.uid, friend.id, messageId, messageSenderId, editingText);
+      setUploadingImage(true);
+      
+      let attachmentUpdate = 'keep';
+      
+      // Handle attachment changes
+      if (editingAttachmentAction === 'remove') {
+        attachmentUpdate = 'remove';
+      } else if (editingAttachmentAction === 'replace' && editingNewFile) {
+        // Upload new image
+        const conversationId = getConversationId(user.uid, friend.id);
+        const imageUrl = await uploadMessageImage(conversationId, editingNewFile);
+        attachmentUpdate = {
+          type: 'image',
+          url: imageUrl
+        };
+      }
+      
+      await editDirectMessage(user.uid, friend.id, messageId, messageSenderId, editingText, attachmentUpdate);
+      
+      // Clear editing state
       setEditingMessageId(null);
       setEditingText('');
+      setEditingAttachment(null);
+      setEditingAttachmentAction('keep');
+      setEditingNewFile(null);
+      setEditingImagePreview(null);
+      setUploadingImage(false);
     } catch (error) {
       console.error('[DirectMessaging] Failed to edit message:', error);
       alert(error.message || 'Failed to edit message');
+      setUploadingImage(false);
     }
   };
 
   const handleCancelEdit = () => {
     setEditingMessageId(null);
     setEditingText('');
+    setEditingAttachment(null);
+    setEditingAttachmentAction('keep');
+    setEditingNewFile(null);
+    setEditingImagePreview(null);
   };
 
   const handleStartReply = (message) => {
@@ -839,13 +908,157 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                       // Edit Mode
                       <div style={{
                         background: theme.background.elevated,
-                        padding: '8px',
+                        padding: '12px',
                         borderRadius: '12px',
-                        border: `1px solid ${theme.border.medium}`,
+                        border: `2px solid ${theme.button.primary}`,
                         width: '100%',
                         maxWidth: '80%',
-                        minWidth: '300px'
+                        minWidth: '300px',
+                        boxShadow: theme.shadow.md
                       }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: theme.button.primary,
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em'
+                        }}>
+                          Editing Message
+                        </div>
+
+                        {/* Show attachment editing options */}
+                        {(message.attachment || editingAttachmentAction === 'replace') && (
+                          <div style={{ marginBottom: '12px' }}>
+                            <div style={{
+                              fontSize: '10px',
+                              fontWeight: '500',
+                              color: theme.text.secondary,
+                              marginBottom: '6px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between'
+                            }}>
+                              <span>
+                                {message.attachment?.type === 'image' ? 'Image:' : 'GIF:'}
+                              </span>
+                              {message.attachment && (
+                                <div style={{ display: 'flex', gap: '6px' }}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingAttachmentAction('keep');
+                                      setEditingNewFile(null);
+                                      setEditingImagePreview(null);
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      background: editingAttachmentAction === 'keep' ? theme.button.primary : 'transparent',
+                                      border: `1px solid ${editingAttachmentAction === 'keep' ? theme.button.primary : theme.border.medium}`,
+                                      borderRadius: '4px',
+                                      fontSize: '10px',
+                                      fontWeight: '500',
+                                      color: editingAttachmentAction === 'keep' ? theme.text.inverse : theme.text.secondary,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    title="Keep current image"
+                                  >
+                                    Keep
+                                  </button>
+                                  <button
+                                    onClick={() => editFileInputRef.current?.click()}
+                                    style={{
+                                      padding: '4px 8px',
+                                      background: editingAttachmentAction === 'replace' ? theme.button.primary : 'transparent',
+                                      border: `1px solid ${editingAttachmentAction === 'replace' ? theme.button.primary : theme.border.medium}`,
+                                      borderRadius: '4px',
+                                      fontSize: '10px',
+                                      fontWeight: '500',
+                                      color: editingAttachmentAction === 'replace' ? theme.text.inverse : theme.text.secondary,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    title="Replace with new image"
+                                  >
+                                    Replace
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingAttachmentAction('remove');
+                                      setEditingNewFile(null);
+                                      setEditingImagePreview(null);
+                                    }}
+                                    style={{
+                                      padding: '4px 8px',
+                                      background: editingAttachmentAction === 'remove' ? '#fee2e2' : 'transparent',
+                                      border: `1px solid ${editingAttachmentAction === 'remove' ? '#ef4444' : theme.border.medium}`,
+                                      borderRadius: '4px',
+                                      fontSize: '10px',
+                                      fontWeight: '500',
+                                      color: editingAttachmentAction === 'remove' ? '#dc2626' : theme.text.secondary,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.2s ease'
+                                    }}
+                                    title="Remove image"
+                                  >
+                                    Remove
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            
+                            {/* Hidden file input for replacement */}
+                            <input
+                              ref={editFileInputRef}
+                              type="file"
+                              accept="image/*"
+                              onChange={handleEditImageSelect}
+                              style={{ display: 'none' }}
+                            />
+                            
+                            {/* Show current or new image based on action */}
+                            {editingAttachmentAction !== 'remove' && (
+                              <img
+                                src={editingAttachmentAction === 'replace' && editingImagePreview ? editingImagePreview : message.attachment?.url}
+                                alt={editingAttachmentAction === 'replace' ? 'New image' : 'Current image'}
+                                style={{
+                                  maxWidth: '200px',
+                                  maxHeight: '200px',
+                                  borderRadius: '8px',
+                                  border: `2px solid ${editingAttachmentAction === 'replace' ? theme.button.primary : theme.border.medium}`,
+                                  display: 'block',
+                                  opacity: editingAttachmentAction === 'replace' ? 1 : 0.9,
+                                  marginTop: '8px'
+                                }}
+                              />
+                            )}
+                            
+                            {editingAttachmentAction === 'remove' && (
+                              <div style={{
+                                padding: '20px',
+                                background: theme.background.card,
+                                borderRadius: '8px',
+                                border: `1px dashed ${theme.border.medium}`,
+                                textAlign: 'center',
+                                color: theme.text.tertiary,
+                                fontSize: '12px',
+                                marginTop: '8px'
+                              }}>
+                                Image will be removed
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Text editing */}
+                        <div style={{
+                          fontSize: '10px',
+                          fontWeight: '500',
+                          color: theme.text.secondary,
+                          marginBottom: '6px'
+                        }}>
+                          Text:
+                        </div>
                         <input
                           ref={editInputRef}
                           type="text"
@@ -858,27 +1071,31 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                               handleCancelEdit();
                             }
                           }}
+                          placeholder={message.attachment ? "Add text to your message (optional)" : "Enter message text"}
                           style={{
                             width: '100%',
-                            padding: '6px 8px',
+                            padding: '8px 10px',
                             border: `1px solid ${theme.border.medium}`,
-                            borderRadius: '4px',
+                            borderRadius: '6px',
                             fontSize: '13px',
                             background: theme.background.card,
                             color: theme.text.primary,
                             outline: 'none',
-                            marginBottom: '6px'
+                            marginBottom: '10px',
+                            transition: 'border-color 0.2s ease'
                           }}
+                          onFocus={(e) => e.target.style.borderColor = theme.button.primary}
+                          onBlur={(e) => e.target.style.borderColor = theme.border.medium}
                         />
-                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
                           <button
                             onClick={handleCancelEdit}
                             style={{
-                              padding: '4px 10px',
+                              padding: '6px 14px',
                               background: theme.background.card,
                               border: `1px solid ${theme.border.medium}`,
-                              borderRadius: '4px',
-                              fontSize: '11px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
                               fontWeight: '500',
                               color: theme.text.primary,
                               cursor: 'pointer',
@@ -886,34 +1103,44 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                             }}
                             onMouseEnter={(e) => {
                               e.target.style.background = theme.background.elevated;
+                              e.target.style.borderColor = theme.border.strong;
                             }}
                             onMouseLeave={(e) => {
                               e.target.style.background = theme.background.card;
+                              e.target.style.borderColor = theme.border.medium;
                             }}
                           >
                             Cancel
                           </button>
                           <button
                             onClick={() => handleSaveEdit(message.id, message.from)}
+                            disabled={uploadingImage}
                             style={{
-                              padding: '4px 10px',
+                              padding: '6px 14px',
                               background: theme.button.primary,
                               border: 'none',
-                              borderRadius: '4px',
-                              fontSize: '11px',
+                              borderRadius: '6px',
+                              fontSize: '12px',
                               fontWeight: '500',
                               color: theme.text.inverse,
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease'
+                              cursor: uploadingImage ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s ease',
+                              opacity: uploadingImage ? 0.6 : 1
                             }}
                             onMouseEnter={(e) => {
-                              e.target.style.background = theme.button.primaryHover;
+                              if (!uploadingImage) {
+                                e.target.style.background = theme.button.primaryHover;
+                                e.target.style.transform = 'translateY(-1px)';
+                              }
                             }}
                             onMouseLeave={(e) => {
-                              e.target.style.background = theme.button.primary;
+                              if (!uploadingImage) {
+                                e.target.style.background = theme.button.primary;
+                                e.target.style.transform = 'translateY(0)';
+                              }
                             }}
                           >
-                            Save
+                            {uploadingImage ? 'Uploading...' : 'Save Changes'}
                           </button>
                         </div>
                       </div>

@@ -97,8 +97,9 @@ export const deleteDirectMessage = async (userId1, userId2, messageId, messageSe
 
 /**
  * Edit a message (only by sender)
+ * @param {string} attachmentUpdate - Optional: 'keep' | 'remove' | { type, url } for replace
  */
-export const editDirectMessage = async (userId1, userId2, messageId, messageSenderId, newText) => {
+export const editDirectMessage = async (userId1, userId2, messageId, messageSenderId, newText, attachmentUpdate = 'keep') => {
   try {
     const conversationId = getConversationId(userId1, userId2);
     
@@ -108,11 +109,24 @@ export const editDirectMessage = async (userId1, userId2, messageId, messageSend
     }
     
     const messageRef = ref(rtdb, `directMessages/${conversationId}/messages/${messageId}`);
-    await update(messageRef, {
+    
+    const updates = {
       text: newText.trim(),
       edited: true,
       editedAt: Date.now()
-    });
+    };
+
+    // Handle attachment updates
+    if (attachmentUpdate === 'remove') {
+      // Remove attachment
+      updates.attachment = null;
+    } else if (attachmentUpdate !== 'keep' && attachmentUpdate) {
+      // Replace attachment
+      updates.attachment = attachmentUpdate;
+    }
+    // If 'keep', don't include attachment in updates (preserves existing)
+    
+    await update(messageRef, updates);
     
     console.log('[DirectMessages] Message edited:', messageId);
   } catch (error) {
