@@ -32,9 +32,12 @@ export default function LeaderboardModal({ onClose }) {
   const { theme } = useTheme();
   const { user } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
-  const [leaderboard, setLeaderboard] = useState([]);
+  const [friendsLeaderboard, setFriendsLeaderboard] = useState([]);
+  const [everyoneLeaderboard, setEveryoneLeaderboard] = useState([]);
+  const [filter, setFilter] = useState('friends'); // 'friends' | 'everyone'
   const [loading, setLoading] = useState(true);
   const [contentVisible, setContentVisible] = useState(false);
+  const [listVisible, setListVisible] = useState(true);
   const [selectedUserData, setSelectedUserData] = useState(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [activityData, setActivityData] = useState([]);
@@ -57,6 +60,22 @@ export default function LeaderboardModal({ onClose }) {
     }
   }, [loading]);
 
+  // Handle filter change with smooth transition
+  const handleFilterChange = (newFilter) => {
+    if (newFilter === filter) return;
+    
+    // Fade out
+    setListVisible(false);
+    
+    // Change filter and fade in after animation
+    setTimeout(() => {
+      setFilter(newFilter);
+      setTimeout(() => {
+        setListVisible(true);
+      }, 50);
+    }, 300);
+  };
+
   // Escape key handler
   useEffect(() => {
     const handleEscape = (e) => {
@@ -74,7 +93,7 @@ export default function LeaderboardModal({ onClose }) {
     return () => document.removeEventListener('keydown', handleEscape);
   }, [selectedUserId]);
 
-  // Load leaderboard data (filtered to friends only)
+  // Load leaderboard data (both friends and everyone)
   useEffect(() => {
     const loadLeaderboard = async () => {
       if (!user?.uid) {
@@ -89,15 +108,15 @@ export default function LeaderboardModal({ onClose }) {
         const friendIds = await getFriendIds(user.uid);
         console.log('[LeaderboardModal] Found', friendIds.length, 'friends');
         
-        // Include self in the leaderboard
-        const userIdsToShow = [user.uid, ...friendIds];
+        // Include self in the friends list
+        const friendsAndSelf = [user.uid, ...friendIds];
         
         // Fetch all users
         const usersRef = collection(db, 'users');
         const q = query(
           usersRef,
           orderBy('changesCount', 'desc'),
-          limit(200) // Fetch more to ensure we get all friends
+          limit(200) // Fetch top 200 users
         );
         
         const snapshot = await getDocs(q);
@@ -106,17 +125,21 @@ export default function LeaderboardModal({ onClose }) {
           ...doc.data()
         }));
         
+        // Set everyone leaderboard (all users)
+        setEveryoneLeaderboard(allUsers);
+        console.log('[LeaderboardModal] Loaded', allUsers.length, 'users for everyone leaderboard');
+        
         // Filter to only include self and friends
-        const filteredUsers = allUsers.filter(u => userIdsToShow.includes(u.uid));
-        console.log('[LeaderboardModal] Filtered to', filteredUsers.length, 'users (self + friends)');
+        const friendsOnly = allUsers.filter(u => friendsAndSelf.includes(u.uid));
+        console.log('[LeaderboardModal] Filtered to', friendsOnly.length, 'users (self + friends)');
         
         // Sort by changes count (in case filtering affected order)
-        filteredUsers.sort((a, b) => (b.changesCount || 0) - (a.changesCount || 0));
+        friendsOnly.sort((a, b) => (b.changesCount || 0) - (a.changesCount || 0));
         
-        setLeaderboard(filteredUsers);
+        setFriendsLeaderboard(friendsOnly);
         
-        // Load REAL activity data for top contributors
-        const topUsers = filteredUsers.slice(0, 10); // Top 10 for the graph
+        // Load REAL activity data for top contributors from the active filter
+        const topUsers = friendsOnly.slice(0, 10); // Top 10 for the graph
         const userIds = topUsers.map(u => u.uid);
         console.log('[LeaderboardModal] Loading activity for top', userIds.length, 'users');
         const activity = await getActivityData(userIds, 7);
@@ -132,6 +155,34 @@ export default function LeaderboardModal({ onClose }) {
 
     loadLeaderboard();
   }, [user]);
+
+  // Get active leaderboard based on filter
+  const leaderboard = filter === 'friends' ? friendsLeaderboard : everyoneLeaderboard;
+
+  // Reload activity data when filter changes
+  useEffect(() => {
+    if (loading || leaderboard.length === 0) return;
+
+    const loadActivityForFilter = async () => {
+      const topUsers = leaderboard.slice(0, 10);
+      const userIds = topUsers.map(u => u.uid);
+      
+      if (userIds.length === 0) {
+        setActivityData([]);
+        return;
+      }
+
+      console.log(`[LeaderboardModal] Loading activity for ${filter} filter (${userIds.length} users)`);
+      try {
+        const activity = await getActivityData(userIds, 7);
+        setActivityData(activity);
+      } catch (error) {
+        console.error('[LeaderboardModal] Failed to load activity data:', error);
+      }
+    };
+
+    loadActivityForFilter();
+  }, [filter, loading, leaderboard.length]);
 
   // Load user profile when leaderboard item is clicked
   useEffect(() => {
@@ -667,6 +718,73 @@ export default function LeaderboardModal({ onClose }) {
         <div style={{ marginBottom: '24px' }}>
           <h3 style={styles.title}>Leaderboard</h3>
           <p style={styles.subtitle}>Top contributors ranked by total changes made</p>
+          
+          {/* Filter Toggle */}
+          <div style={{
+            display: 'flex',
+            gap: '10px',
+            justifyContent: 'center',
+            marginTop: '20px'
+          }}>
+            <button
+              onClick={() => handleFilterChange('friends')}
+              style={{
+                background: filter === 'friends' ? theme.button.primary : theme.background.card,
+                color: filter === 'friends' ? theme.text.inverse : theme.text.secondary,
+                border: filter === 'friends' ? `1px solid ${theme.button.primary}` : `1px solid ${theme.border.medium}`,
+                padding: '8px 20px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: filter === 'friends' ? '500' : '400',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontFamily: "'Roboto Mono', monospace"
+              }}
+              onMouseEnter={(e) => {
+                if (filter !== 'friends') {
+                  e.target.style.background = theme.background.elevated;
+                  e.target.style.borderColor = theme.border.strong;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (filter !== 'friends') {
+                  e.target.style.background = theme.background.card;
+                  e.target.style.borderColor = theme.border.medium;
+                }
+              }}
+            >
+              Friends ({friendsLeaderboard.length})
+            </button>
+            <button
+              onClick={() => handleFilterChange('everyone')}
+              style={{
+                background: filter === 'everyone' ? theme.button.primary : theme.background.card,
+                color: filter === 'everyone' ? theme.text.inverse : theme.text.secondary,
+                border: filter === 'everyone' ? `1px solid ${theme.button.primary}` : `1px solid ${theme.border.medium}`,
+                padding: '8px 20px',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: filter === 'everyone' ? '500' : '400',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                fontFamily: "'Roboto Mono', monospace"
+              }}
+              onMouseEnter={(e) => {
+                if (filter !== 'everyone') {
+                  e.target.style.background = theme.background.elevated;
+                  e.target.style.borderColor = theme.border.strong;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (filter !== 'everyone') {
+                  e.target.style.background = theme.background.card;
+                  e.target.style.borderColor = theme.border.medium;
+                }
+              }}
+            >
+              Everyone ({everyoneLeaderboard.length})
+            </button>
+          </div>
         </div>
 
         <div style={styles.contentContainer}>
@@ -677,20 +795,22 @@ export default function LeaderboardModal({ onClose }) {
             </div>
           ) : leaderboard.length === 0 ? (
             <div style={{...styles.emptyState,
-              opacity: contentVisible ? 1 : 0,
-              transform: contentVisible ? 'translateY(0)' : 'translateY(10px)',
-              transition: 'opacity 0.4s ease, transform 0.4s ease'
+              opacity: (contentVisible && listVisible) ? 1 : 0,
+              transform: (contentVisible && listVisible) ? 'translateY(0)' : 'translateY(10px)',
+              transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}>
               <div style={styles.emptyIcon}>👥</div>
               <p style={styles.emptyText}>
-                No friends yet! Add friends via the Messaging button to see them on the leaderboard.
+                {filter === 'friends' 
+                  ? 'No friends yet! Add friends via the Messaging button to see them on the leaderboard.'
+                  : 'No users found on the leaderboard.'}
               </p>
             </div>
           ) : (
             <div style={{
-              opacity: contentVisible ? 1 : 0,
-              transform: contentVisible ? 'translateY(0)' : 'translateY(10px)',
-              transition: 'opacity 0.4s ease, transform 0.4s ease'
+              opacity: (contentVisible && listVisible) ? 1 : 0,
+              transform: (contentVisible && listVisible) ? 'translateY(0)' : 'translateY(10px)',
+              transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}>
             {leaderboard.map((leaderboardUser, index) => {
               const rank = index + 1;
@@ -699,7 +819,12 @@ export default function LeaderboardModal({ onClose }) {
               return (
                 <div
                   key={leaderboardUser.uid}
-                  style={styles.userItem(rank)}
+                  style={{
+                    ...styles.userItem(rank),
+                    opacity: (contentVisible && listVisible) ? 1 : 0,
+                    transform: (contentVisible && listVisible) ? 'translateY(0)' : 'translateY(10px)',
+                    transition: `opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.05}s, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1) ${index * 0.05}s, box-shadow 0.2s ease, transform 0.2s ease`
+                  }}
                   onClick={(e) => handleUserClick(leaderboardUser.uid, e)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = theme.shadow.md;
@@ -747,7 +872,9 @@ export default function LeaderboardModal({ onClose }) {
               fontSize: '15px',
               fontWeight: '600',
               color: theme.text.primary,
-              marginBottom: '16px'
+              marginBottom: '16px',
+              opacity: contentVisible ? 1 : 0,
+              transition: 'opacity 0.4s ease 0.2s'
             }}>
               Activity Timeline
             </div>
@@ -756,20 +883,35 @@ export default function LeaderboardModal({ onClose }) {
                 Loading activity data...
               </div>
             ) : activityData.length > 0 && leaderboard.length > 0 ? (
-              <ActivityChart 
-                data={activityData}
-                users={leaderboard.slice(0, 10)}
-                highlightUserId={selectedUserId}
-              />
+              <div style={{
+                opacity: (contentVisible && listVisible) ? 1 : 0,
+                transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
+              }}>
+                <ActivityChart 
+                  data={activityData}
+                  users={leaderboard.slice(0, 10)}
+                  highlightUserId={selectedUserId}
+                />
+              </div>
             ) : leaderboard.length === 0 ? (
-              <div style={styles.emptyState}>
+              <div style={{
+                ...styles.emptyState,
+                opacity: (contentVisible && listVisible) ? 1 : 0,
+                transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
+              }}>
                 <div style={styles.emptyIcon}>📊</div>
                 <p style={styles.emptyText}>
-                  No activity data available.<br/>Add friends to see activity timeline.
+                  {filter === 'friends'
+                    ? 'No activity data available.\nAdd friends to see activity timeline.'
+                    : 'No activity data available.'}
                 </p>
               </div>
             ) : (
-              <div style={styles.emptyState}>
+              <div style={{
+                ...styles.emptyState,
+                opacity: (contentVisible && listVisible) ? 1 : 0,
+                transition: 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
+              }}>
                 <div style={styles.emptyIcon}>📊</div>
                 <p style={styles.emptyText}>
                   No activity recorded yet.<br/>Start making changes to see your activity!
