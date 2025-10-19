@@ -134,11 +134,15 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
     modal: {
       background: theme.background.card,
       borderRadius: '16px',
+      
+      // this part of the code sucks and it's so fucking annoying to fix
       padding: wide ? '36px 44px' : '32px',
       // Wide (canvas): make wide enough for single-line stats and keep on-screen.
       width: wide ? 'min(860px, calc(100vw - 112px))' : '550px',
       maxWidth: wide ? 'calc(100vw - 112px)' : '92vw',
       maxHeight: wide ? 'calc(100vh - 112px)' : '88vh',
+
+      
       display: 'flex',
       flexDirection: 'column',
       boxShadow: theme.shadow.xl,

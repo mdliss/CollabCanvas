@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import Avatar from './Avatar';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
-import UserProfileView from '../Landing/UserProfileView';
+import { getUserProfile, getUserRank } from '../../services/userProfile';
 
 /**
  * PresenceList - Shows all online users with avatars
@@ -12,11 +13,30 @@ import UserProfileView from '../Landing/UserProfileView';
  */
 export default function PresenceList({ users, canvasOwnerId = null, isVisible = true, isChatPanelVisible = false }) {
   const { theme } = useTheme();
-  const [showUserProfile, setShowUserProfile] = useState(false);
-  const [selectedUserData, setSelectedUserData] = useState(null);
+  const { user } = useAuth();
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const profilePopupRef = useRef(null);
 
+  // Close popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
+        setSelectedUserId(null);
+        setPopupPosition(null);
+        setSelectedUserProfile(null);
+      }
+    };
+    
+    if (selectedUserId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [selectedUserId]);
 
-  // MOVED: Early return AFTER hooks
+  // Early return AFTER all hooks
   if (!users || users.length === 0) {
     console.log('[PresenceList] Not rendering - no users online');
     return null;
@@ -24,14 +44,39 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
 
   console.log('[PresenceList] Rendering with', users.length, 'online users:', users.map(u => u.displayName).join(', '));
 
-  const handleUserClick = (user) => {
-    setSelectedUserData({
-      userId: user.uid,
-      userName: user.displayName,
-      userEmail: null, // Not available in presence data
-      userPhoto: user.photoURL
+  const handleUserClick = async (clickedUserId, event) => {
+    event.stopPropagation();
+    
+    // If clicking same user, close popup
+    if (selectedUserId === clickedUserId) {
+      setSelectedUserId(null);
+      setPopupPosition(null);
+      setSelectedUserProfile(null);
+      return;
+    }
+    
+    // Calculate popup position (centered on screen)
+    const rect = event.currentTarget.getBoundingClientRect();
+    setPopupPosition({
+      left: window.innerWidth / 2,
+      top: window.innerHeight / 2
     });
-    setShowUserProfile(true);
+    
+    setSelectedUserId(clickedUserId);
+    setIsLoadingProfile(true);
+    
+    // Load user profile and rank
+    try {
+      const [profile, rank] = await Promise.all([
+        getUserProfile(clickedUserId),
+        getUserRank(clickedUserId)
+      ]);
+      setSelectedUserProfile({ ...profile, rank });
+    } catch (error) {
+      console.error('[PresenceList] Failed to load profile:', error);
+    } finally {
+      setIsLoadingProfile(false);
+    }
   };
 
   console.log('[PresenceList] Current state:', {
@@ -70,7 +115,7 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
             <div key={user.uid} style={{ position: "relative" }}>
               {/* Clickable user item */}
               <button
-                onClick={() => handleUserClick(user)}
+                onClick={(e) => handleUserClick(user.uid, e)}
                 style={{
                   width: "100%",
                   display: "flex",
@@ -119,19 +164,167 @@ export default function PresenceList({ users, canvasOwnerId = null, isVisible = 
         })}
       </div>
 
-      {/* User Profile Modal */}
-      {showUserProfile && selectedUserData && (
-        <UserProfileView
-          userId={selectedUserData.userId}
-          userName={selectedUserData.userName}
-          userEmail={selectedUserData.userEmail}
-          userPhoto={selectedUserData.userPhoto}
-          wide={true}
-          onClose={() => {
-            setShowUserProfile(false);
-            setSelectedUserData(null);
+      {/* Simple Profile Popup - Same as Leaderboard */}
+      {selectedUserId && popupPosition && createPortal(
+        <div
+          ref={profilePopupRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: `${popupPosition.left}px`,
+            top: `${popupPosition.top}px`,
+            transform: 'translate(-50%, -50%)',
+            width: '320px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: theme.background.card,
+            borderRadius: '12px',
+            boxShadow: theme.shadow.xl,
+            border: `2px solid ${theme.button.primary}`,
+            zIndex: 999999,
+            padding: '20px'
           }}
-        />
+        >
+          {isLoadingProfile ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: theme.text.tertiary }}>
+              Loading...
+            </div>
+          ) : (() => {
+            const selectedUser = users.find(u => u.uid === selectedUserId);
+            if (!selectedUser) return null;
+            
+            return (
+              <>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <Avatar
+                    src={selectedUser.photoURL}
+                    name={selectedUser.displayName}
+                    size="lg"
+                    style={{ 
+                      width: '72px', 
+                      height: '72px',
+                      fontSize: '28px',
+                      marginBottom: '12px'
+                    }}
+                  />
+                  <h4 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: theme.text.primary,
+                    margin: '0 0 4px 0'
+                  }}>
+                    {selectedUser.displayName || 'User'}
+                  </h4>
+                  {selectedUserProfile?.email && (
+                    <p style={{ 
+                      fontSize: '13px', 
+                      color: theme.text.secondary,
+                      margin: 0
+                    }}>
+                      {selectedUserProfile.email}
+                    </p>
+                  )}
+                </div>
+                
+                {selectedUserProfile?.bio && (
+                  <div style={{
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: theme.text.secondary,
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      Bio
+                    </div>
+                    <p style={{
+                      fontSize: '13px',
+                      color: theme.text.primary,
+                      margin: 0,
+                      lineHeight: '1.4',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {selectedUserProfile.bio}
+                    </p>
+                  </div>
+                )}
+
+                {/* Stats - Rank and Changes */}
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: theme.text.secondary,
+                      marginBottom: '4px'
+                    }}>
+                      Rank
+                    </div>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      color: theme.button.primary
+                    }}>
+                      #{selectedUserProfile?.rank || '-'}
+                    </div>
+                  </div>
+                  <div style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: theme.text.secondary,
+                      marginBottom: '4px'
+                    }}>
+                      Changes
+                    </div>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      color: theme.button.primary
+                    }}>
+                      {selectedUserProfile?.changesCount || 0}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  fontSize: '12px',
+                  color: theme.text.tertiary,
+                  textAlign: 'center'
+                }}>
+                  Click outside to close
+                </div>
+              </>
+            );
+          })()}
+        </div>,
+        document.body
       )}
     </div>
   );

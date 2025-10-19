@@ -18,6 +18,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ref, push, onValue, query, limitToLast, orderByKey } from 'firebase/database';
 import { rtdb } from '../../services/firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -26,7 +27,6 @@ import { getUserProfile, getUserRank } from '../../services/userProfile';
 import { areFriends, removeFriend } from '../../services/friends';
 import Avatar from '../Collaboration/Avatar';
 import PremiumBadge from '../UI/PremiumBadge';
-import UserProfileView from '../Landing/UserProfileView';
 
 export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, onShowShare }) {
   const { user } = useAuth();
@@ -35,11 +35,14 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [selectedMessageId, setSelectedMessageId] = useState(null);
-  const [showUserProfileModal, setShowUserProfileModal] = useState(false);
-  const [selectedUserData, setSelectedUserData] = useState(null);
+  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [popupPosition, setPopupPosition] = useState(null);
   const [userPhotos, setUserPhotos] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const profilePopupRef = useRef(null);
 
   // Load chat messages from RTDB
   useEffect(() => {
@@ -115,7 +118,21 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     return () => document.removeEventListener('keydown', handleEscape);
   }, [isOpen, onClose]);
 
-  // Load user profile when avatar is clicked
+  // Close profile popup when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
+        setSelectedUserId(null);
+        setPopupPosition(null);
+        setSelectedUserProfile(null);
+      }
+    };
+    
+    if (selectedUserId) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [selectedUserId]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -433,14 +450,40 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
               <div key={message.id} style={styles.message(isOwn)}>
                 {/* Always show avatar for all messages */}
                 <div 
-                  onClick={() => {
-                    setSelectedUserData({
-                      userId: message.userId,
-                      userName: message.userName,
-                      userEmail: message.userEmail || null,
-                      userPhoto: message.userPhoto
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    
+                    const clickedUserId = message.userId;
+                    
+                    // If clicking same user, close popup
+                    if (selectedUserId === clickedUserId) {
+                      setSelectedUserId(null);
+                      setPopupPosition(null);
+                      setSelectedUserProfile(null);
+                      return;
+                    }
+                    
+                    // Calculate popup position (centered on screen)
+                    setPopupPosition({
+                      left: window.innerWidth / 2,
+                      top: window.innerHeight / 2
                     });
-                    setShowUserProfileModal(true);
+                    
+                    setSelectedUserId(clickedUserId);
+                    setIsLoadingProfile(true);
+                    
+                    // Load user profile and rank
+                    try {
+                      const [profile, rank] = await Promise.all([
+                        getUserProfile(clickedUserId),
+                        getUserRank(clickedUserId)
+                      ]);
+                      setSelectedUserProfile({ ...profile, rank });
+                    } catch (error) {
+                      console.error('[ChatPanel] Failed to load profile:', error);
+                    } finally {
+                      setIsLoadingProfile(false);
+                    }
                   }}
                   style={{ 
                     cursor: 'pointer',
@@ -515,19 +558,168 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
         </form>
       </div>
 
-      {/* User Profile View Modal */}
-      {showUserProfileModal && selectedUserData && (
-        <UserProfileView
-          userId={selectedUserData.userId}
-          userName={selectedUserData.userName}
-          userEmail={selectedUserData.userEmail}
-          userPhoto={selectedUserData.userPhoto}
-          wide={true}
-          onClose={() => {
-            setShowUserProfileModal(false);
-            setSelectedUserData(null);
+      {/* Simple Profile Popup - Same as Leaderboard */}
+      {selectedUserId && popupPosition && createPortal(
+        <div
+          ref={profilePopupRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: `${popupPosition.left}px`,
+            top: `${popupPosition.top}px`,
+            transform: 'translate(-50%, -50%)',
+            width: '320px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: theme.background.card,
+            borderRadius: '12px',
+            boxShadow: theme.shadow.xl,
+            border: `2px solid ${theme.button.primary}`,
+            zIndex: 999999,
+            padding: '20px'
           }}
-        />
+        >
+          {isLoadingProfile ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: theme.text.tertiary }}>
+              Loading...
+            </div>
+          ) : (() => {
+            // Find message for this user to get their display info
+            const userMessage = messages.find(m => m.userId === selectedUserId);
+            if (!userMessage) return null;
+            
+            return (
+              <>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <Avatar
+                    src={userMessage.userPhoto || userPhotos[selectedUserId]}
+                    name={userMessage.userName || 'User'}
+                    size="lg"
+                    style={{ 
+                      width: '72px', 
+                      height: '72px',
+                      fontSize: '28px',
+                      marginBottom: '12px'
+                    }}
+                  />
+                  <h4 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: theme.text.primary,
+                    margin: '0 0 4px 0'
+                  }}>
+                    {userMessage.userName || 'User'}
+                  </h4>
+                  {selectedUserProfile?.email && (
+                    <p style={{ 
+                      fontSize: '13px', 
+                      color: theme.text.secondary,
+                      margin: 0
+                    }}>
+                      {selectedUserProfile.email}
+                    </p>
+                  )}
+                </div>
+                
+                {selectedUserProfile?.bio && (
+                  <div style={{
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: theme.text.secondary,
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      Bio
+                    </div>
+                    <p style={{
+                      fontSize: '13px',
+                      color: theme.text.primary,
+                      margin: 0,
+                      lineHeight: '1.4',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {selectedUserProfile.bio}
+                    </p>
+                  </div>
+                )}
+
+                {/* Stats - Rank and Changes */}
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: theme.text.secondary,
+                      marginBottom: '4px'
+                    }}>
+                      Rank
+                    </div>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      color: theme.button.primary
+                    }}>
+                      #{selectedUserProfile?.rank || '-'}
+                    </div>
+                  </div>
+                  <div style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: theme.text.secondary,
+                      marginBottom: '4px'
+                    }}>
+                      Changes
+                    </div>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      color: theme.button.primary
+                    }}>
+                      {selectedUserProfile?.changesCount || 0}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  fontSize: '12px',
+                  color: theme.text.tertiary,
+                  textAlign: 'center'
+                }}>
+                  Click outside to close
+                </div>
+              </>
+            );
+          })()}
+        </div>,
+        document.body
       )}
     </div>
   );
