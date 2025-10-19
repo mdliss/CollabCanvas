@@ -1721,6 +1721,12 @@ function CanvasContent() {
   const handleRequestLock = async (shapeId) => {
     if (!user?.uid) return false;
     
+    // CRITICAL FIX: Viewers should NEVER request locks
+    if (isViewer) {
+      console.log('[Lock] ⛔ Viewers cannot acquire locks - read-only mode');
+      return false;
+    }
+    
     // OPTIMIZATION: Check if we already have a selection lock on this shape
     if (selectionLocksRef.current.has(shapeId)) {
       console.log(`[Lock] ⚡ Lock already held via selection for ${shapeId.slice(0, 8)} - skipping acquisition`);
@@ -1778,6 +1784,12 @@ function CanvasContent() {
    */
   const handleShapeSelect = async (shapeId, isShiftKey) => {
     if (!user?.uid) return;
+    
+    // CRITICAL FIX: Viewers should NEVER trigger lock/selection behavior
+    if (isViewer) {
+      console.log('[Selection] ⛔ Viewers cannot select shapes - read-only mode');
+      return;
+    }
     
     // Close AI chat when clicking a shape
     if (isAIChatOpen) {
@@ -2782,7 +2794,8 @@ function CanvasContent() {
       return;
     }
     
-    if (e.evt.button === 0 && !isSpacePressed) {
+    // CRITICAL FIX: Viewers cannot use box selection
+    if (e.evt.button === 0 && !isSpacePressed && !isViewer) {
       const canvasX = (pointerPos.x - stagePos.x) / stageScale;
       const canvasY = (pointerPos.y - stagePos.y) / stageScale;
       const isShiftKey = e.evt?.shiftKey || false;
@@ -2847,7 +2860,8 @@ function CanvasContent() {
     console.log('[MouseUp] 🖱️ Mouse up detected', {
       isPanning,
       hasSelectionStart: !!selectionStartRef.current,
-      hasSelectionBox: !!selectionBox
+      hasSelectionBox: !!selectionBox,
+      isViewer
     });
     
     if (isPanning) {
@@ -2869,7 +2883,15 @@ function CanvasContent() {
       return;
     }
 
-    // Process intersecting shapes
+    // CRITICAL FIX: Viewers cannot select shapes via box selection
+    if (isViewer) {
+      console.log('[MouseUp] ⛔ Viewers cannot use box selection - read-only mode');
+      selectionStartRef.current = null;
+      setSelectionBox(null);
+      return;
+    }
+
+    // Process intersecting shapes (editors only)
     const intersectingShapes = shapes.filter(shape =>
       shapeIntersectsBox(shape, selectionBox)
     );
@@ -2959,7 +2981,8 @@ function CanvasContent() {
         setIsAIChatOpen(false);
       }
       
-      if (selectedIds.length > 0) {
+      // Only handle deselection for editors (viewers shouldn't have selections)
+      if (selectedIds.length > 0 && !isViewer) {
         const deselectStartTime = performance.now();
         console.log(`[Deselection] 🎯 Deselecting ${selectedIds.length} shapes`);
         
@@ -3669,12 +3692,12 @@ function CanvasContent() {
           })}
 
           {/* Render selection badges (for selections and locks) 
-              HIDE DURING DRAG: Badge only shows when shape is stationary
-              This prevents visual clutter during active drag operations */}
+              ONLY SHOW ON OTHER USERS' SCREENS - Never show your own selections
+              This prevents visual clutter and the badge staying in place when you move shapes */}
           {shapes.map(shape => {
             const selection = selections[shape.id];
             const isLockedByOther = shape.isLocked && shape.lockedBy && shape.lockedBy !== user?.uid;
-            const isSelectedByMe = selectedIds.includes(shape.id);
+            const isSelectedByOther = selection && selection.userId !== user?.uid;
             
             // CRITICAL: Hide badge if shape is being actively dragged by anyone
             // This keeps the canvas clean during drag operations
@@ -3684,10 +3707,10 @@ function CanvasContent() {
             }
             
             // Show badge ONLY if:
-            // 1. Selected by current user (isSelectedByMe), OR
+            // 1. Selected by ANOTHER user (not yourself), OR
             // 2. Locked by someone else (isLockedByOther)
-            // This prevents badges from showing on AI-created shapes unless user selects them
-            if ((selection && isSelectedByMe) || isLockedByOther) {
+            // NEVER show badge for your own selections - prevents visual clutter
+            if (isSelectedByOther || isLockedByOther) {
               // For locks, we need to get the user's display name from online users
               let badgeName = selection?.name;
               let badgeColor = selection?.color;
