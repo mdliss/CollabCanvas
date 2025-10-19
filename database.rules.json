@@ -77,7 +77,14 @@
     "notifications": {
       "$userId": {
         ".read": "auth != null && $userId == auth.uid",
-        ".write": "auth != null"
+        "requests": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        },
+        "messages": {
+          ".read": "auth != null && $userId == auth.uid",
+          ".write": "auth != null"
+        }
       }
     },
     "chats": {
