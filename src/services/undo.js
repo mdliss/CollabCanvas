@@ -766,12 +766,45 @@ export class UndoManager {
       const currentUid = this.currentUserId;
       console.log('🔵 [HISTORY] Returning RTDB history:', this.rtdbHistory.commands.length, 'commands from all users. Current user:', currentUid);
       
+      // Find the current position in history by matching with local undo stack
+      // The "current" position is the last command in the undo stack
+      let currentHistoryIndex = -1;
+      if (this.undoStack.length > 0) {
+        const lastCommand = this.undoStack[this.undoStack.length - 1];
+        const lastCommandDesc = lastCommand.getDescription();
+        const lastCommandTime = lastCommand.metadata?.timestamp;
+        
+        // Find matching command in RTDB history (match by description and timestamp)
+        for (let i = this.rtdbHistory.commands.length - 1; i >= 0; i--) {
+          const rtdbCmd = this.rtdbHistory.commands[i];
+          if (rtdbCmd.userId === currentUid && 
+              rtdbCmd.description === lastCommandDesc &&
+              Math.abs((rtdbCmd.timestamp || 0) - (lastCommandTime || 0)) < 5000) { // Within 5 seconds
+            currentHistoryIndex = i;
+            break;
+          }
+        }
+      }
+      
+      console.log('🔵 [HISTORY] Current position in history:', currentHistoryIndex, '(undo stack size:', this.undoStack.length + ')');
+      
       return this.rtdbHistory.commands.map((cmd, idx) => {
         const isLocal = cmd.userId === currentUid;
+        const isCurrent = idx === currentHistoryIndex;
+        
+        // Determine status: commands after current position are "undone" (for local user only)
+        let status = cmd.status;
+        if (isLocal && currentHistoryIndex >= 0) {
+          if (idx > currentHistoryIndex) {
+            status = 'undone'; // This command has been undone
+          } else {
+            status = 'done'; // This command is active
+          }
+        }
         
         // Log the first few to help debug
         if (idx < 3) {
-          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId} - isLocal: ${isLocal} (current: ${currentUid})`);
+          console.log(`🔵 [HISTORY] Command ${idx}: "${cmd.description}" by ${cmd.userId} - isLocal: ${isLocal}, status: ${status}, isCurrent: ${isCurrent}`);
         }
         
         return {
@@ -780,8 +813,8 @@ export class UndoManager {
           description: cmd.description,
           timestamp: cmd.timestamp,
           user: { uid: cmd.userId, displayName: cmd.userName },
-          status: cmd.status,
-          isCurrent: false, // Don't mark any as current in shared view
+          status: status,
+          isCurrent: isCurrent,
           isAI: cmd.isAI || cmd.description?.startsWith('AI:') || false,
           isLocal: isLocal // Check if command is from current user
         };

@@ -1,7 +1,28 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { UndoManager } from '../services/undo';
 
-const UndoContext = createContext();
+// Default context value to prevent undefined errors during React Strict Mode remounts
+const defaultContextValue = {
+  undoStackSize: 0,
+  redoStackSize: 0,
+  canUndo: false,
+  canRedo: false,
+  nextUndo: null,
+  nextRedo: null,
+  execute: async () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  undo: async () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  redo: async () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  clear: () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  revertToPoint: async () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  startBatch: () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  endBatch: async () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  getFullHistory: () => [],
+  logAIAction: () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  registerAIOperation: () => { console.warn('[UndoContext] Using default context - provider not ready'); },
+  getStackSizes: () => ({ undoCount: 0, redoCount: 0 })
+};
+
+const UndoContext = createContext(defaultContextValue);
 
 // Global canvas-specific managers (keyed by canvasId)
 const canvasManagers = new Map();
@@ -39,7 +60,11 @@ export function UndoProvider({ children, canvasId = null }) {
     console.log('[UndoProvider] Initializing with manager for canvas:', canvasId || 'global');
     return manager;
   });
-  const [state, setState] = useState(() => currentManager.getState());
+  const [state, setState] = useState(() => {
+    const initialState = currentManager.getState();
+    console.log('[UndoProvider] Initial state:', initialState);
+    return initialState;
+  });
 
   useEffect(() => {
     // Expose canvas-specific manager to window for debugging
@@ -128,8 +153,9 @@ export function UndoProvider({ children, canvasId = null }) {
 
 export function useUndo() {
   const context = useContext(UndoContext);
-  if (!context) {
-    throw new Error('useUndo must be used within UndoProvider');
+  // Context now always has a default value, but check if it's the real provider
+  if (context === defaultContextValue) {
+    console.warn('[useUndo] Using default context - UndoProvider may not be properly mounted yet');
   }
   return context;
 }

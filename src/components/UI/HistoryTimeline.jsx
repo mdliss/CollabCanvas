@@ -84,12 +84,14 @@ export default function HistoryTimeline({ isVisible = true }) {
   const handleConfirmRevert = async () => {
     if (selectedHistoryIndex !== null && revertToPoint) {
       try {
+        console.log('🔵 [HISTORY REVERT] Starting revert to index:', selectedHistoryIndex, 'Description:', selectedHistoryItem?.description);
         await revertToPoint(selectedHistoryIndex);
+        console.log('🔵 [HISTORY REVERT] ✅ Revert successful - history position updated');
         setShowConfirmModal(false);
         setSelectedHistoryIndex(null);
         setSelectedHistoryItem(null);
       } catch (error) {
-        console.error('Failed to revert to history point:', error);
+        console.error('🔵 [HISTORY REVERT] ❌ Failed to revert to history point:', error);
       }
     }
   };
@@ -212,8 +214,9 @@ export default function HistoryTimeline({ isVisible = true }) {
     }),
     historyItemCurrent: {
       background: theme.gradient.hover,
-      border: `1px solid ${theme.border.medium}`,
-      fontWeight: '600'
+      border: `2px solid ${theme.button.primary}`,
+      fontWeight: '600',
+      boxShadow: theme.shadow.md
     },
     bullet: {
       width: '8px',
@@ -388,7 +391,7 @@ export default function HistoryTimeline({ isVisible = true }) {
 
                 // Check if this is a local command (user's own) or shared (from others)
                 const isLocal = item.isLocal !== false; // Default to true for backward compatibility
-                const isClickable = isLocal; // All local commands are clickable (done or undone)
+                const isClickable = isLocal && !isCurrent; // All local commands are clickable except current
 
                 return (
                   <div
@@ -431,11 +434,11 @@ export default function HistoryTimeline({ isVisible = true }) {
                     }}
                     title={!isLocal 
                       ? 'Command from another user (view only)'
-                      : (isAIAction 
-                        ? `AI-generated action - Click to ${item.status === 'undone' ? 'redo' : 'revert'}`
-                        : (isCurrent 
-                          ? 'Current state' 
-                          : `Click to ${item.status === 'undone' ? 'redo to this point' : 'revert to this point'}`))}
+                      : (isCurrent
+                          ? '📍 Current position in history'
+                          : (isAIAction 
+                            ? `AI-generated action - Click to ${item.status === 'undone' ? 'redo' : 'revert'}`
+                            : `Click to ${item.status === 'undone' ? 'redo to this point' : 'revert to this point'}`))}
                   >
                     {/* AI indicator - removed emoji, using dark left border instead */}
                     
@@ -452,6 +455,7 @@ export default function HistoryTimeline({ isVisible = true }) {
                           ...(item.status === 'undone' ? styles.itemDescriptionUndone : {})
                         }}
                       >
+                        {isCurrent && <span style={{ marginRight: '6px', fontSize: '14px' }}>📍</span>}
                         {item.description}
                       </div>
                       <div style={styles.itemUser}>
