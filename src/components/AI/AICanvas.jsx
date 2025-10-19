@@ -349,13 +349,14 @@ export default function AICanvas({
   const BASE_RIGHT = 20; // Far right edge
   const CHAT_PANEL_WIDTH = 380;
   const CHAT_SLIDE_OFFSET = 400; // Chat panel width + gap
+  const LAYERS_SLIDE_OFFSET = 360; // Layers panel width
   
-  // Button position: slides right when chat is open
-  const buttonRight = isChatPanelVisible ? 78 + CHAT_SLIDE_OFFSET : 78;
+  // Button position: slides right when chat OR layers panel is open
+  const buttonRight = (isLayersPanelVisible ? LAYERS_SLIDE_OFFSET : 0) + (isChatPanelVisible ? 78 + CHAT_SLIDE_OFFSET : 78);
   
-  // Panel position: slides right when chat is open to stay next to button
+  // Panel position: slides right when chat OR layers panel is open to stay next to button
   // When both AI and Design are open, AI stays right, Design slides left
-  const panelRight = isChatPanelVisible ? BASE_RIGHT + CHAT_SLIDE_OFFSET : BASE_RIGHT;
+  const panelRight = (isLayersPanelVisible ? LAYERS_SLIDE_OFFSET : 0) + (isChatPanelVisible ? BASE_RIGHT + CHAT_SLIDE_OFFSET : BASE_RIGHT);
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);

@@ -3879,12 +3879,12 @@ function CanvasContent() {
       <button
         onClick={() => setIsChatPanelVisible(!isChatPanelVisible)}
         onMouseEnter={(e) => {
-          e.currentTarget.style.background = theme.gradient.buttonHover;
-          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.background = theme.gradient.hover;
+          e.currentTarget.style.boxShadow = theme.shadow.lg;
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = theme.gradient.button;
-          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.background = isChatPanelVisible ? theme.button.primary : theme.gradient.button;
+          e.currentTarget.style.boxShadow = theme.shadow.md;
         }}
         style={{
           position: 'fixed',

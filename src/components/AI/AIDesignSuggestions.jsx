@@ -161,13 +161,15 @@ export default function AIDesignSuggestions({
   // Calculate button position - to the LEFT of AI Assistant button
   const BUTTON_GAP = 10;
   const CHAT_SLIDE_OFFSET = 400; // Chat panel width + gap
+  const LAYERS_SLIDE_OFFSET = 360; // Layers panel width
   const baseButtonRight = 78 + 48 + BUTTON_GAP; // AI at 78px, this is left of it
-  const buttonRight = isChatPanelVisible ? baseButtonRight + CHAT_SLIDE_OFFSET : baseButtonRight;
+  const buttonRight = (isLayersPanelVisible ? LAYERS_SLIDE_OFFSET : 0) + (isChatPanelVisible ? baseButtonRight + CHAT_SLIDE_OFFSET : baseButtonRight);
   
   // Panel position logic:
   // 1. If chat is open, slide right by CHAT_SLIDE_OFFSET
-  // 2. If both Design and AI are open, Design slides left to make room for AI
-  const basePanelRight = isChatPanelVisible ? BASE_RIGHT + CHAT_SLIDE_OFFSET : BASE_RIGHT;
+  // 2. If layers panel is open, slide right by LAYERS_SLIDE_OFFSET
+  // 3. If both Design and AI are open, Design slides left to make room for AI
+  const basePanelRight = (isLayersPanelVisible ? LAYERS_SLIDE_OFFSET : 0) + (isChatPanelVisible ? BASE_RIGHT + CHAT_SLIDE_OFFSET : BASE_RIGHT);
   const panelRight = (isOpen && isAIOpen) ? basePanelRight + AI_PANEL_WIDTH + GAP : basePanelRight;
 
   /**
