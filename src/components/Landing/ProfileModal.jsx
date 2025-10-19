@@ -426,7 +426,7 @@ export default function ProfileModal({ onClose }) {
                 }}
                 title="Change profile picture"
               >
-                📷
+                ✎
               </button>
               <input
                 ref={fileInputRef}

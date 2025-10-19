@@ -200,7 +200,7 @@ export default function LeaderboardModal({ onClose }) {
     return count || 0;
   };
 
-  // Generate activity data for the last 7 days
+  // Generate activity data for the last 7 days (NO FABRICATED DATA)
   const generateActivityData = (users) => {
     const days = 7;
     const today = new Date();
@@ -217,13 +217,10 @@ export default function LeaderboardModal({ onClose }) {
         fullLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
       };
 
-      // Generate activity for each user
+      // Set activity to 0 for all users (real data would come from Firestore)
+      // TODO: Track daily activity in Firestore to show real data
       users.forEach(user => {
-        // Simulate realistic activity patterns for recent days
-        const avgDaily = user.changesCount / 7; // Average over the week
-        const variance = Math.random() * 0.8 + 0.6; // 60-140% of average
-        const changes = Math.round(Math.max(0, avgDaily * variance));
-        dayData[user.uid] = changes;
+        dayData[user.uid] = 0; // No fabricated data - all zeros until we track real activity
       });
 
       data.push(dayData);

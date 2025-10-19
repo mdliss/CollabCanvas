@@ -12,7 +12,7 @@
  * /directMessages/{conversationId}/lastMessage - For sorting
  */
 
-import { ref, push, onValue, query, limitToLast, orderByKey, set, get, remove } from 'firebase/database';
+import { ref, push, onValue, query, limitToLast, orderByKey, set, get, remove, update } from 'firebase/database';
 import { rtdb } from './firebase';
 
 /**
@@ -86,6 +86,32 @@ export const deleteDirectMessage = async (userId1, userId2, messageId, messageSe
     console.log('[DirectMessages] Message deleted:', messageId);
   } catch (error) {
     console.error('[DirectMessages] Failed to delete message:', error);
+    throw error;
+  }
+};
+
+/**
+ * Edit a message (only by sender)
+ */
+export const editDirectMessage = async (userId1, userId2, messageId, messageSenderId, newText) => {
+  try {
+    const conversationId = getConversationId(userId1, userId2);
+    
+    // Only allow editing own messages
+    if (userId1 !== messageSenderId && userId2 !== messageSenderId) {
+      throw new Error('You can only edit your own messages');
+    }
+    
+    const messageRef = ref(rtdb, `directMessages/${conversationId}/messages/${messageId}`);
+    await update(messageRef, {
+      text: newText.trim(),
+      edited: true,
+      editedAt: Date.now()
+    });
+    
+    console.log('[DirectMessages] Message edited:', messageId);
+  } catch (error) {
+    console.error('[DirectMessages] Failed to edit message:', error);
     throw error;
   }
 };

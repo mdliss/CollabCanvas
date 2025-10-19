@@ -265,11 +265,11 @@ class UndoManager {
       this.batchDescription
     );
     
-    // Track changes for leaderboard (count all commands in batch, lazy import)
+    // Track changes for leaderboard (BATCH = 1 CHANGE, not n changes)
     const firstCommand = this.batchCommands[0];
     if (firstCommand?.metadata?.user?.uid) {
       import('./userProfile').then(({ incrementChangesCount }) => {
-        incrementChangesCount(firstCommand.metadata.user.uid, this.batchCommands.length).catch(err => {
+        incrementChangesCount(firstCommand.metadata.user.uid, 1).catch(err => {
           console.warn('[UndoManager] Failed to track batch changes for leaderboard:', err);
         });
       }).catch(() => {
@@ -587,10 +587,10 @@ class UndoManager {
     aiCommand.metadata.isAI = true;
     aiCommand.metadata.user = aiCommand.user; // Copy user from command for getUserName()
     
-    // Track changes for leaderboard (AI operations count as changes, lazy import)
+    // Track changes for leaderboard (AI OPERATION = 1 CHANGE, not n shapes)
     if (aiCommand.user?.uid && aiCommand.affectedShapeIds) {
       import('./userProfile').then(({ incrementChangesCount }) => {
-        incrementChangesCount(aiCommand.user.uid, aiCommand.affectedShapeIds.length).catch(err => {
+        incrementChangesCount(aiCommand.user.uid, 1).catch(err => {
           console.warn('[UndoManager] Failed to track AI changes for leaderboard:', err);
         });
       }).catch(() => {

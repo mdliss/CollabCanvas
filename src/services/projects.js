@@ -327,6 +327,23 @@ export const updateProject = async (userId, projectId, updates) => {
   };
   
   await update(projectRef, updateData);
+  
+  // CRITICAL: If name changed, also update canvas metadata so shared users see the new name
+  if (updates.name) {
+    // Get the project to find its canvasId
+    const projectSnapshot = await get(projectRef);
+    if (projectSnapshot.exists()) {
+      const project = projectSnapshot.val();
+      if (project.canvasId) {
+        const canvasMetadataRef = ref(rtdb, `canvas/${project.canvasId}/metadata`);
+        await update(canvasMetadataRef, {
+          projectName: updates.name,
+          lastUpdated: Date.now()
+        });
+        console.log('[Projects] Updated canvas metadata projectName for shared users:', project.canvasId);
+      }
+    }
+  }
 };
 
 /**

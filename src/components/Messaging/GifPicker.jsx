@@ -9,11 +9,16 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 
-// Using Giphy public beta key - limited to 42 requests/hour
-// For production, get your own key at: https://developers.giphy.com/
-const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; 
+// Giphy API - Get your free API key at https://developers.giphy.com/
+// The old public beta key is deprecated
+const GIPHY_API_KEY = 'dc6zaTOxFJmzC'; // This key may be expired/restricted
 const GIPHY_SEARCH_URL = 'https://api.giphy.com/v1/gifs/search';
 const GIPHY_TRENDING_URL = 'https://api.giphy.com/v1/gifs/trending';
+
+// Alternative: Use Tenor (Google's GIF API) if Giphy doesn't work
+const TENOR_API_KEY = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ'; // Demo key
+const TENOR_SEARCH_URL = 'https://tenor.googleapis.com/v2/search';
+const TENOR_TRENDING_URL = 'https://tenor.googleapis.com/v2/featured';
 
 export default function GifPicker({ onSelect, onClose }) {
   const { theme } = useTheme();
@@ -33,8 +38,8 @@ export default function GifPicker({ onSelect, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      console.log('[GifPicker] Loading trending GIFs...');
-      const url = `${GIPHY_TRENDING_URL}?api_key=${GIPHY_API_KEY}&limit=20&rating=g`;
+      console.log('[GifPicker] Loading trending GIFs from Tenor...');
+      const url = `${TENOR_TRENDING_URL}?key=${TENOR_API_KEY}&limit=20&media_filter=gif&contentfilter=high`;
       console.log('[GifPicker] URL:', url);
       
       const response = await fetch(url);
@@ -46,9 +51,9 @@ export default function GifPicker({ onSelect, onClose }) {
       const data = await response.json();
       console.log('[GifPicker] Response data:', data);
       
-      if (data.data && data.data.length > 0) {
-        setGifs(data.data);
-        console.log('[GifPicker] Loaded', data.data.length, 'trending GIFs');
+      if (data.results && data.results.length > 0) {
+        setGifs(data.results);
+        console.log('[GifPicker] Loaded', data.results.length, 'trending GIFs');
       } else {
         console.warn('[GifPicker] No GIFs in response');
         setGifs([]);
@@ -71,8 +76,8 @@ export default function GifPicker({ onSelect, onClose }) {
     setLoading(true);
     setError(null);
     try {
-      console.log('[GifPicker] Searching for:', term);
-      const url = `${GIPHY_SEARCH_URL}?api_key=${GIPHY_API_KEY}&q=${encodeURIComponent(term)}&limit=20&rating=g`;
+      console.log('[GifPicker] Searching Tenor for:', term);
+      const url = `${TENOR_SEARCH_URL}?key=${TENOR_API_KEY}&q=${encodeURIComponent(term)}&limit=20&media_filter=gif&contentfilter=high`;
       
       const response = await fetch(url);
       
@@ -83,9 +88,9 @@ export default function GifPicker({ onSelect, onClose }) {
       const data = await response.json();
       console.log('[GifPicker] Search results:', data);
       
-      if (data.data && data.data.length > 0) {
-        setGifs(data.data);
-        console.log('[GifPicker] Found', data.data.length, 'GIFs');
+      if (data.results && data.results.length > 0) {
+        setGifs(data.results);
+        console.log('[GifPicker] Found', data.results.length, 'GIFs');
       } else {
         setGifs([]);
         console.log('[GifPicker] No GIFs found for search:', term);
@@ -105,11 +110,16 @@ export default function GifPicker({ onSelect, onClose }) {
   };
 
   const handleGifClick = (gif) => {
+    // Tenor API format (different from Giphy)
+    const gifUrl = gif.media_formats?.gif?.url || gif.media_formats?.tinygif?.url;
+    const width = gif.media_formats?.gif?.dims?.[0] || 200;
+    const height = gif.media_formats?.gif?.dims?.[1] || 200;
+    
     onSelect({
       type: 'gif',
-      url: gif.images.fixed_height.url,
-      width: parseInt(gif.images.fixed_height.width),
-      height: parseInt(gif.images.fixed_height.height)
+      url: gifUrl,
+      width: width,
+      height: height
     });
     onClose();
   };
@@ -120,8 +130,8 @@ export default function GifPicker({ onSelect, onClose }) {
         position: 'absolute',
         bottom: '60px',
         left: '20px',
-        width: '400px',
-        height: '400px',
+        width: '500px',
+        height: '500px',
         background: theme.background.card,
         border: `1px solid ${theme.border.normal}`,
         borderRadius: '12px',
@@ -215,15 +225,14 @@ export default function GifPicker({ onSelect, onClose }) {
       <div style={{
         flex: 1,
         overflowY: 'auto',
-        padding: '12px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, 1fr)',
-        gap: '8px',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
         alignContent: 'start'
       }}>
         {loading ? (
           <div style={{
-            gridColumn: '1 / -1',
             textAlign: 'center',
             padding: '40px',
             color: theme.text.secondary
@@ -232,12 +241,10 @@ export default function GifPicker({ onSelect, onClose }) {
           </div>
         ) : error ? (
           <div style={{
-            gridColumn: '1 / -1',
             textAlign: 'center',
             padding: '40px',
             color: theme.text.secondary
           }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚠️</div>
             <div style={{ fontSize: '13px', color: theme.text.primary, fontWeight: '500', marginBottom: '8px' }}>
               Failed to load GIFs
             </div>
@@ -262,55 +269,63 @@ export default function GifPicker({ onSelect, onClose }) {
           </div>
         ) : gifs.length === 0 ? (
           <div style={{
-            gridColumn: '1 / -1',
             textAlign: 'center',
             padding: '40px',
             color: theme.text.secondary
           }}>
-            <div style={{ fontSize: '32px', marginBottom: '12px' }}>🔍</div>
             <div style={{ fontSize: '13px' }}>
               {searchTerm ? `No GIFs found for "${searchTerm}"` : 'No GIFs found'}
             </div>
           </div>
         ) : (
-          gifs.map((gif) => (
-            <div
-              key={gif.id}
-              onClick={() => handleGifClick(gif)}
-              style={{
-                cursor: 'pointer',
-                borderRadius: '8px',
-                overflow: 'hidden',
-                border: `1px solid ${theme.border.light}`,
-                transition: 'all 0.2s ease',
-                aspectRatio: '1',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                background: theme.background.elevated
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'scale(1.05)';
-                e.currentTarget.style.borderColor = theme.button.primary;
-                e.currentTarget.style.boxShadow = theme.shadow.md;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'scale(1)';
-                e.currentTarget.style.borderColor = theme.border.light;
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              <img
-                src={gif.images.fixed_height_small.url}
-                alt={gif.title}
+          gifs.map((gif) => {
+            // Tenor API format - use preview GIF for better quality
+            const gifUrl = gif.media_formats?.gif?.url || gif.media_formats?.mediumgif?.url;
+            const width = gif.media_formats?.gif?.dims?.[0] || 300;
+            const height = gif.media_formats?.gif?.dims?.[1] || 200;
+            
+            return (
+              <div
+                key={gif.id}
+                onClick={() => handleGifClick(gif)}
                 style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover'
+                  cursor: 'pointer',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  border: `1px solid ${theme.border.light}`,
+                  transition: 'all 0.2s ease',
+                  background: theme.background.elevated,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: '120px',
+                  maxHeight: '300px'
                 }}
-              />
-            </div>
-          ))
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = theme.button.primary;
+                  e.currentTarget.style.boxShadow = theme.shadow.md;
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = theme.border.light;
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                }}
+              >
+                <img
+                  src={gifUrl}
+                  alt={gif.content_description || 'GIF'}
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    maxHeight: '300px',
+                    objectFit: 'contain',
+                    display: 'block'
+                  }}
+                />
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -322,7 +337,7 @@ export default function GifPicker({ onSelect, onClose }) {
         fontSize: '10px',
         color: theme.text.tertiary
       }}>
-        Powered by GIPHY
+        Powered by Tenor
       </div>
     </div>
   );

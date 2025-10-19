@@ -333,7 +333,6 @@ export default function MessagingButton({ onOpenMessaging }) {
                   textAlign: 'center',
                   color: theme.text.secondary
                 }}>
-                  <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}>👥</div>
                   <div style={{ fontSize: '14px', marginBottom: '8px', fontWeight: '500' }}>No friends yet</div>
                   <div style={{ fontSize: '13px', opacity: 0.8 }}>Add friends to start messaging!</div>
                 </div>
@@ -569,14 +568,13 @@ export default function MessagingButton({ onOpenMessaging }) {
 
                 {pendingRequests.length === 0 && outgoingRequests.length === 0 && (
                   <div style={{
-                    padding: '40px 20px',
-                    textAlign: 'center',
-                    color: theme.text.secondary
-                  }}>
-                    <div style={{ fontSize: '48px', marginBottom: '12px', opacity: 0.5 }}>📬</div>
-                    <div style={{ fontSize: '14px' }}>No pending requests</div>
-                  </div>
-                )}
+                  padding: '40px 20px',
+                  textAlign: 'center',
+                  color: theme.text.secondary
+                }}>
+                  <div style={{ fontSize: '14px' }}>No pending requests</div>
+                </div>
+              )}
               </>
             )}
 

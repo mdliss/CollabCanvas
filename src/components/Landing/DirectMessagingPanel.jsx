@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
-import { subscribeToConversation, sendDirectMessage, deleteDirectMessage, getConversationId } from '../../services/directMessages';
+import { subscribeToConversation, sendDirectMessage, deleteDirectMessage, editDirectMessage, getConversationId } from '../../services/directMessages';
 import { getUserProfile } from '../../services/userProfile';
 import { uploadMessageImage } from '../../services/messageAttachments';
 import { removeFriend } from '../../services/friends';
@@ -32,6 +32,8 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
   const [hoveredMessageId, setHoveredMessageId] = useState(null);
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editingText, setEditingText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [showRemoveFriendConfirm, setShowRemoveFriendConfirm] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -39,6 +41,7 @@ export default function DirectMessagingPanel({ friend, onClose }) {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
+  const editInputRef = useRef(null);
 
   // Load user and friend profiles from Firestore
   useEffect(() => {
@@ -222,6 +225,33 @@ export default function DirectMessagingPanel({ friend, onClose }) {
       console.error('[DirectMessaging] Failed to delete message:', error);
       alert(error.message || 'Failed to delete message');
     }
+  };
+
+  const handleStartEdit = (message) => {
+    setEditingMessageId(message.id);
+    setEditingText(message.text || '');
+    setTimeout(() => editInputRef.current?.focus(), 100);
+  };
+
+  const handleSaveEdit = async (messageId, messageSenderId) => {
+    if (!editingText.trim()) {
+      alert('Message cannot be empty');
+      return;
+    }
+
+    try {
+      await editDirectMessage(user.uid, friend.id, messageId, messageSenderId, editingText);
+      setEditingMessageId(null);
+      setEditingText('');
+    } catch (error) {
+      console.error('[DirectMessaging] Failed to edit message:', error);
+      alert(error.message || 'Failed to edit message');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingText('');
   };
 
   const handleRemoveFriend = async () => {
@@ -590,12 +620,11 @@ export default function DirectMessagingPanel({ friend, onClose }) {
               zIndex: 10,
               pointerEvents: 'none'
             }}>
-              📎 Drop image to send
+              Drop image to send
             </div>
           )}
           {messages.length === 0 ? (
             <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>💬</div>
               <div style={styles.emptyTitle}>No messages yet</div>
               <div style={styles.emptyText}>
                 Start a conversation with {friend.userName}
@@ -626,65 +655,187 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                       </span>
                       <span style={styles.messageTime}>
                         {formatTimestamp(message.timestamp)}
-                      </span>
-                      {isOwn && isHovered && (
-                        <button
-                          onClick={() => handleDeleteMessage(message.id, message.from)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
+                        {message.edited && (
+                          <span style={{ 
+                            marginLeft: '4px', 
+                            fontSize: '10px', 
                             color: theme.text.tertiary,
-                            cursor: 'pointer',
-                            fontSize: '12px',
-                            padding: '2px 6px',
+                            fontStyle: 'italic'
+                          }}>
+                            (edited)
+                          </span>
+                        )}
+                      </span>
+                      {isOwn && isHovered && editingMessageId !== message.id && (
+                        <div style={{ display: 'flex', gap: '4px' }}>
+                          <button
+                            onClick={() => handleStartEdit(message)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: theme.text.tertiary,
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              transition: 'all 0.2s ease',
+                              fontWeight: '500'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = theme.background.elevated;
+                              e.target.style.color = theme.button.primary;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = 'transparent';
+                              e.target.style.color = theme.text.tertiary;
+                            }}
+                            title="Edit message"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteMessage(message.id, message.from)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: theme.text.tertiary,
+                              cursor: 'pointer',
+                              fontSize: '11px',
+                              padding: '2px 6px',
+                              borderRadius: '4px',
+                              transition: 'all 0.2s ease',
+                              fontWeight: '500'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = '#fee2e2';
+                              e.target.style.color = '#dc2626';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = 'transparent';
+                              e.target.style.color = theme.text.tertiary;
+                            }}
+                            title="Delete message"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {editingMessageId === message.id ? (
+                      // Edit Mode
+                      <div style={{
+                        background: theme.background.elevated,
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: `1px solid ${theme.border.medium}`,
+                        maxWidth: '80%'
+                      }}>
+                        <input
+                          ref={editInputRef}
+                          type="text"
+                          value={editingText}
+                          onChange={(e) => setEditingText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              handleSaveEdit(message.id, message.from);
+                            } else if (e.key === 'Escape') {
+                              handleCancelEdit();
+                            }
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '6px 8px',
+                            border: `1px solid ${theme.border.medium}`,
                             borderRadius: '4px',
-                            transition: 'all 0.2s ease'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.target.style.background = '#fee2e2';
-                            e.target.style.color = '#dc2626';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.target.style.background = 'transparent';
-                            e.target.style.color = theme.text.tertiary;
-                          }}
-                          title="Delete message"
-                        >
-                          🗑️
-                        </button>
-                      )}
-                    </div>
-                    <div style={styles.messageBubble(isOwn)}>
-                      {message.attachment?.type === 'image' && (
-                        <img
-                          src={message.attachment.url}
-                          alt="Shared image"
-                          style={{
-                            maxWidth: '300px',
-                            maxHeight: '300px',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            display: 'block',
-                            marginBottom: message.text ? '8px' : 0
-                          }}
-                          onClick={() => window.open(message.attachment.url, '_blank')}
-                        />
-                      )}
-                      {message.attachment?.type === 'gif' && (
-                        <img
-                          src={message.attachment.url}
-                          alt="GIF"
-                          style={{
-                            maxWidth: '250px',
-                            maxHeight: '250px',
-                            borderRadius: '8px',
-                            display: 'block',
-                            marginBottom: message.text ? '8px' : 0
+                            fontSize: '13px',
+                            background: theme.background.card,
+                            color: theme.text.primary,
+                            outline: 'none',
+                            marginBottom: '6px'
                           }}
                         />
-                      )}
-                      {message.text && <div>{message.text}</div>}
-                    </div>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={handleCancelEdit}
+                            style={{
+                              padding: '4px 10px',
+                              background: theme.background.card,
+                              border: `1px solid ${theme.border.medium}`,
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              color: theme.text.primary,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = theme.background.elevated;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = theme.background.card;
+                            }}
+                          >
+                            Cancel
+                          </button>
+                          <button
+                            onClick={() => handleSaveEdit(message.id, message.from)}
+                            style={{
+                              padding: '4px 10px',
+                              background: theme.button.primary,
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              color: theme.text.inverse,
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.background = theme.button.primaryHover;
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.background = theme.button.primary;
+                            }}
+                          >
+                            Save
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      // View Mode
+                      <div style={styles.messageBubble(isOwn)}>
+                        {message.attachment?.type === 'image' && (
+                          <img
+                            src={message.attachment.url}
+                            alt="Shared image"
+                            style={{
+                              maxWidth: '300px',
+                              maxHeight: '300px',
+                              borderRadius: '8px',
+                              cursor: 'pointer',
+                              display: 'block',
+                              marginBottom: message.text ? '8px' : 0
+                            }}
+                            onClick={() => window.open(message.attachment.url, '_blank')}
+                          />
+                        )}
+                        {message.attachment?.type === 'gif' && (
+                          <img
+                            src={message.attachment.url}
+                            alt="GIF"
+                            style={{
+                              maxWidth: '250px',
+                              maxHeight: '250px',
+                              borderRadius: '8px',
+                              display: 'block',
+                              marginBottom: message.text ? '8px' : 0
+                            }}
+                          />
+                        )}
+                        {message.text && <div>{message.text}</div>}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -747,38 +898,40 @@ export default function DirectMessagingPanel({ friend, onClose }) {
           )}
 
           <form onSubmit={handleSendMessage} style={styles.form}>
-            {/* Attachment Buttons */}
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            {/* Attachment Buttons - Toolbar Style */}
+            <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadingImage}
                 style={{
-                  background: 'transparent',
-                  border: 'none',
-                  padding: '8px',
+                  background: theme.background.card,
+                  border: `1px solid ${theme.border.medium}`,
+                  padding: '6px 10px',
                   borderRadius: '6px',
                   cursor: uploadingImage ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: theme.text.secondary,
+                  color: theme.text.primary,
                   transition: 'all 0.2s ease',
-                  fontSize: '20px'
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  whiteSpace: 'nowrap'
                 }}
                 onMouseEnter={(e) => {
                   if (!uploadingImage) {
-                    e.target.style.background = theme.background.card;
-                    e.target.style.color = theme.button.primary;
+                    e.target.style.background = theme.background.elevated;
+                    e.target.style.borderColor = theme.border.strong;
                   }
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.background = 'transparent';
-                  e.target.style.color = theme.text.secondary;
+                  e.target.style.background = theme.background.card;
+                  e.target.style.borderColor = theme.border.medium;
                 }}
                 title="Attach image"
               >
-                📎
+                Image
               </button>
               <input
                 ref={fileInputRef}
@@ -792,33 +945,35 @@ export default function DirectMessagingPanel({ friend, onClose }) {
                 type="button"
                 onClick={() => setShowGifPicker(!showGifPicker)}
                 style={{
-                  background: showGifPicker ? theme.background.elevated : 'transparent',
-                  border: 'none',
-                  padding: '8px',
+                  background: showGifPicker ? theme.button.primary : theme.background.card,
+                  border: `1px solid ${showGifPicker ? theme.button.primary : theme.border.medium}`,
+                  padding: '6px 10px',
                   borderRadius: '6px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: showGifPicker ? theme.button.primary : theme.text.secondary,
+                  color: showGifPicker ? theme.text.inverse : theme.text.primary,
                   transition: 'all 0.2s ease',
-                  fontSize: '20px'
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  whiteSpace: 'nowrap'
                 }}
                 onMouseEnter={(e) => {
                   if (!showGifPicker) {
-                    e.target.style.background = theme.background.card;
-                    e.target.style.color = theme.button.primary;
+                    e.target.style.background = theme.background.elevated;
+                    e.target.style.borderColor = theme.border.strong;
                   }
                 }}
                 onMouseLeave={(e) => {
                   if (!showGifPicker) {
-                    e.target.style.background = 'transparent';
-                    e.target.style.color = theme.text.secondary;
+                    e.target.style.background = theme.background.card;
+                    e.target.style.borderColor = theme.border.medium;
                   }
                 }}
                 title="Send GIF"
               >
-                🎬
+                GIF
               </button>
             </div>
 
