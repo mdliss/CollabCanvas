@@ -96,6 +96,15 @@ button {
   cursor: pointer;
 }
 
+/* Remove all focus outlines globally */
+button:focus,
+button:focus-visible,
+button:active,
+input:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
 /* Profile Popup Animations */
 @keyframes slideInFromRight {
   from {

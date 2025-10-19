@@ -174,7 +174,7 @@ import { useUndo, UndoProvider } from "../../contexts/UndoContext";
 import { CreateShapeCommand, UpdateShapeCommand, DeleteShapeCommand, BatchDeleteShapesCommand, MoveShapeCommand } from "../../utils/commands";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
 import { stopDragStream } from "../../services/dragStream";
-import { generateUserColor } from "../../services/presence";
+import { generateUserColor, setGlobalUserOnline } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 import { ref, remove, onValue, get } from "firebase/database";
 import { rtdb } from "../../services/firebase";
@@ -465,10 +465,15 @@ function CanvasContent() {
           return;
         }
         
-        // Only reload if role changed from viewer to editor
-        if (initialRole === 'viewer' && newRole === 'editor') {
-          console.log('[Canvas] 🔄 Permission upgraded: viewer → editor');
-          showFeedback('Access upgraded to editor! Reloading...');
+        // Reload if role changed in ANY direction
+        if (initialRole !== newRole) {
+          if (initialRole === 'viewer' && newRole === 'editor') {
+            console.log('[Canvas] 🔄 Permission upgraded: viewer → editor');
+            showFeedback('Access upgraded to editor! Reloading...');
+          } else if (initialRole === 'editor' && newRole === 'viewer') {
+            console.log('[Canvas] 🔄 Permission downgraded: editor → viewer');
+            showFeedback('Access changed to viewer! Reloading...');
+          }
           
           setTimeout(() => {
             window.location.reload();
@@ -542,6 +547,15 @@ function CanvasContent() {
       setSubscription(sub);
     }).catch(err => {
       console.error('[Canvas] Failed to load subscription:', err);
+    });
+  }, [user]);
+
+  // Set user as globally online (for friends to see) even when in canvas
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    setGlobalUserOnline(user.uid).catch(err => {
+      console.error('[Canvas] Failed to set global presence:', err);
     });
   }, [user]);
 
@@ -3102,7 +3116,8 @@ function CanvasContent() {
           gap: '16px',
           fontSize: '13px',
           color: '#92400e',
-          fontWeight: '400'
+          fontWeight: '400',
+          boxShadow: 'none'
         }}>
           <span>View-Only Mode</span>
           <span style={{ opacity: 0.6 }}>•</span>
@@ -3186,21 +3201,35 @@ function CanvasContent() {
           alignItems: 'center',
           gap: '8px',
           opacity: isUIVisible ? 1 : 0,
-          transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)'
+          transform: isUIVisible ? 'translateY(0)' : 'translateY(-10px)',
+          outline: 'none'
         }}
         onMouseEnter={(e) => {
           e.target.style.background = theme.background.elevated;
           e.target.style.borderColor = theme.border.strong;
+          e.target.style.outline = 'none';
         }}
         onMouseLeave={(e) => {
           e.target.style.background = theme.background.card;
           e.target.style.borderColor = theme.border.normal;
+          e.target.style.outline = 'none';
         }}
-        title="Back to projects"
-      >
-        <span>←</span>
-        <span>Projects</span>
-      </button>
+        onFocus={(e) => {
+          e.target.style.outline = 'none';
+        }}
+        onBlur={(e) => {
+          e.target.style.outline = 'none';
+        }}
+        onMouseDown={(e) => {
+          e.target.style.outline = 'none';
+        }}
+        onMouseUp={(e) => {
+          e.target.style.outline = 'none';
+        }}
+          title="Back to projects"
+        >
+          ← Projects
+        </button>
       
       {/* Share Button - Only for owner */}
       {canvasAccess.role === 'owner' && (
@@ -3231,14 +3260,28 @@ function CanvasContent() {
           onMouseEnter={(e) => {
             e.target.style.background = theme.background.elevated;
             e.target.style.borderColor = theme.border.strong;
+            e.target.style.outline = 'none';
           }}
           onMouseLeave={(e) => {
             e.target.style.background = theme.background.card;
             e.target.style.borderColor = theme.border.normal;
+            e.target.style.outline = 'none';
+          }}
+          onFocus={(e) => {
+            e.target.style.outline = 'none';
+          }}
+          onBlur={(e) => {
+            e.target.style.outline = 'none';
+          }}
+          onMouseDown={(e) => {
+            e.target.style.outline = 'none';
+          }}
+          onMouseUp={(e) => {
+            e.target.style.outline = 'none';
           }}
           title="Share canvas"
         >
-          <span>Share</span>
+          Share
         </button>
       )}
 

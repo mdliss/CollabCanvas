@@ -20,7 +20,16 @@ export default function HistoryTimeline({ isVisible = true }) {
       if (getFullHistory) {
         const fullHistory = getFullHistory();
         setHistory(fullHistory.slice(-1000)); // Keep up to 1000 operations
-        console.log('[HistoryTimeline] History updated:', fullHistory.length, 'items');
+        
+        if (fullHistory.length > 0) {
+          console.log('🔵 [HISTORY] History updated:', fullHistory.length, 'items');
+          console.log('🔵 [HISTORY] Sample item:', {
+            description: fullHistory[fullHistory.length - 1]?.description,
+            isLocal: fullHistory[fullHistory.length - 1]?.isLocal,
+            status: fullHistory[fullHistory.length - 1]?.status,
+            user: fullHistory[fullHistory.length - 1]?.user?.displayName
+          });
+        }
       }
     }, 500);
 
@@ -39,23 +48,37 @@ export default function HistoryTimeline({ isVisible = true }) {
   };
 
   const handleHistoryItemClick = (item) => {
-    console.log('[HistoryTimeline] Item clicked:', item);
-    console.log('[HistoryTimeline] Item index:', item.index);
-    console.log('[HistoryTimeline] Is current:', item.isCurrent);
-    console.log('[HistoryTimeline] Status:', item.status);
+    console.log('🔵 [HISTORY CLICK] ━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔵 [HISTORY CLICK] Item clicked:', item.description);
+    console.log('🔵 [HISTORY CLICK] Item index:', item.index);
+    console.log('🔵 [HISTORY CLICK] Is local:', item.isLocal);
+    console.log('🔵 [HISTORY CLICK] Status:', item.status);
+    console.log('🔵 [HISTORY CLICK] Is current:', item.isCurrent);
+    console.log('🔵 [HISTORY CLICK] Is AI:', item.isAI);
     
-    // Allow clicking on any item to revert to that point in history
+    // Only allow clicking on local items (your own undo/redo stack)
+    if (item.isLocal === false) {
+      console.warn('🔵 [HISTORY CLICK] ❌ Cannot revert to non-local command from other users');
+      return;
+    }
+    
+    // Allow clicking on any local item to revert to that point in history
     if (item.status === 'done') {
+      console.log('🔵 [HISTORY CLICK] ✅ Opening revert confirmation modal');
       // Clicking on item takes you to the state AFTER that action
       setSelectedHistoryIndex(item.index);
       setSelectedHistoryItem(item);
       setShowConfirmModal(true);
     } else if (item.status === 'undone') {
+      console.log('🔵 [HISTORY CLICK] ✅ Opening redo confirmation modal');
       // Clicking on undone item redoes to that point
       setSelectedHistoryIndex(item.index);
       setSelectedHistoryItem(item);
       setShowConfirmModal(true);
+    } else {
+      console.warn('🔵 [HISTORY CLICK] ❌ Unknown status:', item.status);
     }
+    console.log('🔵 [HISTORY CLICK] ━━━━━━━━━━━━━━━━━━━━━');
   };
 
   const handleConfirmRevert = async () => {
@@ -363,6 +386,10 @@ export default function HistoryTimeline({ isVisible = true }) {
                 // Check if this is an AI action
                 const isAIAction = item.isAI || item.description?.startsWith('AI:');
 
+                // Check if this is a local command (user's own) or shared (from others)
+                const isLocal = item.isLocal !== false; // Default to true for backward compatibility
+                const isClickable = isLocal && item.status === 'done'; // Only local done commands are clickable
+
                 return (
                   <div
                     key={idx}
@@ -372,11 +399,24 @@ export default function HistoryTimeline({ isVisible = true }) {
                       ...(isAIAction ? {
                         background: theme.background.elevated,
                         borderLeft: `3px solid ${theme.button.primary}`
-                      } : {})
+                      } : {}),
+                      ...(!isClickable ? {
+                        opacity: 0.6,
+                        cursor: 'default'
+                      } : {
+                        cursor: 'pointer'
+                      })
                     }}
-                    onClick={() => handleHistoryItemClick(item)}
+                    onClick={() => {
+                      console.log('🔵 [HISTORY] Item onClick fired. Clickable:', isClickable, 'Description:', item.description);
+                      if (isClickable) {
+                        handleHistoryItemClick(item);
+                      } else {
+                        console.warn('🔵 [HISTORY] Item not clickable. isLocal:', item.isLocal, 'status:', item.status);
+                      }
+                    }}
                     onMouseOver={(e) => {
-                      if (!isCurrent) {
+                      if (!isCurrent && isClickable) {
                         e.currentTarget.style.background = theme.isDark 
                           ? 'rgba(255, 255, 255, 0.05)'
                           : '#f3f4f6';
@@ -384,14 +424,16 @@ export default function HistoryTimeline({ isVisible = true }) {
                       }
                     }}
                     onMouseOut={(e) => {
-                      if (!isCurrent) {
+                      if (!isCurrent && isClickable) {
                         e.currentTarget.style.background = theme.background.elevated;
                         e.currentTarget.style.transform = 'translateX(0)';
                       }
                     }}
-                    title={isAIAction 
-                      ? 'AI-generated action'
-                      : (isCurrent ? 'Current state' : `Click to revert to this point`)}
+                    title={!isLocal 
+                      ? 'Command from another user (view only)'
+                      : (isAIAction 
+                        ? 'AI-generated action - Click to revert'
+                        : (isCurrent ? 'Current state' : `Click to revert to this point`))}
                   >
                     {/* AI indicator - removed emoji, using dark left border instead */}
                     

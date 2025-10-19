@@ -192,15 +192,20 @@ export class UndoManager {
   /**
    * Set up RTDB sync for shared canvas history
    * 
-   * Note: RTDB history is for DISPLAY only (show all users' commands in timeline).
-   * Undo/redo operations are local-only to avoid index mismatch issues.
+   * Subscribes to RTDB to display ALL users' commands in the timeline.
+   * Undo/redo operations remain local-only.
    */
   async setupRTDBSync() {
+    const { subscribeToHistory } = await import('./sharedHistory.js');
+    
     console.log('🔵 [HISTORY] Setting up RTDB sync for canvas:', this.canvasId);
     
-    // RTDB sync is now used only for storing commands, not coordinating undo/redo
-    // Each user maintains their own local undo/redo stacks
-    // This prevents the complexity of syncing undo/redo operations across users
+    // Subscribe to shared history for display purposes
+    this.rtdbUnsubscribe = subscribeToHistory(this.canvasId, (historyData) => {
+      console.log('🔵 [HISTORY] RTDB history updated:', historyData.commands.length, 'total commands from all users');
+      this.rtdbHistory = historyData;
+      this.notifyListeners(); // Update UI to show all users' commands
+    });
   }
   
   /**
@@ -743,12 +748,31 @@ export class UndoManager {
 
   /**
    * Get the full history with metadata
-   * Always returns local history (each user manages their own undo/redo)
-   * RTDB history is for display/coordination only
+   * 
+   * For canvas-specific managers: Returns RTDB history (all users' commands) for display
+   * For global managers: Returns local history
+   * 
+   * Note: RTDB history shows all users' operations, but only local operations are undoable
    */
   getFullHistory() {
-    // Always use local history for now (simpler, more reliable)
-    // Each user can only undo/redo their own changes
+    // If we have RTDB history (canvas-specific), show ALL users' commands
+    if (this.rtdbHistory && this.rtdbHistory.commands && this.rtdbHistory.commands.length > 0) {
+      console.log('🔵 [HISTORY] Returning RTDB history:', this.rtdbHistory.commands.length, 'commands from all users');
+      
+      return this.rtdbHistory.commands.map((cmd, idx) => ({
+        id: cmd.id || `history-${idx}`,
+        index: idx,
+        description: cmd.description,
+        timestamp: cmd.timestamp,
+        user: { uid: cmd.userId, displayName: cmd.userName },
+        status: cmd.status,
+        isCurrent: false, // Don't mark any as current in shared view
+        isAI: cmd.isAI || cmd.description?.startsWith('AI:') || false,
+        isLocal: false // Mark as non-local (from RTDB)
+      }));
+    }
+    
+    // Fallback to local history (for global manager or if RTDB not ready yet)
     const currentIndex = this.undoStack.length - 1;
     
     return [
@@ -760,7 +784,8 @@ export class UndoManager {
         user: cmd.metadata?.user,
         status: 'done',
         isCurrent: idx === currentIndex,
-        isAI: cmd.metadata?.isAI || cmd.metadata?.isAIAction || false // Check both for compatibility
+        isAI: cmd.metadata?.isAI || cmd.metadata?.isAIAction || false,
+        isLocal: true
       })),
       ...this.redoStack.slice().reverse().map((cmd, idx) => ({
         id: `redo-${idx}`,
@@ -770,7 +795,8 @@ export class UndoManager {
         user: cmd.metadata?.user,
         status: 'undone',
         isCurrent: false,
-        isAI: cmd.metadata?.isAI || cmd.metadata?.isAIAction || false // Check both for compatibility
+        isAI: cmd.metadata?.isAI || cmd.metadata?.isAIAction || false,
+        isLocal: true
       }))
     ];
   }

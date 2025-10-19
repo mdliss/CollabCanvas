@@ -106,15 +106,30 @@ export default function NotificationBell({ onApprove }) {
           gap: '8px',
           color: theme.text.primary,
           boxShadow: theme.shadow.md,
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          outline: 'none'
         }}
         onMouseEnter={(e) => {
           e.target.style.background = theme.background.elevated;
           e.target.style.borderColor = theme.border.strong;
+          e.target.style.outline = 'none';
         }}
         onMouseLeave={(e) => {
           e.target.style.background = theme.background.card;
           e.target.style.borderColor = theme.border.medium;
+          e.target.style.outline = 'none';
+        }}
+        onFocus={(e) => {
+          e.target.style.outline = 'none';
+        }}
+        onBlur={(e) => {
+          e.target.style.outline = 'none';
+        }}
+        onMouseDown={(e) => {
+          e.target.style.outline = 'none';
+        }}
+        onMouseUp={(e) => {
+          e.target.style.outline = 'none';
         }}
       >
         <span style={{ fontSize: '13px', fontWeight: '500' }}>Requests</span>
