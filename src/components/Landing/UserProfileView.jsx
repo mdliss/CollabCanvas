@@ -2,14 +2,14 @@
  * ═══════════════════════════════════════════════════════════════════════════
  * User Profile View Modal - View Other Users' Profiles
  * ═══════════════════════════════════════════════════════════════════════════
- * 
+ *
  * Read-only view of another user's profile showing:
  * - Profile picture and name
  * - Bio
  * - Social media links
  * - Stats (member since, leaderboard rank, total changes)
- * 
- * Used from: Leaderboard, Friends list, Friend requests, Message headers
+ *
+ * Used from: Leaderboard, Friends list, Friend requests, Message headers, Canvas presence/chat
  */
 
 import { useState, useEffect } from 'react';
@@ -89,7 +89,6 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
         handleClose();
       }
     };
-
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
   }, []);
@@ -119,15 +118,14 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
   const styles = {
     backdrop: {
       position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
+      top: 0, left: 0, right: 0, bottom: 0,
       background: theme.backdrop,
       backdropFilter: 'blur(8px)',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
+      // Canvas opens from top-right → push down and left so it never clips.
+      alignItems: wide ? 'flex-start' : 'center',
+      justifyContent: wide ? 'flex-end' : 'center',
+      padding: wide ? '56px' : '0px',
       zIndex: 10004,
       opacity: isVisible ? 1 : 0,
       transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -136,10 +134,11 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
     modal: {
       background: theme.background.card,
       borderRadius: '16px',
-      padding: wide ? '36px 40px' : '32px',
-      width: wide ? '800px' : '550px',
-      maxWidth: '92vw',
-      maxHeight: '88vh',
+      padding: wide ? '36px 44px' : '32px',
+      // Wide (canvas): make wide enough for single-line stats and keep on-screen.
+      width: wide ? 'min(860px, calc(100vw - 112px))' : '550px',
+      maxWidth: wide ? 'calc(100vw - 112px)' : '92vw',
+      maxHeight: wide ? 'calc(100vh - 112px)' : '88vh',
       display: 'flex',
       flexDirection: 'column',
       boxShadow: theme.shadow.xl,
@@ -171,10 +170,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
 
   return (
     <div onClick={handleBackdropClick} style={styles.backdrop}>
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={styles.modal}
-      >
+      <div onClick={(e) => e.stopPropagation()} style={styles.modal}>
         <button
           onClick={handleClose}
           style={styles.closeButton}
@@ -206,18 +202,14 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
           </p>
         </div>
 
-        <div style={{
-          flex: 1,
-          overflowY: 'auto',
-          paddingRight: '8px'
-        }}>
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px' }}>
           {/* Profile Header */}
           <div style={{
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            marginBottom: wide ? '28px' : '24px',
-            padding: wide ? '32px' : '24px',
+            marginBottom: wide ? '32px' : '24px',
+            padding: wide ? '36px' : '24px',
             background: theme.background.elevated,
             borderRadius: '12px',
             border: `1px solid ${theme.border.light}`
@@ -227,15 +219,15 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
               name={userName || profile?.displayName || userEmail}
               size="lg"
               style={{
-                width: wide ? '96px' : '80px',
-                height: wide ? '96px' : '80px',
-                fontSize: wide ? '38px' : '32px',
+                width: wide ? '110px' : '80px',
+                height: wide ? '110px' : '80px',
+                fontSize: wide ? '44px' : '32px',
                 borderWidth: '3px',
-                marginBottom: wide ? '18px' : '14px'
+                marginBottom: wide ? '20px' : '14px'
               }}
             />
             <h3 style={{
-              fontSize: wide ? '22px' : '19px',
+              fontSize: wide ? '26px' : '19px',
               fontWeight: '600',
               color: theme.text.primary,
               margin: '0 0 8px 0',
@@ -245,7 +237,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
             </h3>
             {userEmail && (
               <p style={{
-                fontSize: wide ? '15px' : '14px',
+                fontSize: wide ? '16px' : '14px',
                 color: theme.text.secondary,
                 margin: 0,
                 textAlign: 'center'
@@ -256,11 +248,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
           </div>
 
           {loading ? (
-            <div style={{
-              padding: '40px',
-              textAlign: 'center',
-              color: theme.text.tertiary
-            }}>
+            <div style={{ padding: '40px', textAlign: 'center', color: theme.text.tertiary }}>
               Loading...
             </div>
           ) : (
@@ -268,18 +256,18 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
               {/* Bio Section */}
               {profile?.bio && (
                 <div style={{
-                  padding: wide ? '24px 28px' : '20px 24px',
+                  padding: wide ? '28px 32px' : '20px 24px',
                   background: theme.background.elevated,
                   borderRadius: '12px',
                   border: `1px solid ${theme.border.light}`,
-                  marginBottom: wide ? '20px' : '18px'
+                  marginBottom: wide ? '24px' : '18px'
                 }}>
                   <label style={{
                     display: 'block',
-                    fontSize: wide ? '13px' : '12px',
+                    fontSize: wide ? '14px' : '12px',
                     fontWeight: '600',
                     color: theme.text.primary,
-                    marginBottom: wide ? '14px' : '12px',
+                    marginBottom: wide ? '16px' : '12px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em'
                   }}>
@@ -287,9 +275,9 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                   </label>
                   <p style={{
                     margin: 0,
-                    fontSize: wide ? '15px' : '14px',
+                    fontSize: wide ? '16px' : '14px',
                     color: theme.text.primary,
-                    lineHeight: '1.65',
+                    lineHeight: '1.7',
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word'
                   }}>
@@ -302,24 +290,24 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
               {(profile?.socialLinks?.twitter || profile?.socialLinks?.github || profile?.socialLinks?.linkedin ||
                 profile?.socialLinks?.instagram || profile?.socialLinks?.youtube || profile?.socialLinks?.twitch) && (
                 <div style={{
-                  padding: wide ? '24px 28px' : '20px 24px',
+                  padding: wide ? '28px 32px' : '20px 24px',
                   background: theme.background.elevated,
                   borderRadius: '12px',
                   border: `1px solid ${theme.border.light}`,
-                  marginBottom: wide ? '20px' : '18px'
+                  marginBottom: wide ? '24px' : '18px'
                 }}>
                   <label style={{
                     display: 'block',
-                    fontSize: wide ? '13px' : '12px',
+                    fontSize: wide ? '14px' : '12px',
                     fontWeight: '600',
                     color: theme.text.primary,
-                    marginBottom: wide ? '16px' : '14px',
+                    marginBottom: wide ? '18px' : '14px',
                     textTransform: 'uppercase',
                     letterSpacing: '0.05em'
                   }}>
                     Social Links
                   </label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: wide ? '10px' : '9px' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: wide ? '12px' : '9px' }}>
                     {profile.socialLinks.twitter && (
                       <a
                         href={`https://twitter.com/${profile.socialLinks.twitter.replace('@', '')}`}
@@ -328,12 +316,12 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: wide ? '12px' : '10px',
-                          padding: wide ? '12px 16px' : '10px 14px',
+                          gap: wide ? '14px' : '10px',
+                          padding: wide ? '14px 20px' : '10px 14px',
                           background: theme.background.card,
                           borderRadius: '8px',
                           border: `1px solid ${theme.border.light}`,
-                          fontSize: wide ? '15px' : '14px',
+                          fontSize: wide ? '16px' : '14px',
                           color: theme.text.primary,
                           textDecoration: 'none',
                           transition: 'all 0.2s ease'
@@ -347,7 +335,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                           e.currentTarget.style.transform = 'translateX(0)';
                         }}
                       >
-                        <XIcon size={wide ? 18 : 16} color={theme.text.secondary} />
+                        <XIcon size={wide ? 20 : 16} color={theme.text.secondary} />
                         <span style={{ fontWeight: '500' }}>@{profile.socialLinks.twitter.replace('@', '')}</span>
                       </a>
                     )}
@@ -359,12 +347,12 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: wide ? '12px' : '10px',
-                          padding: wide ? '12px 16px' : '10px 14px',
+                          gap: wide ? '14px' : '10px',
+                          padding: wide ? '14px 20px' : '10px 14px',
                           background: theme.background.card,
                           borderRadius: '8px',
                           border: `1px solid ${theme.border.light}`,
-                          fontSize: wide ? '15px' : '14px',
+                          fontSize: wide ? '16px' : '14px',
                           color: theme.text.primary,
                           textDecoration: 'none',
                           transition: 'all 0.2s ease'
@@ -378,7 +366,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                           e.currentTarget.style.transform = 'translateX(0)';
                         }}
                       >
-                        <GitHubIcon size={wide ? 18 : 16} color={theme.text.secondary} />
+                        <GitHubIcon size={wide ? 20 : 16} color={theme.text.secondary} />
                         <span style={{ fontWeight: '500' }}>{profile.socialLinks.github}</span>
                       </a>
                     )}
@@ -390,12 +378,12 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: wide ? '12px' : '10px',
-                          padding: wide ? '12px 16px' : '10px 14px',
+                          gap: wide ? '14px' : '10px',
+                          padding: wide ? '14px 20px' : '10px 14px',
                           background: theme.background.card,
                           borderRadius: '8px',
                           border: `1px solid ${theme.border.light}`,
-                          fontSize: wide ? '15px' : '14px',
+                          fontSize: wide ? '16px' : '14px',
                           color: theme.text.primary,
                           textDecoration: 'none',
                           transition: 'all 0.2s ease'
@@ -409,7 +397,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                           e.currentTarget.style.transform = 'translateX(0)';
                         }}
                       >
-                        <LinkedInIcon size={wide ? 18 : 16} color={theme.text.secondary} />
+                        <LinkedInIcon size={wide ? 20 : 16} color={theme.text.secondary} />
                         <span style={{ fontWeight: '500' }}>{profile.socialLinks.linkedin}</span>
                       </a>
                     )}
@@ -421,12 +409,12 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: wide ? '12px' : '10px',
-                          padding: wide ? '12px 16px' : '10px 14px',
+                          gap: wide ? '14px' : '10px',
+                          padding: wide ? '14px 20px' : '10px 14px',
                           background: theme.background.card,
                           borderRadius: '8px',
                           border: `1px solid ${theme.border.light}`,
-                          fontSize: wide ? '15px' : '14px',
+                          fontSize: wide ? '16px' : '14px',
                           color: theme.text.primary,
                           textDecoration: 'none',
                           transition: 'all 0.2s ease'
@@ -440,7 +428,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                           e.currentTarget.style.transform = 'translateX(0)';
                         }}
                       >
-                        <InstagramIcon size={wide ? 18 : 16} color={theme.text.secondary} />
+                        <InstagramIcon size={wide ? 20 : 16} color={theme.text.secondary} />
                         <span style={{ fontWeight: '500' }}>@{profile.socialLinks.instagram.replace('@', '')}</span>
                       </a>
                     )}
@@ -452,12 +440,12 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: wide ? '12px' : '10px',
-                          padding: wide ? '12px 16px' : '10px 14px',
+                          gap: wide ? '14px' : '10px',
+                          padding: wide ? '14px 20px' : '10px 14px',
                           background: theme.background.card,
                           borderRadius: '8px',
                           border: `1px solid ${theme.border.light}`,
-                          fontSize: wide ? '15px' : '14px',
+                          fontSize: wide ? '16px' : '14px',
                           color: theme.text.primary,
                           textDecoration: 'none',
                           transition: 'all 0.2s ease'
@@ -471,7 +459,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                           e.currentTarget.style.transform = 'translateX(0)';
                         }}
                       >
-                        <YouTubeIcon size={wide ? 18 : 16} color={theme.text.secondary} />
+                        <YouTubeIcon size={wide ? 20 : 16} color={theme.text.secondary} />
                         <span style={{ fontWeight: '500' }}>{profile.socialLinks.youtube}</span>
                       </a>
                     )}
@@ -483,12 +471,12 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                         style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: wide ? '12px' : '10px',
-                          padding: wide ? '12px 16px' : '10px 14px',
+                          gap: wide ? '14px' : '10px',
+                          padding: wide ? '14px 20px' : '10px 14px',
                           background: theme.background.card,
                           borderRadius: '8px',
                           border: `1px solid ${theme.border.light}`,
-                          fontSize: wide ? '15px' : '14px',
+                          fontSize: wide ? '16px' : '14px',
                           color: theme.text.primary,
                           textDecoration: 'none',
                           transition: 'all 0.2s ease'
@@ -502,7 +490,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                           e.currentTarget.style.transform = 'translateX(0)';
                         }}
                       >
-                        <TwitchIcon size={wide ? 18 : 16} color={theme.text.secondary} />
+                        <TwitchIcon size={wide ? 20 : 16} color={theme.text.secondary} />
                         <span style={{ fontWeight: '500' }}>{profile.socialLinks.twitch}</span>
                       </a>
                     )}
@@ -512,7 +500,7 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
 
               {/* Stats Section */}
               <div style={{
-                padding: wide ? '24px 28px' : '20px 24px',
+                padding: wide ? '28px 32px' : '20px 24px',
                 background: theme.background.elevated,
                 borderRadius: '12px',
                 border: `1px solid ${theme.border.light}`
@@ -522,10 +510,14 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontSize: wide ? '15px' : '14px',
-                    marginBottom: wide ? '14px' : '12px',
+                    gap: '12px',
+                    fontSize: wide ? '16px' : '14px',
+                    marginBottom: wide ? '16px' : '12px',
                     color: theme.text.secondary,
-                    padding: wide ? '12px 0' : '10px 0'
+                    padding: wide ? '14px 0' : '10px 0',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
                   }}>
                     <span style={{ fontWeight: '500' }}>Member Since</span>
                     <span style={{ color: theme.text.primary, fontWeight: '600' }}>{formatDate(profile.createdAt)}</span>
@@ -536,10 +528,10 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontSize: wide ? '15px' : '14px',
-                    marginBottom: wide ? '14px' : '12px',
+                    fontSize: wide ? '16px' : '14px',
+                    marginBottom: wide ? '16px' : '12px',
                     color: theme.text.secondary,
-                    padding: wide ? '12px 0' : '10px 0',
+                    padding: wide ? '14px 0' : '10px 0',
                     borderTop: profile?.createdAt ? `1px solid ${theme.border.light}` : 'none'
                   }}>
                     <span style={{ fontWeight: '500' }}>Leaderboard Rank</span>
@@ -551,9 +543,9 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
                     display: 'flex',
                     justifyContent: 'space-between',
                     alignItems: 'center',
-                    fontSize: wide ? '15px' : '14px',
+                    fontSize: wide ? '16px' : '14px',
                     color: theme.text.secondary,
-                    padding: wide ? '12px 0' : '10px 0',
+                    padding: wide ? '14px 0' : '10px 0',
                     borderTop: (profile?.createdAt || rank) ? `1px solid ${theme.border.light}` : 'none'
                   }}>
                     <span style={{ fontWeight: '500' }}>Total Changes</span>
@@ -568,4 +560,3 @@ export default function UserProfileView({ userId, userName, userEmail, userPhoto
     </div>
   );
 }
-
