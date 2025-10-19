@@ -31,10 +31,11 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedMessageId, setSelectedMessageId] = useState(null);
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [selectedUserRank, setSelectedUserRank] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [userPhotos, setUserPhotos] = useState({});
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const profilePopupRef = useRef(null);
@@ -46,7 +47,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     const messagesRef = ref(rtdb, `chats/${canvasId}/messages`);
     const messagesQuery = query(messagesRef, orderByKey(), limitToLast(100));
 
-    const unsubscribe = onValue(messagesQuery, (snapshot) => {
+    const unsubscribe = onValue(messagesQuery, async (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const messagesList = Object.entries(data).map(([id, msg]) => ({
@@ -54,13 +55,35 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
           ...msg
         }));
         setMessages(messagesList);
+        
+        // Fetch photos for users who don't have them in the message
+        const usersNeedingPhotos = messagesList
+          .filter(msg => !msg.userPhoto && msg.userId)
+          .map(msg => msg.userId);
+        
+        const uniqueUserIds = [...new Set(usersNeedingPhotos)];
+        
+        for (const userId of uniqueUserIds) {
+          if (!userPhotos[userId]) {
+            getUserProfile(userId).then(profile => {
+              if (profile?.photoURL) {
+                setUserPhotos(prev => ({
+                  ...prev,
+                  [userId]: profile.photoURL
+                }));
+              }
+            }).catch(() => {
+              // Silently fail
+            });
+          }
+        }
       } else {
         setMessages([]);
       }
     });
 
     return () => unsubscribe();
-  }, [canvasId]);
+  }, [canvasId, userPhotos]);
 
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -78,16 +101,20 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
 
   // Load user profile when avatar is clicked
   useEffect(() => {
-    if (!selectedUserId) {
+    if (!selectedMessageId) {
       setSelectedUserProfile(null);
       setSelectedUserRank(null);
       return;
     }
 
+    // Find the message to get userId
+    const message = messages.find(m => m.id === selectedMessageId);
+    if (!message) return;
+
     setIsLoadingProfile(true);
     Promise.all([
-      getUserProfile(selectedUserId),
-      getUserRank(selectedUserId)
+      getUserProfile(message.userId),
+      getUserRank(message.userId)
     ])
       .then(([profile, rank]) => {
         setSelectedUserProfile(profile);
@@ -98,21 +125,21 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
         console.error('[ChatPanel] Failed to load profile:', err);
         setIsLoadingProfile(false);
       });
-  }, [selectedUserId]);
+  }, [selectedMessageId, messages]);
 
   // Click outside to close profile popup
   useEffect(() => {
-    if (!selectedUserId) return;
+    if (!selectedMessageId) return;
 
     const handleClickOutside = (e) => {
       if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
-        setSelectedUserId(null);
+        setSelectedMessageId(null);
       }
     };
 
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
-        setSelectedUserId(null);
+        setSelectedMessageId(null);
       }
     };
 
@@ -123,7 +150,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     };
-  }, [selectedUserId]);
+  }, [selectedMessageId]);
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
@@ -133,11 +160,13 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
     setSending(true);
     try {
       const messagesRef = ref(rtdb, `chats/${canvasId}/messages`);
+      
       await push(messagesRef, {
         text: newMessage.trim(),
         userId: user.uid,
         userName: user.displayName || user.email?.split('@')[0] || 'Anonymous',
         userPhoto: user.photoURL || null,
+        userColor: user.color || '#4285f4',
         timestamp: Date.now()
       });
       
@@ -439,7 +468,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
               <div key={message.id} style={styles.message(isOwn)}>
                 {/* Always show avatar for all messages */}
                 <div 
-                  onClick={() => setSelectedUserId(message.userId)}
+                  onClick={() => setSelectedMessageId(message.id)}
                   style={{ 
                     cursor: 'pointer',
                     position: 'relative',
@@ -451,8 +480,9 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                   title="View profile"
                 >
                   <Avatar
-                    src={message.userPhoto}
-                    name={message.userName}
+                    src={message.userPhoto || userPhotos[message.userId] || null}
+                    name={message.userName || 'User'}
+                    color={message.userColor || '#4285f4'}
                     size="sm"
                     style={{
                       width: '32px',
@@ -462,7 +492,7 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                   />
                   
                   {/* Profile Popup */}
-                  {selectedUserId === message.userId && (
+                  {selectedMessageId === message.id && (
                     <div
                       ref={profilePopupRef}
                       onClick={(e) => e.stopPropagation()}
@@ -493,8 +523,9 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                             marginBottom: '12px'
                           }}>
                             <Avatar
-                              src={message.userPhoto}
+                              src={message.userPhoto || userPhotos[message.userId] || selectedUserProfile?.photoURL || null}
                               name={message.userName}
+                              color={message.userColor || '#4285f4'}
                               size="lg"
                               style={{ 
                                 width: '64px', 
