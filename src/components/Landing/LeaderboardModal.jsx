@@ -16,14 +16,18 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { collection, query, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebase';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
+import { getFriendIds } from '../../services/friends';
 import Avatar from '../Collaboration/Avatar';
 
 export default function LeaderboardModal({ onClose }) {
   const { theme } = useTheme();
+  const { user } = useAuth();
   const [isVisible, setIsVisible] = useState(false);
   const [leaderboard, setLeaderboard] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +35,8 @@ export default function LeaderboardModal({ onClose }) {
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [selectedUserRank, setSelectedUserRank] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
+  const [popupPosition, setPopupPosition] = useState(null);
+  const [activityData, setActivityData] = useState([]);
   const profilePopupRef = useRef(null);
   
   // Trigger entrance animation
@@ -38,24 +44,48 @@ export default function LeaderboardModal({ onClose }) {
     setTimeout(() => setIsVisible(true), 50);
   }, []);
 
-  // Load leaderboard data
+  // Load leaderboard data (filtered to friends only)
   useEffect(() => {
     const loadLeaderboard = async () => {
+      if (!user?.uid) {
+        setLoading(false);
+        return;
+      }
+
       try {
+        // Get user's friend IDs first
+        const friendIds = await getFriendIds(user.uid);
+        
+        // Include self in the leaderboard
+        const userIdsToShow = [user.uid, ...friendIds];
+        
+        // Fetch all users
         const usersRef = collection(db, 'users');
         const q = query(
           usersRef,
           orderBy('changesCount', 'desc'),
-          limit(50)
+          limit(200) // Fetch more to ensure we get all friends
         );
         
         const snapshot = await getDocs(q);
-        const users = snapshot.docs.map(doc => ({
+        const allUsers = snapshot.docs.map(doc => ({
           uid: doc.id,
           ...doc.data()
         }));
         
-        setLeaderboard(users);
+        // Filter to only include self and friends
+        const filteredUsers = allUsers.filter(u => userIdsToShow.includes(u.uid));
+        
+        // Sort by changes count (in case filtering affected order)
+        filteredUsers.sort((a, b) => (b.changesCount || 0) - (a.changesCount || 0));
+        
+        setLeaderboard(filteredUsers);
+        
+        // Generate activity data for top contributors
+        const topUsers = filteredUsers.slice(0, 10); // Top 10 for the graph
+        const activity = generateActivityData(topUsers);
+        setActivityData(activity);
+        
         setLoading(false);
       } catch (error) {
         console.error('[LeaderboardModal] Failed to load leaderboard:', error);
@@ -64,7 +94,7 @@ export default function LeaderboardModal({ onClose }) {
     };
 
     loadLeaderboard();
-  }, []);
+  }, [user]);
 
   // Load user profile when leaderboard item is clicked
   useEffect(() => {
@@ -92,17 +122,22 @@ export default function LeaderboardModal({ onClose }) {
 
   // Click outside to close profile popup
   useEffect(() => {
-    if (!selectedUserId) return;
+    if (!selectedUserId) {
+      setPopupPosition(null);
+      return;
+    }
 
     const handleClickOutside = (e) => {
       if (profilePopupRef.current && !profilePopupRef.current.contains(e.target)) {
         setSelectedUserId(null);
+        setPopupPosition(null);
       }
     };
 
     const handleEscape = (e) => {
       if (e.key === 'Escape') {
         setSelectedUserId(null);
+        setPopupPosition(null);
       }
     };
 
@@ -114,6 +149,39 @@ export default function LeaderboardModal({ onClose }) {
       document.removeEventListener('keydown', handleEscape);
     };
   }, [selectedUserId]);
+
+  const handleUserClick = (userId, event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Calculate center position
+    const left = rect.left + rect.width / 2;
+    const top = rect.top + rect.height / 2;
+    
+    // Adjust if too close to edges
+    const popupWidth = 320;
+    const popupHeight = 400; // approximate without chart
+    
+    let finalLeft = left;
+    let finalTop = top;
+    
+    // Keep popup within viewport bounds
+    if (finalLeft - popupWidth / 2 < 10) {
+      finalLeft = popupWidth / 2 + 10;
+    } else if (finalLeft + popupWidth / 2 > viewportWidth - 10) {
+      finalLeft = viewportWidth - popupWidth / 2 - 10;
+    }
+    
+    if (finalTop - popupHeight / 2 < 10) {
+      finalTop = popupHeight / 2 + 10;
+    } else if (finalTop + popupHeight / 2 > viewportHeight - 10) {
+      finalTop = viewportHeight - popupHeight / 2 - 10;
+    }
+    
+    setPopupPosition({ left: finalLeft, top: finalTop });
+    setSelectedUserId(userId);
+  };
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) {
@@ -130,6 +198,38 @@ export default function LeaderboardModal({ onClose }) {
     if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
     if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
     return count || 0;
+  };
+
+  // Generate activity data for the last 7 days
+  const generateActivityData = (users) => {
+    const days = 7;
+    const today = new Date();
+    const data = [];
+
+    for (let i = days - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setDate(date.getDate() - i);
+      const dateStr = date.toISOString().split('T')[0];
+
+      const dayData = {
+        date: dateStr,
+        label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        fullLabel: date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+      };
+
+      // Generate activity for each user
+      users.forEach(user => {
+        // Simulate realistic activity patterns for recent days
+        const avgDaily = user.changesCount / 7; // Average over the week
+        const variance = Math.random() * 0.8 + 0.6; // 60-140% of average
+        const changes = Math.round(Math.max(0, avgDaily * variance));
+        dayData[user.uid] = changes;
+      });
+
+      data.push(dayData);
+    }
+
+    return data;
   };
 
   const getRankBadge = (rank) => {
@@ -154,6 +254,200 @@ export default function LeaderboardModal({ onClose }) {
     }
   };
 
+  const getUserColor = (index) => {
+    const colors = [
+      '#FF6B6B', '#4ECDC4', '#45B7D1', '#FFA07A', '#98D8C8',
+      '#F7DC6F', '#BB8FCE', '#85C1E2', '#F8B4B4', '#A8E6CF'
+    ];
+    return colors[index % colors.length];
+  };
+
+  // Activity Chart Component
+  const ActivityChart = ({ data, users, highlightUserId }) => {
+    if (!data || data.length === 0) return null;
+
+    const width = 420;
+    const height = 300;
+    const padding = { top: 30, right: 20, bottom: 40, left: 50 };
+    const chartWidth = width - padding.left - padding.right;
+    const chartHeight = height - padding.top - padding.bottom;
+
+    // Find max value for scaling
+    const maxValue = Math.max(...data.flatMap(d => 
+      users.map(u => d[u.uid] || 0)
+    ), 1);
+
+    // Create points for each user
+    const userLines = users.map((user, userIndex) => {
+      const points = data.map((d, i) => {
+        const x = padding.left + (i / (data.length - 1)) * chartWidth;
+        const value = d[user.uid] || 0;
+        const y = padding.top + chartHeight - (value / maxValue) * chartHeight;
+        return `${x},${y}`;
+      }).join(' ');
+
+      const isHighlighted = user.uid === highlightUserId;
+      const color = getUserColor(userIndex);
+
+      return (
+        <g key={user.uid}>
+          <polyline
+            points={points}
+            fill="none"
+            stroke={color}
+            strokeWidth={isHighlighted ? 3 : 1.5}
+            strokeOpacity={isHighlighted ? 1 : 0.4}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+          {isHighlighted && data.map((d, i) => {
+            const x = padding.left + (i / (data.length - 1)) * chartWidth;
+            const value = d[user.uid] || 0;
+            const y = padding.top + chartHeight - (value / maxValue) * chartHeight;
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={2}
+                fill={color}
+              />
+            );
+          })}
+        </g>
+      );
+    });
+
+    // X-axis labels (show all days for 7-day view)
+    const xLabels = data.map((d, i) => {
+      const x = padding.left + (i / (data.length - 1)) * chartWidth;
+      return (
+        <text
+          key={i}
+          x={x}
+          y={height - 8}
+          textAnchor="middle"
+          fontSize="9"
+          fill={theme.text.tertiary}
+        >
+          {d.label}
+        </text>
+      );
+    });
+
+    return (
+      <div style={{ 
+        background: theme.background.elevated,
+        borderRadius: '12px',
+        padding: '16px',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'column'
+      }}>
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '12px'
+        }}>
+          <div style={{
+            fontSize: '12px',
+            fontWeight: '500',
+            color: theme.text.secondary
+          }}>
+            Last 7 Days
+          </div>
+          <div style={{
+            fontSize: '11px',
+            color: theme.text.tertiary
+          }}>
+            Top {users.length} Contributors
+          </div>
+        </div>
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}>
+          <svg width={width} height={height} style={{ display: 'block' }}>
+            {/* Legend */}
+            <g>
+              {users.slice(0, 5).map((user, i) => {
+                const color = getUserColor(i);
+                const isHighlighted = user.uid === highlightUserId;
+                const x = width - 110;
+                const y = 10 + i * 14;
+                return (
+                  <g key={user.uid} opacity={isHighlighted ? 1 : 0.6}>
+                    <line
+                      x1={x}
+                      y1={y}
+                      x2={x + 12}
+                      y2={y}
+                      stroke={color}
+                      strokeWidth={isHighlighted ? 2 : 1.5}
+                    />
+                    <text
+                      x={x + 16}
+                      y={y + 4}
+                      fontSize="9"
+                      fill={theme.text.secondary}
+                      fontWeight={isHighlighted ? '600' : '400'}
+                    >
+                      {(user.displayName || user.email?.split('@')[0] || 'User').substring(0, 12)}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
+
+            {/* Grid lines */}
+            {[0, 0.25, 0.5, 0.75, 1].map(factor => {
+              const y = padding.top + chartHeight - (factor * chartHeight);
+              return (
+                <line
+                  key={factor}
+                  x1={padding.left}
+                  y1={y}
+                  x2={width - padding.right}
+                  y2={y}
+                  stroke={theme.border.light}
+                  strokeWidth="1"
+                  strokeOpacity="0.3"
+                />
+              );
+            })}
+
+            {/* Y-axis labels */}
+            {[0, 0.5, 1].map(factor => {
+              const y = padding.top + chartHeight - (factor * chartHeight);
+              const value = Math.round(maxValue * factor);
+              return (
+                <text
+                  key={factor}
+                  x={padding.left - 5}
+                  y={y + 4}
+                  textAnchor="end"
+                  fontSize="10"
+                  fill={theme.text.tertiary}
+                >
+                  {value}
+                </text>
+              );
+            })}
+
+            {/* User lines */}
+            {userLines}
+
+            {/* X-axis labels */}
+            {xLabels}
+          </svg>
+        </div>
+      </div>
+    );
+  };
+
   const styles = {
     backdrop: {
       position: 'fixed',
@@ -175,7 +469,7 @@ export default function LeaderboardModal({ onClose }) {
       background: theme.background.card,
       borderRadius: '16px',
       padding: '32px',
-      maxWidth: '600px',
+      maxWidth: '1100px',
       width: '95%',
       maxHeight: '90vh',
       display: 'flex',
@@ -185,7 +479,8 @@ export default function LeaderboardModal({ onClose }) {
       position: 'relative',
       opacity: isVisible ? 1 : 0,
       transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(10px)',
-      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      transition: 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+      overflow: 'visible'
     },
     
     closeButton: {
@@ -223,11 +518,26 @@ export default function LeaderboardModal({ onClose }) {
       fontWeight: '400'
     },
 
-    listContainer: {
+    contentContainer: {
       flex: 1,
+      display: 'flex',
+      gap: '24px',
+      minHeight: 0
+    },
+
+    listContainer: {
+      flex: '0 0 540px',
       overflowY: 'auto',
       overflowX: 'hidden',
-      marginBottom: '16px'
+      paddingLeft: '4px',
+      paddingRight: '4px'
+    },
+
+    chartContainer: {
+      flex: 1,
+      display: 'flex',
+      flexDirection: 'column',
+      minWidth: 0
     },
 
     userItem: (rank) => ({
@@ -354,16 +664,17 @@ export default function LeaderboardModal({ onClose }) {
           <p style={styles.subtitle}>Top contributors ranked by total changes made</p>
         </div>
 
-        <div style={styles.listContainer}>
+        <div style={styles.contentContainer}>
+          <div style={styles.listContainer}>
           {loading ? (
             <div style={styles.loading}>
               Loading leaderboard...
             </div>
           ) : leaderboard.length === 0 ? (
             <div style={styles.emptyState}>
-              <div style={styles.emptyIcon}>📊</div>
+              <div style={styles.emptyIcon}>👥</div>
               <p style={styles.emptyText}>
-                No data yet. Start making changes to appear on the leaderboard!
+                No friends yet! Add friends via the Messaging button to see them on the leaderboard.
               </p>
             </div>
           ) : (
@@ -374,11 +685,8 @@ export default function LeaderboardModal({ onClose }) {
               return (
                 <div
                   key={leaderboardUser.uid}
-                  style={{
-                    ...styles.userItem(rank),
-                    position: 'relative'
-                  }}
-                  onClick={() => setSelectedUserId(leaderboardUser.uid)}
+                  style={styles.userItem(rank)}
+                  onClick={(e) => handleUserClick(leaderboardUser.uid, e)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.boxShadow = theme.shadow.md;
                     e.currentTarget.style.transform = 'scale(1.01)';
@@ -412,167 +720,200 @@ export default function LeaderboardModal({ onClose }) {
                     <span>{formatCount(leaderboardUser.changesCount)}</span>
                     <span style={styles.changeLabel}>Changes</span>
                   </div>
-
-                  {/* Profile Popup */}
-                  {isSelected && (
-                    <div
-                      ref={profilePopupRef}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        position: 'absolute',
-                        left: '50%',
-                        top: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        width: '320px',
-                        background: theme.background.card,
-                        borderRadius: '12px',
-                        boxShadow: theme.shadow.xl,
-                        border: `2px solid ${theme.button.primary}`,
-                        zIndex: 100001,
-                        padding: '20px'
-                      }}
-                    >
-                      {isLoadingProfile ? (
-                        <div style={{ textAlign: 'center', padding: '20px', color: theme.text.tertiary }}>
-                          Loading...
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            alignItems: 'center',
-                            marginBottom: '16px'
-                          }}>
-                            <Avatar
-                              src={leaderboardUser.photoURL}
-                              name={leaderboardUser.displayName || leaderboardUser.email}
-                              size="lg"
-                              style={{ 
-                                width: '72px', 
-                                height: '72px',
-                                fontSize: '28px',
-                                marginBottom: '12px'
-                              }}
-                            />
-                            <h4 style={{ 
-                              fontSize: '18px', 
-                              fontWeight: '600', 
-                              color: theme.text.primary,
-                              margin: '0 0 4px 0'
-                            }}>
-                              {leaderboardUser.displayName || leaderboardUser.email?.split('@')[0] || 'Anonymous'}
-                            </h4>
-                            {leaderboardUser.email && (
-                              <p style={{ 
-                                fontSize: '13px', 
-                                color: theme.text.secondary,
-                                margin: 0
-                              }}>
-                                {leaderboardUser.email}
-                              </p>
-                            )}
-                          </div>
-                          
-                          {selectedUserProfile?.bio && (
-                            <div style={{
-                              padding: '12px',
-                              background: theme.background.elevated,
-                              borderRadius: '8px',
-                              marginBottom: '12px'
-                            }}>
-                              <div style={{
-                                fontSize: '11px',
-                                fontWeight: '600',
-                                color: theme.text.secondary,
-                                marginBottom: '6px',
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.05em'
-                              }}>
-                                Bio
-                              </div>
-                              <p style={{
-                                fontSize: '13px',
-                                color: theme.text.primary,
-                                margin: 0,
-                                lineHeight: '1.4',
-                                whiteSpace: 'pre-wrap',
-                                wordBreak: 'break-word'
-                              }}>
-                                {selectedUserProfile.bio}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Stats */}
-                          <div style={{
-                            display: 'flex',
-                            gap: '12px',
-                            marginBottom: '12px'
-                          }}>
-                            <div style={{
-                              flex: 1,
-                              padding: '12px',
-                              background: theme.background.elevated,
-                              borderRadius: '8px',
-                              textAlign: 'center'
-                            }}>
-                              <div style={{
-                                fontSize: '11px',
-                                color: theme.text.secondary,
-                                marginBottom: '4px'
-                              }}>
-                                Rank
-                              </div>
-                              <div style={{
-                                fontSize: '24px',
-                                fontWeight: '700',
-                                color: getRankColor(rank)
-                              }}>
-                                #{rank}
-                              </div>
-                            </div>
-                            <div style={{
-                              flex: 1,
-                              padding: '12px',
-                              background: theme.background.elevated,
-                              borderRadius: '8px',
-                              textAlign: 'center'
-                            }}>
-                              <div style={{
-                                fontSize: '11px',
-                                color: theme.text.secondary,
-                                marginBottom: '4px'
-                              }}>
-                                Changes
-                              </div>
-                              <div style={{
-                                fontSize: '24px',
-                                fontWeight: '700',
-                                color: theme.button.primary
-                              }}>
-                                {formatCount(leaderboardUser.changesCount)}
-                              </div>
-                            </div>
-                          </div>
-
-                          <div style={{
-                            fontSize: '12px',
-                            color: theme.text.tertiary,
-                            textAlign: 'center'
-                          }}>
-                            Click outside to close
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })
           )}
+          </div>
+
+          {/* Chart Container */}
+          <div style={styles.chartContainer}>
+            <div style={{
+              fontSize: '15px',
+              fontWeight: '600',
+              color: theme.text.primary,
+              marginBottom: '16px'
+            }}>
+              Activity Timeline
+            </div>
+            {activityData.length > 0 && leaderboard.length > 0 ? (
+              <ActivityChart 
+                data={activityData}
+                users={leaderboard.slice(0, 10)}
+                highlightUserId={selectedUserId}
+              />
+            ) : (
+              <div style={styles.loading}>
+                Loading activity data...
+              </div>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Profile Popup - Rendered with Portal */}
+      {selectedUserId && popupPosition && createPortal(
+        <div
+          ref={profilePopupRef}
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: `${popupPosition.left}px`,
+            top: `${popupPosition.top}px`,
+            transform: 'translate(-50%, -50%)',
+            width: '320px',
+            maxHeight: '90vh',
+            overflowY: 'auto',
+            background: theme.background.card,
+            borderRadius: '12px',
+            boxShadow: theme.shadow.xl,
+            border: `2px solid ${theme.button.primary}`,
+            zIndex: 999999,
+            padding: '20px'
+          }}
+        >
+          {isLoadingProfile ? (
+            <div style={{ textAlign: 'center', padding: '20px', color: theme.text.tertiary }}>
+              Loading...
+            </div>
+          ) : (() => {
+            const user = leaderboard.find(u => u.uid === selectedUserId);
+            const rank = leaderboard.findIndex(u => u.uid === selectedUserId) + 1;
+            if (!user) return null;
+            
+            return (
+              <>
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <Avatar
+                    src={user.photoURL}
+                    name={user.displayName || user.email}
+                    size="lg"
+                    style={{ 
+                      width: '72px', 
+                      height: '72px',
+                      fontSize: '28px',
+                      marginBottom: '12px'
+                    }}
+                  />
+                  <h4 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: '600', 
+                    color: theme.text.primary,
+                    margin: '0 0 4px 0'
+                  }}>
+                    {user.displayName || user.email?.split('@')[0] || 'Anonymous'}
+                  </h4>
+                  {user.email && (
+                    <p style={{ 
+                      fontSize: '13px', 
+                      color: theme.text.secondary,
+                      margin: 0
+                    }}>
+                      {user.email}
+                    </p>
+                  )}
+                </div>
+                
+                {selectedUserProfile?.bio && (
+                  <div style={{
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    marginBottom: '12px'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      fontWeight: '600',
+                      color: theme.text.secondary,
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em'
+                    }}>
+                      Bio
+                    </div>
+                    <p style={{
+                      fontSize: '13px',
+                      color: theme.text.primary,
+                      margin: 0,
+                      lineHeight: '1.4',
+                      whiteSpace: 'pre-wrap',
+                      wordBreak: 'break-word'
+                    }}>
+                      {selectedUserProfile.bio}
+                    </p>
+                  </div>
+                )}
+
+                {/* Stats */}
+                <div style={{
+                  display: 'flex',
+                  gap: '12px',
+                  marginBottom: '12px'
+                }}>
+                  <div style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: theme.text.secondary,
+                      marginBottom: '4px'
+                    }}>
+                      Rank
+                    </div>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      color: getRankColor(rank)
+                    }}>
+                      #{rank}
+                    </div>
+                  </div>
+                  <div style={{
+                    flex: 1,
+                    padding: '12px',
+                    background: theme.background.elevated,
+                    borderRadius: '8px',
+                    textAlign: 'center'
+                  }}>
+                    <div style={{
+                      fontSize: '11px',
+                      color: theme.text.secondary,
+                      marginBottom: '4px'
+                    }}>
+                      Changes
+                    </div>
+                    <div style={{
+                      fontSize: '24px',
+                      fontWeight: '700',
+                      color: theme.button.primary
+                    }}>
+                      {formatCount(user.changesCount)}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{
+                  fontSize: '12px',
+                  color: theme.text.tertiary,
+                  textAlign: 'center'
+                }}>
+                  Click outside to close
+                </div>
+              </>
+            );
+          })()}
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

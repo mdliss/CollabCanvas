@@ -33,6 +33,8 @@ import TemplateSelectionModal from './TemplateSelectionModal';
 import SettingsModal from './SettingsModal';
 import ProfileModal from './ProfileModal';
 import LeaderboardModal from './LeaderboardModal';
+import MessagingButton from './MessagingButton';
+import DirectMessagingPanel from './DirectMessagingPanel';
 import { TEMPLATES } from '../../utils/templates';
 
 export default function LandingPage() {
@@ -50,6 +52,7 @@ export default function LandingPage() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [selectedFriendForChat, setSelectedFriendForChat] = useState(null);
   const [renamingProject, setRenamingProject] = useState(null);
   const [sharingProject, setSharingProject] = useState(null);
   const [creatingProject, setCreatingProject] = useState(false);
@@ -450,6 +453,9 @@ export default function LandingPage() {
           >
             Leaderboard
           </button>
+          
+          {/* Messaging Button */}
+          <MessagingButton onOpenMessaging={(friend) => setSelectedFriendForChat(friend)} />
 
           {/* Themes Button */}
           <button
@@ -916,6 +922,13 @@ export default function LandingPage() {
       {showLeaderboardModal && (
         <LeaderboardModal
           onClose={() => setShowLeaderboardModal(false)}
+        />
+      )}
+      
+      {selectedFriendForChat && (
+        <DirectMessagingPanel
+          friend={selectedFriendForChat}
+          onClose={() => setSelectedFriendForChat(null)}
         />
       )}
 
