@@ -37,6 +37,7 @@ import ProfileModal from './ProfileModal';
 import LeaderboardModal from './LeaderboardModal';
 import MessagingButton from './MessagingButton';
 import DirectMessagingPanel from './DirectMessagingPanel';
+import FriendsModal from './FriendsModal';
 import { TEMPLATES } from '../../utils/templates';
 
 export default function LandingPage() {
@@ -54,6 +55,7 @@ export default function LandingPage() {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [selectedFriendForChat, setSelectedFriendForChat] = useState(null);
   const [renamingProject, setRenamingProject] = useState(null);
   const [sharingProject, setSharingProject] = useState(null);
@@ -488,6 +490,35 @@ export default function LandingPage() {
             title="Leaderboard"
           >
             Leaderboard
+          </button>
+          
+          {/* Friends Button */}
+          <button
+            onClick={() => setShowFriendsModal(true)}
+            style={{
+              background: theme.background.card,
+              color: theme.text.primary,
+              border: `1px solid ${theme.border.medium}`,
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '13px',
+              fontWeight: '500',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              boxShadow: theme.shadow.md,
+              whiteSpace: 'nowrap'
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }}
+            title="Friends"
+          >
+            Friends
           </button>
           
           {/* Messaging Button */}
@@ -958,6 +989,12 @@ export default function LandingPage() {
       {showLeaderboardModal && (
         <LeaderboardModal
           onClose={() => setShowLeaderboardModal(false)}
+        />
+      )}
+
+      {showFriendsModal && (
+        <FriendsModal
+          onClose={() => setShowFriendsModal(false)}
         />
       )}
       
