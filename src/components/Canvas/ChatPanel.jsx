@@ -463,10 +463,36 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
                       return;
                     }
                     
-                    // Calculate popup position (centered on screen)
+                    // Calculate popup position near the clicked avatar with boundary detection
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const popupWidth = 320;
+                    const popupMaxHeight = window.innerHeight * 0.9; // 90vh
+                    const padding = 20; // Keep 20px from edges
+                    
+                    // Try to position to the left of the avatar
+                    let left = rect.left - popupWidth - 10;
+                    let top = rect.top;
+                    
+                    // If popup would go off left edge, position to the right instead
+                    if (left < padding) {
+                      left = rect.right + 10;
+                    }
+                    
+                    // If popup would go off right edge, clamp it
+                    if (left + popupWidth > window.innerWidth - padding) {
+                      left = window.innerWidth - popupWidth - padding;
+                    }
+                    
+                    // Clamp top position to keep popup on screen
+                    if (top < padding) {
+                      top = padding;
+                    } else if (top + popupMaxHeight > window.innerHeight - padding) {
+                      top = window.innerHeight - popupMaxHeight - padding;
+                    }
+                    
                     setPopupPosition({
-                      left: window.innerWidth / 2,
-                      top: window.innerHeight / 2
+                      left: left,
+                      top: top
                     });
                     
                     setSelectedUserId(clickedUserId);
@@ -567,7 +593,6 @@ export default function ChatPanel({ canvasId, isOpen, onClose, hasSharedAccess, 
             position: 'fixed',
             left: `${popupPosition.left}px`,
             top: `${popupPosition.top}px`,
-            transform: 'translate(-50%, -50%)',
             width: '320px',
             maxHeight: '90vh',
             overflowY: 'auto',
