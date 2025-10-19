@@ -555,7 +555,7 @@ export default function LandingPage() {
           
           {subscription.isPremium ? (
             <div style={styles.premiumBadge}>
-              {subscription.tier === 'lifetime' ? 'Lifetime' : 'Premium'}
+              Premium
             </div>
           ) : (
             <>
@@ -788,15 +788,15 @@ export default function LandingPage() {
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  background: 'rgba(255, 255, 255, 0.95)',
+                  background: theme.isDark ? 'rgba(0, 0, 0, 0.95)' : 'rgba(255, 255, 255, 0.95)',
                   borderRadius: '10px',
                   zIndex: 10
                 }}>
                   <div style={{
                     width: '40px',
                     height: '40px',
-                    border: '3px solid #f5f5f5',
-                    borderTop: '3px solid #2c2e33',
+                    border: `3px solid ${theme.border.light}`,
+                    borderTop: `3px solid ${theme.button.primary}`,
                     borderRadius: '50%',
                     animation: 'spin 0.8s linear infinite'
                   }} />
@@ -804,7 +804,7 @@ export default function LandingPage() {
                     marginTop: '12px',
                     fontSize: '13px',
                     fontWeight: '500',
-                    color: '#2c2e33',
+                    color: theme.text.primary,
                     fontFamily: "'Roboto Mono', monospace"
                   }}>
                     Deleting...
