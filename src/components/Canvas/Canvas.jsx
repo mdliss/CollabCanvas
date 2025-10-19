@@ -173,7 +173,7 @@ import { usePerformance } from "../../hooks/usePerformance";
 import { useUndo, UndoProvider } from "../../contexts/UndoContext";
 import { CreateShapeCommand, UpdateShapeCommand, DeleteShapeCommand, BatchDeleteShapesCommand, MoveShapeCommand } from "../../utils/commands";
 import { watchSelections, setSelection, clearSelection } from "../../services/selection";
-import { stopDragStream } from "../../services/dragStream";
+import { stopDragStream, streamDragPosition } from "../../services/dragStream";
 import { generateUserColor, setGlobalUserOnline } from "../../services/presence";
 import { shapeIntersectsBox } from "../../utils/geometry";
 import { ref, remove, onValue, get } from "firebase/database";
@@ -356,6 +356,9 @@ function CanvasContent() {
   const stageRef = useRef(null);
   const [mousePos, setMousePos] = useState(null);
   const dragStartStateRef = useRef({}); // Store initial state for undo
+  const followerPositionsRef = useRef({}); // Live positions for multi-drag followers
+  const followerStreamIntervalsRef = useRef({}); // 100Hz streaming for followers
+  const lastFollowerUpdateRef = useRef(0); // Throttle RTDB writes
   const lastMousePosRef = useRef({ x: 0, y: 0 });
   const lastUpdateTimeRef = useRef(0);
   const [selectionBox, setSelectionBox] = useState(null);
@@ -1364,8 +1367,8 @@ function CanvasContent() {
   /**
    * Handle Multi-Shape Drag Start
    * 
-   * When dragging a selected shape, store initial positions for ALL selected shapes.
-   * This enables group dragging where all selected shapes move together.
+   * When dragging a selected shape, store initial positions for ALL selected shapes
+   * and start 100Hz streaming for followers (same as leader in ShapeRenderer).
    * 
    * @param {string} shapeId - ID of the shape being dragged (the "leader")
    */
@@ -1382,15 +1385,35 @@ function CanvasContent() {
     
     // If this shape is part of a selection, store initial positions for ALL selected shapes
     if (selectedIds.includes(shapeId) && selectedIds.length > 1) {
-      console.log(`[Multi-Drag] 📦 Starting group drag with ${selectedIds.length} shapes`);
+      console.log(`[Multi-Drag] Starting group drag with ${selectedIds.length} shapes`);
+      
+      // Reset throttle timer
+      lastFollowerUpdateRef.current = 0;
+      
       selectedIds.forEach(id => {
         const s = shapes.find(sh => sh.id === id);
-        if (s && !dragStartStateRef.current[id]) {
+        if (s) {
           dragStartStateRef.current[id] = {
             x: s.x,
             y: s.y,
             rotation: s.rotation
           };
+          
+          // Initialize follower position tracking
+          if (id !== shapeId) {
+            followerPositionsRef.current[id] = { x: s.x, y: s.y, rotation: s.rotation };
+            
+            // Start 100Hz streaming for this follower
+            if (user?.uid) {
+              const userName = user.displayName || user.email?.split('@')[0] || 'User';
+              followerStreamIntervalsRef.current[id] = setInterval(() => {
+                const pos = followerPositionsRef.current[id];
+                if (pos) {
+                  streamDragPosition(id, user.uid, userName, pos.x, pos.y, pos.rotation || 0);
+                }
+              }, 10);
+            }
+          }
         }
       });
     }
@@ -1440,41 +1463,47 @@ function CanvasContent() {
   /**
    * Handle Multi-Shape Drag Move
    * 
-   * When dragging a selected shape in a multi-selection, move all selected shapes together.
-   * Calculates delta from leader shape and applies to all followers.
+   * Updates follower positions in ref (for streaming) and RTDB (for local render).
+   * Throttles RTDB writes to 20fps to prevent flooding.
    * 
    * @param {string} leaderShapeId - ID of shape being actively dragged
    * @param {Object} newPos - New position of leader shape {x, y}
    */
   const handleShapeDragMove = (leaderShapeId, newPos) => {
-    // Only handle group dragging if this shape is part of a multi-selection
-    if (!selectedIds.includes(leaderShapeId) || selectedIds.length <= 1) {
-      return;
-    }
+    if (!selectedIds.includes(leaderShapeId) || selectedIds.length <= 1) return;
     
     const leaderStartPos = dragStartStateRef.current[leaderShapeId];
     if (!leaderStartPos) return;
     
-    // Calculate how far the leader has moved from its starting position
     const deltaX = newPos.x - leaderStartPos.x;
     const deltaY = newPos.y - leaderStartPos.y;
+    const now = Date.now();
+    const shouldUpdateRTDB = now - lastFollowerUpdateRef.current > 50;
     
-    // Apply the same delta to all other selected shapes (except the leader)
     selectedIds.forEach(id => {
-      if (id === leaderShapeId) return; // Skip leader (already being dragged)
+      if (id === leaderShapeId) return;
       
       const startPos = dragStartStateRef.current[id];
       if (!startPos) return;
       
-      // Calculate new position for this follower
-      const newX = startPos.x + deltaX;
-      const newY = startPos.y + deltaY;
+      const newFollowerPos = {
+        x: startPos.x + deltaX,
+        y: startPos.y + deltaY,
+        rotation: startPos.rotation
+      };
       
-      // Update the shape in RTDB (this will trigger re-render for all users)
-      updateShape(CANVAS_ID, id, { x: newX, y: newY }, user).catch(err => {
-        console.error(`[Multi-Drag] Failed to update follower ${id}:`, err);
-      });
+      // Always update ref (streaming uses this at 100Hz)
+      followerPositionsRef.current[id] = newFollowerPos;
+      
+      // Throttled RTDB update (for local screen render)
+      if (shouldUpdateRTDB) {
+        updateShape(CANVAS_ID, id, { x: newFollowerPos.x, y: newFollowerPos.y }, user).catch(() => {});
+      }
     });
+    
+    if (shouldUpdateRTDB) {
+      lastFollowerUpdateRef.current = now;
+    }
   };
   
   const handleShapeDragEnd = async (shapeId, pos) => {
@@ -1490,7 +1519,18 @@ function CanvasContent() {
     const isGroupDrag = selectedIds.includes(shapeId) && selectedIds.length > 1;
     
     if (isGroupDrag) {
-      console.log(`[Multi-Drag] 📦 Completing group drag for ${selectedIds.length} shapes`);
+      console.log(`[Multi-Drag] Completing group drag for ${selectedIds.length} shapes`);
+      
+      // Stop streaming intervals with 200ms delay (same as single drag)
+      selectedIds.forEach(id => {
+        if (id !== shapeId && followerStreamIntervalsRef.current[id]) {
+          setTimeout(() => {
+            clearInterval(followerStreamIntervalsRef.current[id]);
+            stopDragStream(id);
+            delete followerStreamIntervalsRef.current[id];
+          }, 200);
+        }
+      });
       
       // Start batch for multiple shape moves
       startBatch(`Moved ${selectedIds.length} shapes`);
@@ -1501,14 +1541,15 @@ function CanvasContent() {
           const oldPosition = dragStartStateRef.current[id];
           if (!oldPosition) continue;
           
-          const currentShape = shapes.find(s => s.id === id);
-          if (!currentShape) continue;
+          // Get final position: from followerPositionsRef for followers, pos for leader
+          const finalPosition = id === shapeId ? pos : followerPositionsRef.current[id];
+          if (!finalPosition) continue;
           
-          // Create move command for each shape
+          // Create move command
           const command = new MoveShapeCommand(
             CANVAS_ID,
             id,
-            { x: currentShape.x, y: currentShape.y, rotation: currentShape.rotation },
+            { x: finalPosition.x, y: finalPosition.y, rotation: finalPosition.rotation || oldPosition.rotation },
             oldPosition,
             user,
             updateShape
@@ -1516,12 +1557,13 @@ function CanvasContent() {
           
           await execute(command, user);
           delete dragStartStateRef.current[id];
+          delete followerPositionsRef.current[id];
         }
       } finally {
         await endBatch();
       }
       
-      console.log(`[Multi-Drag] ✅ Group drag complete`);
+      console.log(`[Multi-Drag] Complete`);
     } else {
       // Single shape drag
       const oldPosition = dragStartStateRef.current[shapeId];
