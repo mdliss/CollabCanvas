@@ -109,7 +109,20 @@ export const listSharedCanvases = async (userEmail) => {
     
     // Check each canvas for collaborator entry
     for (const [canvasId, canvasData] of Object.entries(allCanvases)) {
+      // Skip if canvas data is null/undefined (deleted canvas)
       if (!canvasData) continue;
+      
+      // Skip if metadata is missing (invalid/corrupted canvas)
+      if (!canvasData.metadata) {
+        console.warn(`[Projects] Skipping canvas ${canvasId} - missing metadata`);
+        continue;
+      }
+      
+      // Skip if canvas has no valid creation data (orphaned data)
+      if (!canvasData.metadata.createdBy && !canvasData.metadata.createdAt) {
+        console.warn(`[Projects] Skipping canvas ${canvasId} - invalid metadata`);
+        continue;
+      }
       
       const collaborators = canvasData.collaborators || {};
       
@@ -140,6 +153,76 @@ export const listSharedCanvases = async (userEmail) => {
     console.error('[Projects] Failed to list shared canvases:', error);
     return [];
   }
+};
+
+/**
+ * Find orphaned canvases (canvases with incomplete/corrupted data)
+ * 
+ * @returns {Promise<Array>} Array of orphaned canvas IDs with details
+ */
+export const findOrphanedCanvases = async () => {
+  try {
+    const canvasesRef = ref(rtdb, 'canvas');
+    const snapshot = await get(canvasesRef);
+    
+    if (!snapshot.exists()) {
+      return [];
+    }
+    
+    const allCanvases = snapshot.val();
+    const orphaned = [];
+    
+    for (const [canvasId, canvasData] of Object.entries(allCanvases)) {
+      // Check for various issues
+      const issues = [];
+      
+      if (!canvasData) {
+        issues.push('null_data');
+      } else {
+        if (!canvasData.metadata) {
+          issues.push('missing_metadata');
+        } else {
+          if (!canvasData.metadata.createdBy) issues.push('missing_createdBy');
+          if (!canvasData.metadata.createdAt) issues.push('missing_createdAt');
+        }
+        
+        if (!canvasData.shapes && !canvasData.collaborators) {
+          issues.push('empty_canvas');
+        }
+      }
+      
+      if (issues.length > 0) {
+        orphaned.push({
+          canvasId,
+          issues,
+          metadata: canvasData?.metadata || null,
+          hasShapes: !!canvasData?.shapes,
+          hasCollaborators: !!canvasData?.collaborators,
+          collaboratorCount: canvasData?.collaborators ? Object.keys(canvasData.collaborators).length : 0
+        });
+      }
+    }
+    
+    console.log(`[Projects] Found ${orphaned.length} orphaned canvases`);
+    return orphaned;
+    
+  } catch (error) {
+    console.error('[Projects] Failed to find orphaned canvases:', error);
+    return [];
+  }
+};
+
+/**
+ * Clean up orphaned canvas (use with caution!)
+ * 
+ * @param {string} canvasId - Canvas ID to delete
+ * @returns {Promise<void>}
+ */
+export const cleanupOrphanedCanvas = async (canvasId) => {
+  console.warn(`[Projects] Cleaning up orphaned canvas: ${canvasId}`);
+  const canvasRef = ref(rtdb, `canvas/${canvasId}`);
+  await remove(canvasRef);
+  console.log(`[Projects] Deleted canvas: ${canvasId}`);
 };
 
 /**
