@@ -149,7 +149,7 @@ export default function ShapeToolbar({
       style={{
         position: 'fixed',
         left: '16px', // Moved to left side of screen
-        top: '50%',
+        top: '40%',
         transform: isVisible ? 'translateY(-50%)' : 'translate(-20px, -50%)',
         display: 'flex',
         flexDirection: 'column',
