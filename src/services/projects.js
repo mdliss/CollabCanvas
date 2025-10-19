@@ -114,13 +114,11 @@ export const listSharedCanvases = async (userEmail) => {
       
       // Skip if metadata is missing (invalid/corrupted canvas)
       if (!canvasData.metadata) {
-        console.warn(`[Projects] Skipping canvas ${canvasId} - missing metadata`);
         continue;
       }
       
       // Skip if canvas has no valid creation data (orphaned data)
       if (!canvasData.metadata.createdBy && !canvasData.metadata.createdAt) {
-        console.warn(`[Projects] Skipping canvas ${canvasId} - invalid metadata`);
         continue;
       }
       

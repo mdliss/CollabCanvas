@@ -91,7 +91,7 @@ The enhanced validation now prevents these orphaned canvases from appearing in t
 
 - ✅ Skip canvases with missing metadata
 - ✅ Skip canvases with incomplete creation data  
-- ✅ Log warnings about invalid canvases for debugging
+- ✅ Silently filter out invalid canvases
 - ✅ Only show valid, complete shared canvases
 
 ## Testing
