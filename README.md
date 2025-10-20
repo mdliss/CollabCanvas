@@ -91,7 +91,7 @@ CollabCanvas is a professional-grade, real-time collaborative design platform bu
 
 ### 👥 Collaboration Features
 
-- **Live Presence**: See who's online with colored avatars and premium badges
+- **Live Presence**: See who's online with colored avatars
 - **Real-Time Cursors**: Watch collaborators' cursor movements (<50ms latency)
 - **Per-Canvas Chat**: Built-in messaging with profile integration
 - **Selection Indicators**: Visual badges showing who's editing what
@@ -126,7 +126,6 @@ CollabCanvas is a professional-grade, real-time collaborative design platform bu
 
 - **35 Themes**: 3-column grid with premium gating
 - **Dark/Light Modes**: Theme-aware UI across all components
-- **Premium Badges**: Blue verification checkmarks for premium users
 - **Custom Avatars**: Upload profile pictures with fallback initials
 
 ---
