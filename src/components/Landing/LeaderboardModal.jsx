@@ -855,9 +855,11 @@ export default function LeaderboardModal({ onClose }) {
                     <div style={styles.userName}>
                       {leaderboardUser.displayName || leaderboardUser.email?.split('@')[0] || 'Anonymous'}
                     </div>
-                    <div style={styles.userStats}>
-                      {leaderboardUser.email}
-                    </div>
+                    {filter === 'friends' && (
+                      <div style={styles.userStats}>
+                        {leaderboardUser.email}
+                      </div>
+                    )}
                   </div>
                   
                   <div style={styles.changeCount}>
@@ -984,7 +986,7 @@ export default function LeaderboardModal({ onClose }) {
                   }}>
                     {selectedUser.displayName || selectedUser.email?.split('@')[0] || 'Anonymous'}
                   </h4>
-                  {selectedUser.email && (
+                  {filter === 'friends' && selectedUser.email && (
                     <p style={{ 
                       fontSize: '13px', 
                       color: theme.text.secondary,
