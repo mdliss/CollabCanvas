@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import { subscribeToPlayers, updatePlayer, removePlayer, subscribeToBullets, createBullet, removeBullet } from '../../services/gameState';
 import ChatPanel from '../Canvas/ChatPanel';
 import PresenceList from '../Collaboration/PresenceList';
+import CharacterCustomization from './CharacterCustomization';
 import usePresence from '../../hooks/usePresence';
 import useCursors from '../../hooks/useCursors';
 
@@ -88,8 +89,13 @@ export default function GameCanvas() {
     y: 610,
     velocityY: 0,
     facingRight: true,
-    isOnGround: false
+    isOnGround: false,
+    hasDoubleJumped: false
   });
+  
+  // Character customization
+  const [selectedHat, setSelectedHat] = useState(localStorage.getItem('battleArenaHairStyle') || 'none');
+  const [showCustomization, setShowCustomization] = useState(!localStorage.getItem('battleArenaHairStyle'));
   
   // Input state
   const keysPressed = useRef({});
@@ -109,6 +115,14 @@ export default function GameCanvas() {
   const [isChatPanelVisible, setIsChatPanelVisible] = useState(false);
   const [deathAnimation, setDeathAnimation] = useState(null); // {uid, x, y, timestamp}
   const [respawnAnimation, setRespawnAnimation] = useState(null); // {x, y, timestamp}
+  const [doubleJumpParticles, setDoubleJumpParticles] = useState([]); // Particle effects
+  
+  // Handle hair style selection
+  const handleHatSelect = (styleId) => {
+    setSelectedHat(styleId);
+    localStorage.setItem('battleArenaHairStyle', styleId);
+    setShowCustomization(false);
+  };
   
   // Center canvas on load
   useEffect(() => {
@@ -181,7 +195,7 @@ export default function GameCanvas() {
     
     const unsubPlayers = subscribeToPlayers((remotePlayers) => {
       console.log('[Game] 👥 Received players from RTDB:', remotePlayers.length, 'total');
-      remotePlayers.forEach(p => console.log('  - Player:', p.name, 'at', `(${p.x}, ${p.y})`));
+      remotePlayers.forEach(p => console.log('  - Player:', p.name, 'at', `(${p.x}, ${p.y})`, 'hair:', p.hat));
       // Filter out local player
       const filtered = remotePlayers.filter(p => p.uid !== user.uid);
       console.log('[Game] 🎯 Filtered to', filtered.length, 'remote players (excluding self)');
@@ -229,6 +243,9 @@ export default function GameCanvas() {
   useEffect(() => {
     setTimeout(() => setIsUIVisible(true), 150);
   }, []);
+  
+  // Refs for click-outside detection
+  const chatPanelRef = useRef(null);
   
   // Keyboard input handlers
   useEffect(() => {
@@ -335,6 +352,7 @@ export default function GameCanvas() {
         let newVelocityY = prev.velocityY;
         let newIsOnGround = false;
         let newFacingRight = prev.facingRight;
+        let newHasDoubleJumped = prev.hasDoubleJumped;
         
         // Horizontal movement
         if (keysPressed.current['ArrowLeft']) {
@@ -346,10 +364,32 @@ export default function GameCanvas() {
           newFacingRight = true;
         }
         
-        // Jumping
-        if (keysPressed.current['ArrowUp'] && prev.isOnGround) {
-          newVelocityY = JUMP_VELOCITY;
-          newIsOnGround = false;
+        // Jumping (with double jump mechanic)
+        if (keysPressed.current['ArrowUp']) {
+          if (prev.isOnGround) {
+            // First jump
+            newVelocityY = JUMP_VELOCITY;
+            newIsOnGround = false;
+            newHasDoubleJumped = false;
+          } else if (!prev.hasDoubleJumped && !prev.isOnGround) {
+            // Double jump (only if not already used)
+            newVelocityY = JUMP_VELOCITY * 0.8; // Slightly weaker second jump
+            newHasDoubleJumped = true;
+            
+            // Create particle effect
+            const particles = Array.from({ length: 8 }, (_, i) => ({
+              id: `particle_${Date.now()}_${i}`,
+              x: newX + PLAYER_SIZE / 2,
+              y: newY + PLAYER_SIZE,
+              velocityX: (Math.random() - 0.5) * 10,
+              velocityY: Math.random() * 5 + 2,
+              createdAt: Date.now()
+            }));
+            setDoubleJumpParticles(prev => [...prev, ...particles]);
+            
+            // Clear used jump key to prevent repeated jumps
+            keysPressed.current['ArrowUp'] = false;
+          }
         }
         
         // Apply gravity
@@ -385,7 +425,8 @@ export default function GameCanvas() {
           y: newY,
           velocityY: newVelocityY,
           facingRight: newFacingRight,
-          isOnGround: newIsOnGround
+          isOnGround: newIsOnGround,
+          hasDoubleJumped: newHasDoubleJumped
         };
       });
       
@@ -423,6 +464,16 @@ export default function GameCanvas() {
       
       // Update bullets state for rendering
       setBullets(Array.from(remoteBulletsRef.current.values()));
+      
+      // Update particle effects
+      setDoubleJumpParticles(prev => 
+        prev.filter(p => Date.now() - p.createdAt < 600).map(p => ({
+          ...p,
+          y: p.y + p.velocityY,
+          velocityY: p.velocityY + 0.5, // Gravity effect
+          x: p.x + p.velocityX
+        }))
+      );
       
       // Check bullet collisions (use refs directly to avoid stale closure)
       const allBullets = [...localBulletsRef.current, ...Array.from(remoteBulletsRef.current.values())];
@@ -526,11 +577,12 @@ export default function GameCanvas() {
         name: user.displayName || user.email?.split('@')[0] || 'Player',
         x: Math.round(current.x),
         y: Math.round(current.y),
-        facingRight: current.facingRight
+        facingRight: current.facingRight,
+        hat: selectedHat
       };
       
       if (updateCount === 1 || updateCount % 40 === 0) {
-        console.log('[Game] Updating player position to RTDB:', playerData);
+        console.log('[Game] Updating player position to RTDB:', playerData, '(hair:', playerData.hat, ')');
       }
       
       updatePlayer(user.uid, playerData).catch((err) => {
@@ -544,7 +596,7 @@ export default function GameCanvas() {
       console.log('[Game] Stopping player position sync');
       clearInterval(updateInterval);
     };
-  }, [user]);
+  }, [user, selectedHat]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -662,6 +714,89 @@ export default function GameCanvas() {
     return lines;
   };
   
+  // Render hair based on style
+  const renderHair = (x, y, size, color, style) => {
+    if (!style || style === 'none') return null;
+    
+    const headCenterX = x + size / 2;
+    const headCenterY = y + size * 0.25;
+    const headRadius = size * 0.2;
+    
+    switch (style) {
+      case 'spiky':
+        // Spiky hair - triangular spikes on top
+        return (
+          <>
+            <KonvaLine points={[headCenterX - 6, headCenterY - headRadius, headCenterX - 6, headCenterY - headRadius - 8]} stroke={color} strokeWidth={3} />
+            <KonvaLine points={[headCenterX, headCenterY - headRadius, headCenterX, headCenterY - headRadius - 10]} stroke={color} strokeWidth={3} />
+            <KonvaLine points={[headCenterX + 6, headCenterY - headRadius, headCenterX + 6, headCenterY - headRadius - 8]} stroke={color} strokeWidth={3} />
+          </>
+        );
+      
+      case 'afro':
+        // Afro - large circle around head
+        return (
+          <Circle
+            x={headCenterX}
+            y={headCenterY - 2}
+            radius={headRadius * 1.6}
+            stroke={color}
+            strokeWidth={3}
+            listening={false}
+          />
+        );
+      
+      case 'long':
+        // Long hair - lines down the sides
+        return (
+          <>
+            <KonvaLine points={[headCenterX - headRadius, headCenterY, headCenterX - headRadius - 2, headCenterY + 15]} stroke={color} strokeWidth={3} />
+            <KonvaLine points={[headCenterX + headRadius, headCenterY, headCenterX + headRadius + 2, headCenterY + 15]} stroke={color} strokeWidth={3} />
+          </>
+        );
+      
+      case 'ponytail':
+        // Ponytail - line extending from back of head
+        return (
+          <KonvaLine points={[headCenterX + headRadius, headCenterY, headCenterX + headRadius + 8, headCenterY + 5]} stroke={color} strokeWidth={3} />
+        );
+      
+      case 'curly':
+        // Curly - wavy line on top
+        return (
+          <>
+            <Circle x={headCenterX - 5} y={headCenterY - headRadius - 2} radius={3} stroke={color} strokeWidth={2} listening={false} />
+            <Circle x={headCenterX + 0} y={headCenterY - headRadius - 3} radius={3} stroke={color} strokeWidth={2} listening={false} />
+            <Circle x={headCenterX + 5} y={headCenterY - headRadius - 2} radius={3} stroke={color} strokeWidth={2} listening={false} />
+          </>
+        );
+      
+      case 'buzz':
+        // Buzz cut - short line on top
+        return (
+          <KonvaLine points={[headCenterX - headRadius, headCenterY - headRadius, headCenterX + headRadius, headCenterY - headRadius]} stroke={color} strokeWidth={4} />
+        );
+      
+      case 'mohawk':
+        // Mohawk - central spike
+        return (
+          <KonvaLine points={[headCenterX, headCenterY - headRadius, headCenterX, headCenterY - headRadius - 12]} stroke={color} strokeWidth={4} />
+        );
+      
+      case 'wavy':
+        // Wavy - curved lines
+        return (
+          <>
+            <KonvaLine points={[headCenterX - 6, headCenterY - headRadius, headCenterX - 4, headCenterY - headRadius - 6, headCenterX - 6, headCenterY - headRadius - 10]} stroke={color} strokeWidth={2} />
+            <KonvaLine points={[headCenterX + 6, headCenterY - headRadius, headCenterX + 4, headCenterY - headRadius - 6, headCenterX + 6, headCenterY - headRadius - 10]} stroke={color} strokeWidth={2} />
+          </>
+        );
+      
+      default:
+        return null;
+    }
+  };
+  
   // Render stick figure player
   const renderPlayer = (player, isLocal = false) => {
     const color = isLocal ? theme.button.primary : theme.accent.blue;
@@ -669,9 +804,13 @@ export default function GameCanvas() {
     const y = player.y;
     const size = PLAYER_SIZE;
     const facingRight = player.facingRight;
+    const hairStyle = player.hat || 'none';
     
     return (
       <Group key={player.uid || 'local'}>
+        {/* Hair */}
+        {renderHair(x, y, size, color, hairStyle)}
+        
         {/* Head */}
         <Circle
           x={x + size / 2}
@@ -869,7 +1008,7 @@ export default function GameCanvas() {
           textAlign: 'center',
           marginTop: '2px'
         }}>
-          Arrows to move • Up to jump • Space to shoot • M for chat • Scroll to zoom • Middle click to pan
+          Arrows to move • Up to jump (double jump!) • Space to shoot • M for chat
         </div>
       </div>
       
@@ -921,10 +1060,10 @@ export default function GameCanvas() {
           right: '20px',
           width: '48px',
           height: '48px',
-          display: 'flex',
+          display: isChatPanelVisible ? 'none' : 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: isChatPanelVisible ? theme.button.primary : theme.gradient.button,
+          background: theme.gradient.button,
           border: `1px solid ${theme.border.normal}`,
           borderRadius: '10px',
           cursor: 'pointer',
@@ -935,11 +1074,11 @@ export default function GameCanvas() {
           transform: isUIVisible ? 'translateY(0)' : 'translateY(10px)'
         }}
         onMouseEnter={(e) => {
-          e.target.style.background = isChatPanelVisible ? theme.button.primaryHover : theme.gradient.hover;
+          e.target.style.background = theme.gradient.hover;
           e.target.style.boxShadow = theme.shadow.lg;
         }}
         onMouseLeave={(e) => {
-          e.target.style.background = isChatPanelVisible ? theme.button.primary : theme.gradient.button;
+          e.target.style.background = theme.gradient.button;
           e.target.style.boxShadow = theme.shadow.md;
         }}
         title="Chat (M)"
@@ -949,7 +1088,7 @@ export default function GameCanvas() {
           height="22" 
           viewBox="0 0 24 24" 
           fill="none" 
-          stroke={isChatPanelVisible ? theme.text.inverse : theme.text.primary}
+          stroke={theme.text.primary}
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -1012,7 +1151,8 @@ export default function GameCanvas() {
           {renderPlayer({
             uid: user?.uid,
             name: user?.displayName || user?.email?.split('@')[0] || 'You',
-            ...localPlayer
+            ...localPlayer,
+            hat: selectedHat
           }, true)}
           
           {/* Local bullets (smooth client-side movement) - YOUR bullets */}
@@ -1020,6 +1160,20 @@ export default function GameCanvas() {
           
           {/* Remote bullets from other players - THEIR bullets (already filtered) */}
           {bullets.map(renderBullet)}
+          
+          {/* Double Jump Particles */}
+          {doubleJumpParticles.map(particle => (
+            <Circle
+              key={particle.id}
+              x={particle.x}
+              y={particle.y}
+              radius={3}
+              fill={theme.accent.blue}
+              opacity={Math.max(0, 1 - (Date.now() - particle.createdAt) / 600)}
+              listening={false}
+              perfectDrawEnabled={false}
+            />
+          ))}
           
           {/* Death Animation */}
           {deathAnimation && (
@@ -1089,13 +1243,92 @@ export default function GameCanvas() {
         </Layer>
       </Stage>
       
-      {/* Chat Panel */}
-      <ChatPanel
-        canvasId={GAME_CANVAS_ID}
-        isOpen={isChatPanelVisible}
-        onClose={() => setIsChatPanelVisible(false)}
-        hasSharedAccess={true}
+      {/* Change Hair Button */}
+      <button
+        onClick={() => setShowCustomization(true)}
+        style={{
+          position: 'fixed',
+          bottom: '80px',
+          right: '20px',
+          width: '48px',
+          height: '48px',
+          display: isChatPanelVisible ? 'none' : 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: theme.gradient.button,
+          border: `1px solid ${theme.border.normal}`,
+          borderRadius: '10px',
+          cursor: 'pointer',
+          boxShadow: theme.shadow.md,
+          zIndex: 10000,
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          opacity: isUIVisible ? 1 : 0,
+          transform: isUIVisible ? 'translateY(0)' : 'translateY(10px)'
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = theme.gradient.hover;
+          e.target.style.boxShadow = theme.shadow.lg;
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = theme.gradient.button;
+          e.target.style.boxShadow = theme.shadow.md;
+        }}
+        title="Change Hair Style"
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke={theme.text.primary}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="8" r="4" />
+          <path d="M8 12c-2 0-4 1-4 3v1h16v-1c0-2-2-3-4-3" />
+        </svg>
+      </button>
+      
+      {/* Character Customization Modal */}
+      <CharacterCustomization
+        isOpen={showCustomization}
+        onSelect={handleHatSelect}
+        selectedHat={selectedHat}
       />
+      
+      {/* Chat Panel Backdrop (click outside to close) */}
+      {isChatPanelVisible && (
+        <div
+          onClick={() => setIsChatPanelVisible(false)}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 9998, // Below chat panel (9999) but above everything else
+            cursor: 'pointer'
+          }}
+        />
+      )}
+      
+      {/* Chat Panel */}
+      <div
+        ref={chatPanelRef}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          position: 'relative',
+          zIndex: 9999
+        }}
+      >
+        <ChatPanel
+          canvasId={GAME_CANVAS_ID}
+          isOpen={isChatPanelVisible}
+          onClose={() => setIsChatPanelVisible(false)}
+          hasSharedAccess={true}
+        />
+      </div>
     </div>
   );
 }
