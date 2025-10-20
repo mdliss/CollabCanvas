@@ -22,47 +22,47 @@ import useCursors from '../../hooks/useCursors';
 const GAME_CANVAS_ID = 'game-canvas-platformer';
 const PLAYER_SIZE = 40;
 const PLAYER_SPEED = 10;
-const JUMP_VELOCITY = -22;
+const JUMP_VELOCITY = -25;
 const GRAVITY = 0.9;
 const BULLET_SPEED = 20;
 const BULLET_SIZE = 8;
-const CANVAS_WIDTH = 5000;
-const CANVAS_HEIGHT = 3000;
+const CANVAS_WIDTH = 3000;
+const CANVAS_HEIGHT = 2000;
 const GRID_SIZE = 50;
 
-// Static platform layout - Donkey Kong style
+// Static platform layout - Donkey Kong style (scaled for 3000x2000 canvas)
 const PLATFORMS = [
   // Ground level
-  { id: 'platform_0', x: 0, y: 2800, width: 5000, strokeWidth: 20 },
-  // Level 1 - low platforms (350px gap vertically)
-  { id: 'platform_1a', x: 400, y: 2450, width: 1200, strokeWidth: 15 },
-  { id: 'platform_1b', x: 2000, y: 2450, width: 1200, strokeWidth: 15 },
-  { id: 'platform_1c', x: 3600, y: 2450, width: 1200, strokeWidth: 15 },
-  // Level 2 - mid platforms (350px gap)
-  { id: 'platform_2a', x: 800, y: 2100, width: 1100, strokeWidth: 15 },
-  { id: 'platform_2b', x: 2400, y: 2100, width: 1100, strokeWidth: 15 },
-  { id: 'platform_2c', x: 4000, y: 2100, width: 800, strokeWidth: 15 },
-  // Level 3 - high platforms (350px gap)
-  { id: 'platform_3a', x: 200, y: 1750, width: 1000, strokeWidth: 15 },
-  { id: 'platform_3b', x: 1800, y: 1750, width: 1000, strokeWidth: 15 },
-  { id: 'platform_3c', x: 3400, y: 1750, width: 1000, strokeWidth: 15 },
-  // Level 4 - top platforms (350px gap)
-  { id: 'platform_4a', x: 600, y: 1400, width: 900, strokeWidth: 15 },
-  { id: 'platform_4b', x: 2200, y: 1400, width: 900, strokeWidth: 15 },
-  { id: 'platform_4c', x: 3800, y: 1400, width: 900, strokeWidth: 15 },
-  // Level 5 - highest platforms (350px gap)
-  { id: 'platform_5a', x: 400, y: 1050, width: 800, strokeWidth: 15 },
-  { id: 'platform_5b', x: 1800, y: 1050, width: 800, strokeWidth: 15 },
-  { id: 'platform_5c', x: 3200, y: 1050, width: 800, strokeWidth: 15 }
+  { id: 'platform_0', x: 0, y: 1900, width: 3000, strokeWidth: 20 },
+  // Level 1 - low platforms (250px gap vertically)
+  { id: 'platform_1a', x: 240, y: 1650, width: 720, strokeWidth: 15 },
+  { id: 'platform_1b', x: 1200, y: 1650, width: 720, strokeWidth: 15 },
+  { id: 'platform_1c', x: 2160, y: 1650, width: 720, strokeWidth: 15 },
+  // Level 2 - mid platforms (250px gap)
+  { id: 'platform_2a', x: 480, y: 1400, width: 660, strokeWidth: 15 },
+  { id: 'platform_2b', x: 1440, y: 1400, width: 660, strokeWidth: 15 },
+  { id: 'platform_2c', x: 2400, y: 1400, width: 480, strokeWidth: 15 },
+  // Level 3 - high platforms (250px gap)
+  { id: 'platform_3a', x: 120, y: 1150, width: 600, strokeWidth: 15 },
+  { id: 'platform_3b', x: 1080, y: 1150, width: 600, strokeWidth: 15 },
+  { id: 'platform_3c', x: 2040, y: 1150, width: 600, strokeWidth: 15 },
+  // Level 4 - top platforms (250px gap)
+  { id: 'platform_4a', x: 360, y: 900, width: 540, strokeWidth: 15 },
+  { id: 'platform_4b', x: 1320, y: 900, width: 540, strokeWidth: 15 },
+  { id: 'platform_4c', x: 2280, y: 900, width: 540, strokeWidth: 15 },
+  // Level 5 - highest platforms (250px gap)
+  { id: 'platform_5a', x: 240, y: 650, width: 480, strokeWidth: 15 },
+  { id: 'platform_5b', x: 1080, y: 650, width: 480, strokeWidth: 15 },
+  { id: 'platform_5c', x: 1920, y: 650, width: 480, strokeWidth: 15 }
 ];
 
-// Spawn points
+// Spawn points (positioned on platforms minus player height)
 const SPAWN_POINTS = [
-  { x: 600, y: 950 },
-  { x: 2000, y: 950 },
-  { x: 3400, y: 950 },
-  { x: 1000, y: 1300 },
-  { x: 2500, y: 1650 }
+  { x: 360, y: 610 },   // Level 5 platform
+  { x: 1200, y: 610 },  // Level 5 platform
+  { x: 2040, y: 610 },  // Level 5 platform
+  { x: 600, y: 860 },   // Level 4 platform
+  { x: 1500, y: 1110 }  // Level 3 platform
 ];
 
 export default function GameCanvas() {
@@ -78,12 +78,14 @@ export default function GameCanvas() {
   // Game state
   const [players, setPlayers] = useState([]);
   const [bullets, setBullets] = useState([]);
+  const playersRef = useRef([]); // Ref for collision detection without recreating game loop
   const localBulletsRef = useRef([]); // Use ref for 60 FPS updates
+  const remoteBulletsRef = useRef(new Map()); // Track remote bullets by ID to prevent resets
   
   // Local player state
   const [localPlayer, setLocalPlayer] = useState({
-    x: 2000,
-    y: 950,
+    x: 1200,
+    y: 610,
     velocityY: 0,
     facingRight: true,
     isOnGround: false
@@ -93,35 +95,130 @@ export default function GameCanvas() {
   const keysPressed = useRef({});
   const lastShootTime = useRef(0);
   
-  // Camera state - centered view
+  // Camera state - with zoom and pan like normal canvas
   const [stagePos, setStagePos] = useState({ x: 0, y: 0 });
-  const [stageScale] = useState(0.6);
+  const [stageScale, setStageScale] = useState(0.8);
+  const [isPanning, setIsPanning] = useState(false);
+  const panStartRef = useRef(null);
+  const panInitialPosRef = useRef(null);
   
   // UI state
   const [kills, setKills] = useState(0);
   const [deaths, setDeaths] = useState(0);
   const [isUIVisible, setIsUIVisible] = useState(false);
   const [isChatPanelVisible, setIsChatPanelVisible] = useState(false);
+  const [deathAnimation, setDeathAnimation] = useState(null); // {uid, x, y, timestamp}
+  const [respawnAnimation, setRespawnAnimation] = useState(null); // {x, y, timestamp}
   
   // Center canvas on load
   useEffect(() => {
     const centeredX = (window.innerWidth - CANVAS_WIDTH * stageScale) / 2;
     const centeredY = (window.innerHeight - CANVAS_HEIGHT * stageScale) / 2;
     setStagePos({ x: centeredX, y: centeredY });
-  }, [stageScale]);
+  }, []);
+  
+  // Zoom handler (like Canvas.jsx)
+  const handleWheel = (e) => {
+    e.evt.preventDefault();
+    const stage = e.target.getStage();
+    const pointer = stage.getPointerPosition();
+    const scaleBy = 1.05;
+    
+    const newScale = e.evt.deltaY > 0 
+      ? stageScale / scaleBy 
+      : stageScale * scaleBy;
+    const clampedScale = Math.max(0.3, Math.min(2, newScale));
+    
+    const mousePointTo = {
+      x: (pointer.x - stagePos.x) / stageScale,
+      y: (pointer.y - stagePos.y) / stageScale
+    };
+    
+    const newPos = {
+      x: pointer.x - mousePointTo.x * clampedScale,
+      y: pointer.y - mousePointTo.y * clampedScale
+    };
+    
+    setStageScale(clampedScale);
+    setStagePos(newPos);
+  };
+  
+  // Pan handlers (middle click like Canvas.jsx)
+  const handleStageMouseDown = (e) => {
+    if (e.evt.button === 1) { // Middle click
+      e.evt.preventDefault();
+      setIsPanning(true);
+      panStartRef.current = { x: e.evt.clientX, y: e.evt.clientY };
+      panInitialPosRef.current = { ...stagePos };
+    }
+  };
+  
+  const handleStageMouseMove = (e) => {
+    if (isPanning && panStartRef.current && panInitialPosRef.current) {
+      const deltaX = e.evt.clientX - panStartRef.current.x;
+      const deltaY = e.evt.clientY - panStartRef.current.y;
+      
+      setStagePos({
+        x: panInitialPosRef.current.x + deltaX,
+        y: panInitialPosRef.current.y + deltaY
+      });
+    }
+  };
+  
+  const handleStageMouseUp = () => {
+    if (isPanning) {
+      setIsPanning(false);
+      panStartRef.current = null;
+      panInitialPosRef.current = null;
+    }
+  };
   
   // Subscribe to multiplayer state
   useEffect(() => {
     if (!user) return;
     
+    console.log('[Game] Setting up player subscription for user:', user.uid);
+    
     const unsubPlayers = subscribeToPlayers((remotePlayers) => {
+      console.log('[Game] 👥 Received players from RTDB:', remotePlayers.length, 'total');
+      remotePlayers.forEach(p => console.log('  - Player:', p.name, 'at', `(${p.x}, ${p.y})`));
       // Filter out local player
-      setPlayers(remotePlayers.filter(p => p.uid !== user.uid));
+      const filtered = remotePlayers.filter(p => p.uid !== user.uid);
+      console.log('[Game] 🎯 Filtered to', filtered.length, 'remote players (excluding self)');
+      playersRef.current = filtered;
+      setPlayers(filtered);
     });
     
-    const unsubBullets = subscribeToBullets(setBullets);
+    const unsubBullets = subscribeToBullets((remoteBullets) => {
+      console.log('[Game] 🔫 Received bullets from RTDB:', remoteBullets.length, 'total');
+      
+      // CRITICAL: Only add NEW bullets, don't replace existing ones
+      // This prevents RTDB subscription from resetting bullet positions
+      remoteBullets.forEach(bullet => {
+        // Skip your own bullets
+        if (bullet.ownerId === user.uid) return;
+        
+        // Skip if already tracking this bullet
+        if (remoteBulletsRef.current.has(bullet.id)) return;
+        
+        // Validate bullet data
+        if (!bullet.velocityX || !bullet.createdAt) {
+          console.warn('[Game] ⚠️ Invalid bullet data:', bullet.id);
+          return;
+        }
+        
+        // Add new remote bullet
+        remoteBulletsRef.current.set(bullet.id, bullet);
+        console.log('[Game] ➕ New remote bullet from', bullet.ownerName, '- velocity:', bullet.velocityX);
+      });
+      
+      // Update bullets state from the Map
+      setBullets(Array.from(remoteBulletsRef.current.values()));
+      console.log('[Game] 📊 Total remote bullets being tracked:', remoteBulletsRef.current.size);
+    });
     
     return () => {
+      console.log('[Game] Cleaning up - removing player from RTDB');
       unsubPlayers();
       unsubBullets();
       removePlayer(user.uid);
@@ -193,12 +290,16 @@ export default function GameCanvas() {
       createdAt: Date.now()
     };
     
+    console.log('[Game] 🔫 Shooting bullet:', bulletData.id, 'velocity:', bulletData.velocityX);
+    
     // Add to local bullets ref for immediate rendering
     localBulletsRef.current.push(bulletData);
     
-    // Sync to RTDB for multiplayer (non-blocking)
-    createBullet(bulletData).catch(() => {
-      console.log('[Game] Bullet sync failed (non-critical)');
+    // Sync to RTDB for multiplayer - CRITICAL for other players to see
+    createBullet(bulletData).then(() => {
+      console.log('[Game] ✅ Bullet synced to RTDB for multiplayer');
+    }).catch((err) => {
+      console.error('[Game] ❌ Bullet sync failed:', err.message);
     });
   }, [localPlayer, user]);
   
@@ -288,7 +389,7 @@ export default function GameCanvas() {
         };
       });
       
-      // Update bullet positions
+      // Update LOCAL bullet positions
       localBulletsRef.current = localBulletsRef.current.map(bullet => ({
         ...bullet,
         x: bullet.x + bullet.velocityX
@@ -299,10 +400,34 @@ export default function GameCanvas() {
         return inBounds && age < 5000;
       });
       
-      // Check bullet collisions
-      const allBullets = [...localBulletsRef.current, ...bullets];
+      // Update REMOTE bullet positions (CRITICAL - makes them move on all screens!)
+      // Update positions in the Map to maintain state between RTDB syncs
+      const bulletsToRemove = [];
+      remoteBulletsRef.current.forEach((bullet, id) => {
+        const newX = bullet.x + bullet.velocityX;
+        const age = Date.now() - bullet.createdAt;
+        const inBounds = newX >= -100 && newX <= CANVAS_WIDTH + 100;
+        
+        if (!inBounds || age > 5000) {
+          // Mark for removal
+          bulletsToRemove.push(id);
+        } else {
+          // Update position
+          bullet.x = newX;
+          remoteBulletsRef.current.set(id, bullet);
+        }
+      });
+      
+      // Remove old bullets
+      bulletsToRemove.forEach(id => remoteBulletsRef.current.delete(id));
+      
+      // Update bullets state for rendering
+      setBullets(Array.from(remoteBulletsRef.current.values()));
+      
+      // Check bullet collisions (use refs directly to avoid stale closure)
+      const allBullets = [...localBulletsRef.current, ...Array.from(remoteBulletsRef.current.values())];
       allBullets.forEach(bullet => {
-        const hitPlayer = [...players, {
+        const hitPlayer = [...playersRef.current, {
           uid: user.uid,
           x: localPlayer.x,
           y: localPlayer.y
@@ -314,22 +439,63 @@ export default function GameCanvas() {
         });
         
         if (hitPlayer) {
-          // Remove bullet
+          // Remove bullet from local and remote tracking
           localBulletsRef.current = localBulletsRef.current.filter(b => b.id !== bullet.id);
+          remoteBulletsRef.current.delete(bullet.id);
           removeBullet(bullet.id).catch(() => {});
           
-          // If hit local player, respawn
+          // Hit local player - you died
           if (hitPlayer.uid === user.uid) {
+            console.log('[Game] 💀 You were killed by', bullet.ownerName);
+            
+            // Death animation
+            setDeathAnimation({
+              uid: user.uid,
+              x: localPlayer.x,
+              y: localPlayer.y,
+              timestamp: Date.now()
+            });
+            setTimeout(() => setDeathAnimation(null), 1000);
+            
             const spawn = SPAWN_POINTS[Math.floor(Math.random() * SPAWN_POINTS.length)];
+            
+            // Respawn animation
+            setRespawnAnimation({
+              x: spawn.x,
+              y: spawn.y,
+              timestamp: Date.now()
+            });
+            setTimeout(() => setRespawnAnimation(null), 1500);
+            
             setLocalPlayer(prev => ({
               ...prev,
               x: spawn.x,
               y: spawn.y,
               velocityY: 0
             }));
-            setDeaths(d => d + 1);
+            
+            setDeaths(d => {
+              const newDeaths = d + 1;
+              console.log('[Game] 📊 Your deaths:', newDeaths);
+              return newDeaths;
+            });
           } else {
-            setKills(k => k + 1);
+            // You killed someone else
+            console.log('[Game] ☠️ You killed', hitPlayer.name || 'Player');
+            
+            setDeathAnimation({
+              uid: hitPlayer.uid,
+              x: hitPlayer.x,
+              y: hitPlayer.y,
+              timestamp: Date.now()
+            });
+            setTimeout(() => setDeathAnimation(null), 1000);
+            
+            setKills(k => {
+              const newKills = k + 1;
+              console.log('[Game] 📊 Your kills:', newKills);
+              return newKills;
+            });
           }
         }
       });
@@ -338,26 +504,47 @@ export default function GameCanvas() {
     const gameLoopInterval = setInterval(gameLoop, 1000 / 60); // 60 FPS
     
     return () => clearInterval(gameLoopInterval);
-  }, [user, players, bullets, checkPlatformCollision, localPlayer.x, localPlayer.y]);
+  }, [user, checkPlatformCollision, localPlayer.x, localPlayer.y]);
   
-  // Update remote player position
+  // Update remote player position - use ref to avoid recreating interval
+  const localPlayerRef = useRef(localPlayer);
+  useEffect(() => {
+    localPlayerRef.current = localPlayer;
+  }, [localPlayer]);
+  
   useEffect(() => {
     if (!user) return;
     
+    let updateCount = 0;
+    console.log('[Game] Starting player position sync to RTDB');
+    
     const updateInterval = setInterval(() => {
-      updatePlayer(user.uid, {
+      updateCount++;
+      const current = localPlayerRef.current;
+      const playerData = {
         uid: user.uid,
         name: user.displayName || user.email?.split('@')[0] || 'Player',
-        x: localPlayer.x,
-        y: localPlayer.y,
-        facingRight: localPlayer.facingRight
-      }).catch(() => {
-        // Silently fail - game works client-side
+        x: Math.round(current.x),
+        y: Math.round(current.y),
+        facingRight: current.facingRight
+      };
+      
+      if (updateCount === 1 || updateCount % 40 === 0) {
+        console.log('[Game] Updating player position to RTDB:', playerData);
+      }
+      
+      updatePlayer(user.uid, playerData).catch((err) => {
+        if (updateCount % 40 === 0) {
+          console.error('[Game] Player update failed:', err.message);
+        }
       });
     }, 1000 / 20); // 20 updates per second
     
-    return () => clearInterval(updateInterval);
-  }, [user, localPlayer]);
+    return () => {
+      console.log('[Game] Stopping player position sync');
+      clearInterval(updateInterval);
+    };
+  }, [user]);
   
   // Cleanup on unmount
   useEffect(() => {
@@ -367,6 +554,79 @@ export default function GameCanvas() {
       }
     };
   }, [user]);
+  
+  // Auto-cleanup old bullets and expose debug utilities
+  useEffect(() => {
+    // Auto-cleanup old bullets every 10 seconds
+    const cleanupInterval = setInterval(async () => {
+      try {
+        const { ref, get, remove } = await import('firebase/database');
+        const { rtdb } = await import('../../services/firebase');
+        const bulletsRef = ref(rtdb, `game/${GAME_CANVAS_ID}/bullets`);
+        const snapshot = await get(bulletsRef);
+        
+        if (snapshot.exists()) {
+          const allBullets = snapshot.val();
+          const now = Date.now();
+          let removedCount = 0;
+          
+          // Remove bullets older than 5 seconds
+          for (const [bulletId, bullet] of Object.entries(allBullets)) {
+            if (now - bullet.createdAt > 5000) {
+              const bulletRef = ref(rtdb, `game/${GAME_CANVAS_ID}/bullets/${bulletId}`);
+              await remove(bulletRef);
+              removedCount++;
+            }
+          }
+          
+          if (removedCount > 0) {
+            console.log('[Game] 🧹 Auto-cleaned', removedCount, 'old bullets from RTDB');
+          }
+        }
+      } catch (error) {
+        // Ignore cleanup errors
+      }
+    }, 10000);
+    
+    // Debug utilities
+    window.gameDebug = {
+      clearAllBullets: async () => {
+        const { ref, remove } = await import('firebase/database');
+        const { rtdb } = await import('../../services/firebase');
+        const bulletsRef = ref(rtdb, `game/${GAME_CANVAS_ID}/bullets`);
+        await remove(bulletsRef);
+        localBulletsRef.current = [];
+        remoteBulletsRef.current.clear();
+        setBullets([]);
+        console.log('[Game Debug] ✅ Cleared all bullets from RTDB and local state');
+      },
+      clearAllPlayers: async () => {
+        const { ref, remove } = await import('firebase/database');
+        const { rtdb } = await import('../../services/firebase');
+        const playersRef = ref(rtdb, `game/${GAME_CANVAS_ID}/players`);
+        await remove(playersRef);
+        console.log('[Game Debug] ✅ Cleared all players from RTDB');
+      },
+      getGameState: async () => {
+        const { ref, get } = await import('firebase/database');
+        const { rtdb } = await import('../../services/firebase');
+        const gameRef = ref(rtdb, `game/${GAME_CANVAS_ID}`);
+        const snapshot = await get(gameRef);
+        console.log('[Game Debug] Current game state:', snapshot.val());
+        return snapshot.val();
+      }
+    };
+    
+    console.log('[Game] 🎮 Debug utilities available:');
+    console.log('  - window.gameDebug.clearAllBullets() - Remove all bullets');
+    console.log('  - window.gameDebug.clearAllPlayers() - Clear player list');
+    console.log('  - window.gameDebug.getGameState() - View game state');
+    
+    return () => {
+      clearInterval(cleanupInterval);
+      delete window.gameDebug;
+    };
+  }, []);
   
   // Grid rendering like Canvas.jsx
   const renderGrid = () => {
@@ -609,7 +869,7 @@ export default function GameCanvas() {
           textAlign: 'center',
           marginTop: '2px'
         }}>
-          Arrow keys to move • Up to jump • Space to shoot • M for chat
+          Arrows to move • Up to jump • Space to shoot • M for chat • Scroll to zoom • Middle click to pan
         </div>
       </div>
       
@@ -707,6 +967,10 @@ export default function GameCanvas() {
         y={stagePos.y}
         scaleX={stageScale}
         scaleY={stageScale}
+        onWheel={handleWheel}
+        onMouseDown={handleStageMouseDown}
+        onMouseMove={handleStageMouseMove}
+        onMouseUp={handleStageMouseUp}
       >
         <Layer>
           {/* Background */}
@@ -751,11 +1015,77 @@ export default function GameCanvas() {
             ...localPlayer
           }, true)}
           
-          {/* Local bullets (smooth client-side movement) */}
+          {/* Local bullets (smooth client-side movement) - YOUR bullets */}
           {localBulletsRef.current.map(renderBullet)}
           
-          {/* Remote bullets from other players */}
-          {bullets.filter(b => b.ownerId !== user?.uid).map(renderBullet)}
+          {/* Remote bullets from other players - THEIR bullets (already filtered) */}
+          {bullets.map(renderBullet)}
+          
+          {/* Death Animation */}
+          {deathAnimation && (
+            <Group>
+              {/* Explosion effect */}
+              <Circle
+                x={deathAnimation.x + PLAYER_SIZE / 2}
+                y={deathAnimation.y + PLAYER_SIZE / 2}
+                radius={PLAYER_SIZE * 2}
+                stroke={theme.accent.red}
+                strokeWidth={4}
+                opacity={0.6}
+                listening={false}
+              />
+              <Circle
+                x={deathAnimation.x + PLAYER_SIZE / 2}
+                y={deathAnimation.y + PLAYER_SIZE / 2}
+                radius={PLAYER_SIZE}
+                fill={theme.accent.red}
+                opacity={0.4}
+                listening={false}
+              />
+              <Text
+                x={deathAnimation.x - 20}
+                y={deathAnimation.y - 40}
+                text="💀"
+                fontSize={32}
+                align="center"
+                width={PLAYER_SIZE + 40}
+                listening={false}
+              />
+            </Group>
+          )}
+          
+          {/* Respawn Animation */}
+          {respawnAnimation && (
+            <Group>
+              {/* Spawn pulse */}
+              <Circle
+                x={respawnAnimation.x + PLAYER_SIZE / 2}
+                y={respawnAnimation.y + PLAYER_SIZE / 2}
+                radius={PLAYER_SIZE * 1.5}
+                stroke={theme.accent.green}
+                strokeWidth={3}
+                opacity={0.5}
+                listening={false}
+              />
+              <Circle
+                x={respawnAnimation.x + PLAYER_SIZE / 2}
+                y={respawnAnimation.y + PLAYER_SIZE / 2}
+                radius={PLAYER_SIZE * 0.8}
+                fill={theme.accent.green}
+                opacity={0.3}
+                listening={false}
+              />
+              <Text
+                x={respawnAnimation.x - 20}
+                y={respawnAnimation.y - 40}
+                text="✨"
+                fontSize={32}
+                align="center"
+                width={PLAYER_SIZE + 40}
+                listening={false}
+              />
+            </Group>
+          )}
         </Layer>
       </Stage>
       

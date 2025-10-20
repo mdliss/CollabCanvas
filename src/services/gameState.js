@@ -60,14 +60,12 @@ export function subscribeToBullets(callback) {
  * Create a new bullet
  */
 export async function createBullet(bulletData) {
-  const bulletId = `bullet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  // Use the bulletId from bulletData to maintain consistency across clients
+  const bulletId = bulletData.id || `bullet_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const bulletRef = ref(rtdb, `game/${GAME_CANVAS_ID}/bullets/${bulletId}`);
   
-  await set(bulletRef, {
-    ...bulletData,
-    id: bulletId,
-    createdAt: Date.now()
-  });
+  // Use bulletData as-is without regenerating id/createdAt to prevent sync issues
+  await set(bulletRef, bulletData);
   
   return bulletId;
 }
