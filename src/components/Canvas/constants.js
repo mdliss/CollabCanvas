@@ -132,15 +132,15 @@ export const DEFAULT_SHAPE_DIMENSIONS = {
   /**
    * Text: LARGE CANVAS-SCALE TYPOGRAPHY
    * 
-   * Font Size: 120px (5× larger than old 24px)
-   * Box: 1800×200px (9× larger than old 200×30px)
+   * Font Size: 500px - Extra large for maximum visibility
+   * Box: 1800×700px - Proportional to large font size
    * 
    * This ensures text is IMMEDIATELY readable at any reasonable zoom level
    */
   text: {
-    fontSize: 120,
+    fontSize: 500,
     width: 1800,
-    height: 200,
+    height: 700,
     fontFamily: 'Arial',
     fontWeight: 'normal',
     fontStyle: 'normal',

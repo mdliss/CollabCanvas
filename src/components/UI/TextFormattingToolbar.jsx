@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 export default function TextFormattingToolbar({ 
   shape, 
@@ -6,6 +7,13 @@ export default function TextFormattingToolbar({
   onUpdate,
   onClose 
 }) {
+  const { theme } = useTheme();
+  
+  // CRITICAL FIX: Guard against undefined shape (happens when shape is deleted)
+  if (!shape) {
+    return null;
+  }
+  
   const [fontFamily, setFontFamily] = useState(shape.fontFamily || 'Inter');
   const [fontSize, setFontSize] = useState(shape.fontSize || 24);
   const [fontStyle, setFontStyle] = useState(shape.fontStyle || 'normal');
@@ -13,6 +21,12 @@ export default function TextFormattingToolbar({
   const [textDecoration, setTextDecoration] = useState(shape.textDecoration || '');
   const [align, setAlign] = useState(shape.align || 'left');
   const [lineHeight, setLineHeight] = useState(shape.lineHeight || 1.2);
+  const [isVisible, setIsVisible] = useState(false);
+  
+  // Entrance animation
+  useEffect(() => {
+    setTimeout(() => setIsVisible(true), 10);
+  }, []);
 
   const fonts = [
     { value: 'Inter', label: 'Inter' },
@@ -80,16 +94,20 @@ export default function TextFormattingToolbar({
       position: 'fixed',
       left: `${position.x}px`,
       top: `${position.y}px`,
-      backgroundColor: '#fff',
-      borderRadius: '8px',
-      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
-      padding: '12px',
+      backgroundColor: theme.background.card,
+      borderRadius: '12px',
+      boxShadow: theme.shadow.xl,
+      border: `1px solid ${theme.border.normal}`,
+      padding: '16px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '12px',
+      gap: '14px',
       zIndex: 10001,
-      minWidth: '420px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+      minWidth: '440px',
+      fontFamily: "'Roboto Mono', monospace",
+      opacity: isVisible ? 1 : 0,
+      transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(-5px)',
+      transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
     },
     row: {
       display: 'flex',
@@ -98,72 +116,88 @@ export default function TextFormattingToolbar({
       flexWrap: 'wrap'
     },
     select: {
-      padding: '6px 10px',
-      borderRadius: '4px',
-      border: '1px solid #d1d5db',
+      padding: '8px 12px',
+      borderRadius: '8px',
+      border: `1px solid ${theme.border.medium}`,
       fontSize: '13px',
-      backgroundColor: '#fff',
+      backgroundColor: theme.background.input,
+      color: theme.text.primary,
       cursor: 'pointer',
-      minWidth: '120px'
+      minWidth: '140px',
+      fontFamily: 'inherit',
+      transition: 'all 0.2s ease',
+      outline: 'none'
     },
     input: {
-      padding: '6px 10px',
-      borderRadius: '4px',
-      border: '1px solid #d1d5db',
+      padding: '8px 12px',
+      borderRadius: '8px',
+      border: `1px solid ${theme.border.medium}`,
       fontSize: '13px',
-      width: '60px'
+      width: '70px',
+      backgroundColor: theme.background.input,
+      color: theme.text.primary,
+      fontFamily: 'inherit',
+      transition: 'all 0.2s ease',
+      outline: 'none'
     },
     button: {
-      padding: '6px 12px',
-      borderRadius: '4px',
-      border: '1px solid #d1d5db',
-      backgroundColor: '#fff',
+      padding: '8px 14px',
+      borderRadius: '8px',
+      border: `1px solid ${theme.border.medium}`,
+      backgroundColor: theme.background.card,
+      color: theme.text.primary,
       cursor: 'pointer',
       fontSize: '14px',
-      fontWeight: '500',
-      transition: 'all 0.2s',
+      fontWeight: '600',
+      transition: 'all 0.2s ease',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      minWidth: '36px',
-      height: '32px'
+      minWidth: '40px',
+      height: '36px',
+      boxShadow: theme.shadow.sm
     },
     buttonActive: {
-      backgroundColor: '#3b82f6',
-      color: '#fff',
-      borderColor: '#3b82f6'
+      backgroundColor: theme.button.primary,
+      color: theme.text.inverse,
+      borderColor: theme.button.primary,
+      boxShadow: theme.shadow.md
     },
     slider: {
       flex: 1,
-      minWidth: '100px'
+      minWidth: '120px',
+      accentColor: theme.button.primary
     },
     label: {
       fontSize: '12px',
-      color: '#6b7280',
-      fontWeight: '500',
-      minWidth: '70px'
+      color: theme.text.secondary,
+      fontWeight: '600',
+      minWidth: '85px',
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em'
     },
     divider: {
       width: '1px',
-      height: '24px',
-      backgroundColor: '#e5e7eb',
-      margin: '0 4px'
+      height: '28px',
+      backgroundColor: theme.border.light,
+      margin: '0 6px'
     },
     closeButton: {
       position: 'absolute',
-      top: '8px',
-      right: '8px',
-      background: 'none',
+      top: '12px',
+      right: '12px',
+      background: 'transparent',
       border: 'none',
-      fontSize: '20px',
-      color: '#9ca3af',
+      fontSize: '24px',
+      color: theme.text.tertiary,
       cursor: 'pointer',
-      width: '24px',
-      height: '24px',
+      width: '28px',
+      height: '28px',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: '4px'
+      borderRadius: '6px',
+      transition: 'color 0.2s ease'
     }
   };
 
@@ -172,6 +206,8 @@ export default function TextFormattingToolbar({
       <button 
         style={styles.closeButton}
         onClick={onClose}
+        onMouseEnter={(e) => e.target.style.color = theme.text.primary}
+        onMouseLeave={(e) => e.target.style.color = theme.text.tertiary}
         title="Close (Esc)"
       >
         ×
@@ -183,6 +219,8 @@ export default function TextFormattingToolbar({
           style={styles.select}
           value={fontFamily}
           onChange={handleFontChange}
+          onFocus={(e) => e.target.style.borderColor = theme.border.focus}
+          onBlur={(e) => e.target.style.borderColor = theme.border.medium}
           title="Font family"
         >
           {fonts.map(font => (
@@ -197,6 +235,8 @@ export default function TextFormattingToolbar({
           style={styles.input}
           value={fontSize}
           onChange={handleSizeChange}
+          onFocus={(e) => e.target.style.borderColor = theme.border.focus}
+          onBlur={(e) => e.target.style.borderColor = theme.border.medium}
           min="8"
           max="144"
           title="Font size"
@@ -211,6 +251,18 @@ export default function TextFormattingToolbar({
             ...(fontWeight === 'bold' ? styles.buttonActive : {})
           }}
           onClick={toggleBold}
+          onMouseEnter={(e) => {
+            if (fontWeight !== 'bold') {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (fontWeight !== 'bold') {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }
+          }}
           title="Bold (Cmd+B)"
         >
           <strong>B</strong>
@@ -222,6 +274,18 @@ export default function TextFormattingToolbar({
             ...(fontStyle === 'italic' ? styles.buttonActive : {})
           }}
           onClick={toggleItalic}
+          onMouseEnter={(e) => {
+            if (fontStyle !== 'italic') {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (fontStyle !== 'italic') {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }
+          }}
           title="Italic (Cmd+I)"
         >
           <em>I</em>
@@ -233,6 +297,18 @@ export default function TextFormattingToolbar({
             ...(textDecoration === 'underline' ? styles.buttonActive : {})
           }}
           onClick={toggleUnderline}
+          onMouseEnter={(e) => {
+            if (textDecoration !== 'underline') {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (textDecoration !== 'underline') {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }
+          }}
           title="Underline (Cmd+U)"
         >
           <u>U</u>
@@ -247,6 +323,18 @@ export default function TextFormattingToolbar({
             ...(align === 'left' ? styles.buttonActive : {})
           }}
           onClick={() => handleAlignChange('left')}
+          onMouseEnter={(e) => {
+            if (align !== 'left') {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (align !== 'left') {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }
+          }}
           title="Align left"
         >
           ≡
@@ -258,6 +346,18 @@ export default function TextFormattingToolbar({
             ...(align === 'center' ? styles.buttonActive : {})
           }}
           onClick={() => handleAlignChange('center')}
+          onMouseEnter={(e) => {
+            if (align !== 'center') {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (align !== 'center') {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }
+          }}
           title="Align center"
         >
           ≣
@@ -269,6 +369,18 @@ export default function TextFormattingToolbar({
             ...(align === 'right' ? styles.buttonActive : {})
           }}
           onClick={() => handleAlignChange('right')}
+          onMouseEnter={(e) => {
+            if (align !== 'right') {
+              e.target.style.background = theme.background.elevated;
+              e.target.style.borderColor = theme.border.strong;
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (align !== 'right') {
+              e.target.style.background = theme.background.card;
+              e.target.style.borderColor = theme.border.medium;
+            }
+          }}
           title="Align right"
         >
           ≡
@@ -293,12 +405,13 @@ export default function TextFormattingToolbar({
       {/* Hint */}
       <div style={{ 
         fontSize: '11px', 
-        color: '#9ca3af', 
+        color: theme.text.tertiary, 
         textAlign: 'center',
-        paddingTop: '4px',
-        borderTop: '1px solid #e5e7eb'
+        paddingTop: '8px',
+        borderTop: `1px solid ${theme.border.light}`,
+        fontWeight: '400'
       }}>
-        Click outside to close • Changes apply immediately
+        Changes apply instantly • Click outside to close
       </div>
     </div>
   );

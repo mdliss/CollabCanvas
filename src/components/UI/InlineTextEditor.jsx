@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTheme } from '../../contexts/ThemeContext';
 
 /**
  * CRITICAL FIX #6: Professional inline text editor for canvas
@@ -14,6 +15,7 @@ import { useState, useEffect, useRef } from 'react';
  * - Escape to cancel, Enter to save (with Shift+Enter for new lines)
  * - Professional styling with proper typography
  * - Accessible keyboard navigation
+ * - Theme-aware styling
  * 
  * @param {Object} props
  * @param {Object} props.shape - Text shape being edited
@@ -38,6 +40,7 @@ export default function InlineTextEditor({
   onCancel,
   stageScale = 1
 }) {
+  const { theme } = useTheme();
   const [text, setText] = useState(shape.text || '');
   const [isVisible, setIsVisible] = useState(false);
   const textareaRef = useRef(null);
@@ -50,11 +53,13 @@ export default function InlineTextEditor({
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-focus and select all text when editor appears
+  // Auto-focus with cursor at end when editor appears
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus();
-      textareaRef.current.select();
+      // Place cursor at the end instead of selecting all
+      const length = textareaRef.current.value.length;
+      textareaRef.current.setSelectionRange(length, length);
     }
   }, []);
 
@@ -141,57 +146,60 @@ export default function InlineTextEditor({
       zIndex: 100000,
       pointerEvents: 'auto',
       opacity: isVisible ? 1 : 0,
-      transform: isVisible ? 'scale(1)' : 'scale(0.95)',
-      transition: 'opacity 0.15s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+      transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.98) translateY(-5px)',
+      transition: 'opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
     },
     textarea: {
       width: '100%',
       minHeight: `${minHeight}px`,
       maxHeight: '400px',
-      padding: '12px 16px',
+      padding: '14px 18px',
       fontSize: `${Math.max(14, fontSize)}px`,
       fontFamily: shape.fontFamily || 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
       fontWeight: shape.fontWeight || 'normal',
       fontStyle: shape.fontStyle || 'normal',
       textDecoration: shape.textDecoration || 'none',
-      color: '#111827',
-      backgroundColor: '#ffffff',
-      border: '2px solid #4f46e5',
-      borderRadius: '8px',
+      color: theme.text.primary,
+      backgroundColor: theme.background.card,
+      border: `2px solid ${theme.button.primary}`,
+      borderRadius: '10px',
       outline: 'none',
       resize: 'vertical',
-      boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15), 0 4px 8px rgba(79, 70, 229, 0.2)',
+      boxShadow: theme.shadow.xl,
       lineHeight: shape.lineHeight || 1.5,
       textAlign: shape.align || 'left',
     },
     hint: {
-      marginTop: '8px',
-      padding: '8px 12px',
+      marginTop: '10px',
+      padding: '10px 14px',
       fontSize: '12px',
-      color: '#6b7280',
-      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+      color: theme.text.secondary,
+      backgroundColor: theme.background.elevated,
       backdropFilter: 'blur(8px)',
-      borderRadius: '6px',
+      borderRadius: '8px',
+      border: `1px solid ${theme.border.light}`,
       display: 'flex',
       alignItems: 'center',
-      gap: '12px',
-      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.08)',
-      userSelect: 'none'
+      gap: '14px',
+      boxShadow: theme.shadow.md,
+      userSelect: 'none',
+      fontFamily: "'Roboto Mono', monospace"
     },
     hintItem: {
       display: 'flex',
       alignItems: 'center',
-      gap: '4px'
+      gap: '5px'
     },
     kbd: {
-      padding: '2px 6px',
-      backgroundColor: '#f3f4f6',
-      border: '1px solid #d1d5db',
-      borderRadius: '4px',
+      padding: '3px 8px',
+      backgroundColor: theme.background.card,
+      border: `1px solid ${theme.border.medium}`,
+      borderRadius: '5px',
       fontFamily: 'monospace',
       fontSize: '11px',
       fontWeight: '600',
-      color: '#374151'
+      color: theme.text.primary,
+      boxShadow: theme.shadow.sm
     }
   };
 
