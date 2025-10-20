@@ -22,7 +22,7 @@ import { db } from '../../services/firebase';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserProfile, getUserRank } from '../../services/userProfile';
-import { getFriendIds, removeFriend, sendFriendRequest } from '../../services/friends';
+import { getFriendIds, removeFriend, sendFriendRequest, areFriends } from '../../services/friends';
 import { getActivityData } from '../../services/dailyActivity';
 import Avatar from '../Collaboration/Avatar';
 import UserProfileView from './UserProfileView';
@@ -46,6 +46,8 @@ export default function LeaderboardModal({ onClose }) {
   const [selectedUserRank, setSelectedUserRank] = useState(null);
   const [isLoadingProfile, setIsLoadingProfile] = useState(false);
   const [popupPosition, setPopupPosition] = useState(null);
+  const [isFriend, setIsFriend] = useState(false);
+  const [sendingRequest, setSendingRequest] = useState(false);
   const profilePopupRef = useRef(null);
   
   // Trigger entrance animation
@@ -186,27 +188,30 @@ export default function LeaderboardModal({ onClose }) {
 
   // Load user profile when leaderboard item is clicked
   useEffect(() => {
-    if (!selectedUserId) {
+    if (!selectedUserId || !user?.uid) {
       setSelectedUserProfile(null);
       setSelectedUserRank(null);
+      setIsFriend(false);
       return;
     }
 
     setIsLoadingProfile(true);
     Promise.all([
       getUserProfile(selectedUserId),
-      getUserRank(selectedUserId)
+      getUserRank(selectedUserId),
+      areFriends(user.uid, selectedUserId)
     ])
-      .then(([profile, rank]) => {
+      .then(([profile, rank, friendStatus]) => {
         setSelectedUserProfile(profile);
         setSelectedUserRank(rank);
+        setIsFriend(friendStatus);
         setIsLoadingProfile(false);
       })
       .catch(err => {
         console.error('[LeaderboardModal] Failed to load profile:', err);
         setIsLoadingProfile(false);
       });
-  }, [selectedUserId]);
+  }, [selectedUserId, user]);
 
   // Click outside to close profile popup
   useEffect(() => {
@@ -1072,48 +1077,103 @@ export default function LeaderboardModal({ onClose }) {
                   </div>
                 </div>
 
-                {/* Remove Friend Button - Only show for friends (not yourself) */}
+                {/* Friend Action Button - Only show for others (not yourself) */}
                 {user?.uid && selectedUserId && user.uid !== selectedUserId && (
-                  <button
-                    onClick={async () => {
-                      if (!confirm(`Remove from friends? You'll no longer see them on the leaderboard.`)) return;
-                      try {
-                        await removeFriend(user.uid, selectedUserId);
-                        setSelectedUserId(null);
-                        setPopupPosition(null);
-                        // Reload leaderboard to reflect changes
-                        window.location.reload();
-                      } catch (error) {
-                        console.error('[LeaderboardModal] Failed to remove friend:', error);
-                        alert('Failed to remove friend');
-                      }
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '10px',
-                      background: 'transparent',
-                      border: `1px solid ${theme.border.medium}`,
-                      borderRadius: '8px',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      color: theme.text.secondary,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      marginBottom: '12px'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.background = '#fee2e2';
-                      e.target.style.borderColor = '#ef4444';
-                      e.target.style.color = '#dc2626';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.background = 'transparent';
-                      e.target.style.borderColor = theme.border.medium;
-                      e.target.style.color = theme.text.secondary;
-                    }}
-                  >
-                    Remove Friend
-                  </button>
+                  isFriend ? (
+                    // Remove Friend Button - For existing friends
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`Remove from friends? You'll no longer see them on the leaderboard.`)) return;
+                        try {
+                          await removeFriend(user.uid, selectedUserId);
+                          setSelectedUserId(null);
+                          setPopupPosition(null);
+                          // Reload leaderboard to reflect changes
+                          window.location.reload();
+                        } catch (error) {
+                          console.error('[LeaderboardModal] Failed to remove friend:', error);
+                          alert('Failed to remove friend');
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        background: 'transparent',
+                        border: `1px solid ${theme.border.medium}`,
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: theme.text.secondary,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        marginBottom: '12px'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.background = '#fee2e2';
+                        e.target.style.borderColor = '#ef4444';
+                        e.target.style.color = '#dc2626';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.background = 'transparent';
+                        e.target.style.borderColor = theme.border.medium;
+                        e.target.style.color = theme.text.secondary;
+                      }}
+                    >
+                      Remove Friend
+                    </button>
+                  ) : (
+                    // Send Friend Request Button - For non-friends
+                    <button
+                      onClick={async () => {
+                        setSendingRequest(true);
+                        try {
+                          const result = await sendFriendRequest(user, selectedUser.email);
+                          
+                          if (result.autoAccepted) {
+                            alert('Friend request accepted automatically! You both wanted to be friends.');
+                            // Reload to update friend status
+                            window.location.reload();
+                          } else {
+                            alert('Friend request sent!');
+                            setSelectedUserId(null);
+                            setPopupPosition(null);
+                          }
+                        } catch (error) {
+                          console.error('[LeaderboardModal] Failed to send friend request:', error);
+                          alert(error.message || 'Failed to send friend request');
+                        } finally {
+                          setSendingRequest(false);
+                        }
+                      }}
+                      disabled={sendingRequest}
+                      style={{
+                        width: '100%',
+                        padding: '10px',
+                        background: theme.button.primary,
+                        border: `1px solid ${theme.button.primary}`,
+                        borderRadius: '8px',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        color: theme.text.inverse,
+                        cursor: sendingRequest ? 'not-allowed' : 'pointer',
+                        opacity: sendingRequest ? 0.6 : 1,
+                        transition: 'all 0.2s ease',
+                        marginBottom: '12px'
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!sendingRequest) {
+                          e.target.style.background = theme.button.primaryHover;
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!sendingRequest) {
+                          e.target.style.background = theme.button.primary;
+                        }
+                      }}
+                    >
+                      {sendingRequest ? 'Sending...' : 'Send Friend Request'}
+                    </button>
+                  )
                 )}
 
                 <div style={{
