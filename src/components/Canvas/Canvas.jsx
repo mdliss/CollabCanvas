@@ -3993,6 +3993,7 @@ function CanvasContent() {
           currentUser={user}
           isPremium={subscription.isPremium}
           onClose={() => setShowShareModal(false)}
+          stageRef={stageRef}
         />
       )}
     </div>

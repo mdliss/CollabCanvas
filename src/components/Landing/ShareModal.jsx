@@ -2,13 +2,15 @@
  * Canvas Sharing Modal - Invite collaborators with view/edit permissions
  * 
  * PREMIUM FEATURE: Only premium users can share canvases
+ * 
+ * Also includes canvas download functionality (available to all users)
  */
 
 import { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { shareCanvas, getCollaborators, removeCollaborator } from '../../services/sharing';
 
-export default function ShareModal({ project, currentUser, isPremium, onClose }) {
+export default function ShareModal({ project, currentUser, isPremium, onClose, stageRef }) {
   const { theme } = useTheme();
   const [email, setEmail] = useState('');
   const [role, setRole] = useState('viewer');
@@ -17,6 +19,8 @@ export default function ShareModal({ project, currentUser, isPremium, onClose })
   const [success, setSuccess] = useState('');
   const [collaborators, setCollaborators] = useState([]);
   const [isVisible, setIsVisible] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState('png');
+  const [downloading, setDownloading] = useState(false);
   
   // Trigger entrance animation
   useEffect(() => {
@@ -89,8 +93,123 @@ export default function ShareModal({ project, currentUser, isPremium, onClose })
     }
   };
 
+  const handleDownload = async () => {
+    if (!stageRef?.current || downloading) return;
+    
+    setDownloading(true);
+    setError('');
+    setSuccess('');
+    
+    try {
+      const stage = stageRef.current;
+      const canvasName = project.name || 'canvas';
+      const timestamp = new Date().toISOString().split('T')[0];
+      const filename = `${canvasName}-${timestamp}`;
+      
+      console.log('[ShareModal] Starting download as', downloadFormat);
+      
+      if (downloadFormat === 'png' || downloadFormat === 'jpeg') {
+        // Export as image using Konva's native export
+        const mimeType = downloadFormat === 'png' ? 'image/png' : 'image/jpeg';
+        const extension = downloadFormat;
+        
+        // Get the data URL from the stage
+        const dataURL = stage.toDataURL({
+          mimeType: mimeType,
+          quality: 1.0, // Maximum quality
+          pixelRatio: 2 // 2x resolution for better quality
+        });
+        
+        // Create download link
+        const link = document.createElement('a');
+        link.download = `${filename}.${extension}`;
+        link.href = dataURL;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setSuccess(`Canvas downloaded as ${extension.toUpperCase()}`);
+        setTimeout(() => setSuccess(''), 3000);
+      } else if (downloadFormat === 'svg') {
+        // SVG export - convert canvas to SVG
+        // Note: This requires all shapes to be re-rendered as SVG elements
+        setError('SVG export coming soon!');
+        setTimeout(() => setError(''), 3000);
+      } else if (downloadFormat === 'pdf') {
+        // PDF export using canvas as image
+        // We'll use jsPDF if available, otherwise fall back to image
+        try {
+          // Dynamic import to avoid bundle bloat
+          const { jsPDF } = await import('jspdf');
+          
+          // Get canvas dimensions
+          const stage = stageRef.current;
+          const width = stage.width();
+          const height = stage.height();
+          
+          // Create PDF with canvas dimensions (in mm, A4 is 210x297)
+          const aspectRatio = width / height;
+          let pdfWidth = 297; // A4 width in landscape
+          let pdfHeight = pdfWidth / aspectRatio;
+          
+          if (pdfHeight > 210) {
+            pdfHeight = 210;
+            pdfWidth = pdfHeight * aspectRatio;
+          }
+          
+          const pdf = new jsPDF({
+            orientation: aspectRatio > 1 ? 'landscape' : 'portrait',
+            unit: 'mm',
+            format: 'a4'
+          });
+          
+          // Get canvas as image
+          const dataURL = stage.toDataURL({
+            mimeType: 'image/png',
+            quality: 1.0,
+            pixelRatio: 2
+          });
+          
+          // Add image to PDF
+          pdf.addImage(dataURL, 'PNG', 0, 0, pdfWidth, pdfHeight);
+          pdf.save(`${filename}.pdf`);
+          
+          setSuccess('Canvas downloaded as PDF');
+          setTimeout(() => setSuccess(''), 3000);
+        } catch (pdfError) {
+          console.error('[ShareModal] PDF export failed:', pdfError);
+          setError('PDF export requires additional library. Using PNG instead.');
+          
+          // Fallback to PNG
+          const dataURL = stage.toDataURL({
+            mimeType: 'image/png',
+            quality: 1.0,
+            pixelRatio: 2
+          });
+          
+          const link = document.createElement('a');
+          link.download = `${filename}.png`;
+          link.href = dataURL;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setTimeout(() => setError(''), 3000);
+        }
+      }
+      
+      console.log('[ShareModal] Download complete');
+    } catch (err) {
+      console.error('[ShareModal] Download failed:', err);
+      setError('Failed to download canvas. Please try again.');
+      setTimeout(() => setError(''), 3000);
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget && !loading) {
+    if (e.target === e.currentTarget && !loading && !downloading) {
       handleClose();
     }
   };
@@ -343,8 +462,83 @@ export default function ShareModal({ project, currentUser, isPremium, onClose })
           ×
         </button>
 
-        <h3 style={styles.title}>Share Canvas</h3>
+        <h3 style={styles.title}>Share & Download</h3>
         <p style={styles.subtitle}>{project.name}</p>
+
+        {/* Download Section */}
+        <div style={{
+          marginBottom: '28px',
+          paddingBottom: '24px',
+          borderBottom: `1px solid ${theme.border.normal}`
+        }}>
+          <h4 style={{
+            margin: '0 0 14px 0',
+            fontSize: '15px',
+            fontWeight: '600',
+            color: theme.text.primary
+          }}>
+            Download Canvas
+          </h4>
+          <div style={{
+            display: 'flex',
+            gap: '10px'
+          }}>
+            <select
+              value={downloadFormat}
+              onChange={(e) => setDownloadFormat(e.target.value)}
+              disabled={downloading}
+              style={{
+                ...styles.select,
+                flex: 1
+              }}
+            >
+              <option value="png">Download as PNG</option>
+              <option value="jpeg">Download as JPEG</option>
+              <option value="pdf">Download as PDF</option>
+              <option value="svg">Download as SVG</option>
+            </select>
+            
+            <button
+              onClick={handleDownload}
+              disabled={downloading}
+              style={{
+                background: theme.button.primary,
+                color: theme.text.inverse,
+                border: 'none',
+                padding: '12px 24px',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: '500',
+                cursor: downloading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                opacity: downloading ? 0.5 : 1,
+                whiteSpace: 'nowrap'
+              }}
+              onMouseEnter={(e) => {
+                if (!downloading) {
+                  e.target.style.background = theme.button.primaryHover;
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!downloading) {
+                  e.target.style.background = theme.button.primary;
+                }
+              }}
+            >
+              {downloading ? 'Downloading...' : 'Download'}
+            </button>
+          </div>
+        </div>
+
+        {/* Share Section */}
+        <h4 style={{
+          margin: '0 0 14px 0',
+          fontSize: '15px',
+          fontWeight: '600',
+          color: theme.text.primary
+        }}>
+          Share with Collaborators
+        </h4>
 
         {!isPremium && (
           <div style={styles.premiumNotice}>
