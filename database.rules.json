@@ -122,6 +122,10 @@
         ".read": "auth != null && $userId == auth.uid",
         ".write": "auth != null && $userId == auth.uid"
       }
+    },
+    "game": {
+      ".read": "auth != null",
+      ".write": "auth != null"
     }
   }
 }

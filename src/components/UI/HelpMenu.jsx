@@ -199,11 +199,6 @@ export default function HelpMenu({ isVisible, onClose }) {
               <div style={styles.sectionTitle}>Navigation & View</div>
               
               <div style={styles.item}>
-                <span style={styles.key}>Space + Drag</span>
-                <span style={styles.desc}>Pan the canvas</span>
-              </div>
-              
-              <div style={styles.item}>
                 <span style={styles.key}>Middle Click</span>
                 <span style={styles.desc}>Pan the canvas</span>
               </div>

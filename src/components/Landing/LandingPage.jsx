@@ -725,6 +725,84 @@ export default function LandingPage() {
           ? 'opacity 0.4s cubic-bezier(0.4, 0, 0.2, 1), transform 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.2s'
           : 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
       }}>
+        {/* Battle Arena Game Card */}
+        <div
+          onClick={() => navigate('/canvas/game-canvas-platformer')}
+          style={{
+            ...styles.projectCard,
+            background: `linear-gradient(135deg, ${theme.button.primary} 0%, ${theme.button.primaryHover} 100%)`,
+            border: `2px solid ${theme.button.primary}`,
+            cursor: 'pointer',
+            animation: triggerReflow ? 'gridSettle 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none',
+            position: 'relative',
+            overflow: 'hidden'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.boxShadow = `0 8px 32px ${theme.isDark ? 'rgba(0, 0, 0, 0.6)' : 'rgba(0, 0, 0, 0.15)'}`;
+            e.currentTarget.style.transform = 'translateY(-2px) scale(1.02)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.boxShadow = theme.shadow.lg;
+            e.currentTarget.style.transform = 'translateY(0) scale(1)';
+          }}
+        >
+          {/* Game Badge */}
+          <div style={{
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            background: 'rgba(255, 255, 255, 0.2)',
+            color: theme.text.inverse,
+            padding: '4px 10px',
+            borderRadius: '6px',
+            fontSize: '11px',
+            fontWeight: '600',
+            backdropFilter: 'blur(4px)',
+            border: '1px solid rgba(255, 255, 255, 0.3)'
+          }}>
+            MULTIPLAYER
+          </div>
+          
+          {/* Game Icon/Visual */}
+          <div style={{
+            width: '100%',
+            height: '160px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0, 0, 0, 0.2)',
+            position: 'relative'
+          }}>
+            <div style={{
+              fontSize: '64px',
+              color: theme.text.inverse,
+              opacity: 0.9
+            }}>
+              🎮
+            </div>
+          </div>
+          
+          {/* Game Info */}
+          <div style={{ padding: '14px 16px' }}>
+            <div style={{
+              fontSize: '16px',
+              fontWeight: '600',
+              color: theme.text.inverse,
+              marginBottom: '6px'
+            }}>
+              Battle Arena
+            </div>
+            <div style={{
+              fontSize: '12px',
+              color: 'rgba(255, 255, 255, 0.85)',
+              fontWeight: '400',
+              lineHeight: '1.4'
+            }}>
+              Multiplayer platformer shooter • Play with friends in real-time
+            </div>
+          </div>
+        </div>
+        
         {/* Create New Project Card */}
         <button
           onClick={handleCreateProject}

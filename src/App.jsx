@@ -4,6 +4,7 @@ import { ThemeProvider, useTheme } from "./contexts/ThemeContext";
 import ModernLogin from "./components/Auth/ModernLogin";
 import LandingPage from "./components/Landing/LandingPage";
 import Canvas from "./components/Canvas/Canvas";
+import GameCanvas from "./components/Game/GameCanvas";
 import ErrorBoundary from "./components/UI/ErrorBoundary";
 
 function AppContent() {
@@ -47,6 +48,20 @@ function AppContent() {
       <Route 
         path="/" 
         element={user ? <LandingPage /> : <Navigate to="/login" replace />} 
+      />
+      
+      {/* Game Canvas - Battle Arena */}
+      <Route 
+        path="/canvas/game-canvas-platformer" 
+        element={
+          user ? (
+            <ErrorBoundary>
+              <GameCanvas />
+            </ErrorBoundary>
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        } 
       />
       
       {/* Canvas Editor - Note: Canvas handles its own UndoProvider internally */}
